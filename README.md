@@ -276,6 +276,13 @@ Le réordonnancement du trajet ne tourne qu'à l'envoi : il est en n², donc
 trop lourd à rejouer à chaque mouvement d'un réglage, et il ne change rien à
 ce que l'aperçu montre.
 
+`theme.py` porte les couleurs — **celles du visualiseur G-code**, recopiées
+plutôt qu'importées d'un dépôt à l'autre pour une question d'habillage.
+Sombre par défaut, clair pour les captures, accent `#ff8a00`, l'orange de
+l'atelier. Quand le dessin déborde, les tracés, l'emprise et le message
+passent au rouge **et** le bouton d'envoi se grise : un message d'alerte sous
+un style neutre ne se lit pas comme un refus.
+
 **Pas encore fait : la mosaïque.** Découper un grand dessin en panneaux
 demande de couper les polylignes à la frontière de chacun — le seul morceau
 délicat de tout ça, qui mérite d'être traité à part.

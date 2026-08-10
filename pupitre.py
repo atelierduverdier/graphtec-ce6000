@@ -21,6 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import svg2hpgl as noyau                                    # noqa: E402
+from theme import SOMBRE, CLAIR, feuille_de_style           # noqa: E402
 
 from PySide6.QtCore import Qt, QPointF, QRectF               # noqa: E402
 from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF  # noqa: E402
@@ -37,14 +38,19 @@ from PySide6.QtWidgets import (                              # noqa: E402
 class Apercu(QWidget):
     """Média, zone utile et dessin, à l'échelle, Y vers le haut."""
 
-    def __init__(self):
+    def __init__(self, palette):
         super().__init__()
         self.setMinimumSize(420, 340)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.pal = palette
         self.media = (380.9, 285.6)
         self.polygones = []
         self.emprise = None
         self.deborde = False
+
+    def habiller(self, palette):
+        self.pal = palette
+        self.update()
 
     def poser(self, polylignes, media, deborde):
         self.media = media
@@ -55,9 +61,10 @@ class Apercu(QWidget):
         self.update()
 
     def paintEvent(self, _):
+        pal = self.pal
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor("#f4f4f4"))
+        p.fillRect(self.rect(), QColor(pal.ardoise))
 
         mx, my = self.media
         marge = 14
@@ -70,26 +77,26 @@ class Apercu(QWidget):
             return QPointF(ox + x * k, oy - y * k)
 
         # la zone utile, telle que la machine la déclare
-        p.setPen(QPen(QColor("#b0b0b0"), 1, Qt.DashLine))
-        p.setBrush(QColor("#ffffff"))
+        p.setPen(QPen(QColor(pal.texte_faible), 1, Qt.DashLine))
+        p.setBrush(QColor(pal.papier))
         p.drawRect(QRectF(pt(0, my), pt(mx, 0)))
 
         # le dessin
         if self.polygones:
             p.setBrush(Qt.NoBrush)
-            p.setPen(QPen(QColor("#c02020" if self.deborde else "#1a3a8f"), 1))
+            p.setPen(QPen(QColor(pal.alerte if self.deborde else pal.trace), 1))
             for poly in self.polygones:
                 p.drawPolyline(QPolygonF([pt(q.x(), q.y()) for q in poly]))
 
         # l'emprise, pour lire le placement d'un coup d'oeil
         if self.emprise:
             x0, y0, x1, y1 = self.emprise
-            p.setPen(QPen(QColor("#c02020" if self.deborde else "#2f9e44"),
+            p.setPen(QPen(QColor(pal.alerte if self.deborde else pal.accent),
                           1, Qt.DotLine))
             p.setBrush(Qt.NoBrush)
             p.drawRect(QRectF(pt(x0, y1), pt(x1, y0)))
 
-        p.setPen(QColor("#606060"))
+        p.setPen(QColor(pal.texte_faible))
         p.drawText(8, self.height() - 8,
                    f"média {mx:.1f} × {my:.1f} mm")
 
@@ -107,9 +114,11 @@ class Pupitre(QWidget):
         self.calcule = []                 # après placement, ce qui sera tracé
         self.media = (380.9, 285.6)
         self.chemin = None
+        self.pal = SOMBRE                 # comme le visualiseur G-code
 
-        self.apercu = Apercu()
+        self.apercu = Apercu(self.pal)
         self.info = QLabel("Aucun dessin chargé.")
+        self.info.setObjectName("faible")
         self.info.setWordWrap(True)
 
         principal = QHBoxLayout(self)
@@ -119,7 +128,18 @@ class Pupitre(QWidget):
         droite.addWidget(self.info, 0)
         principal.addLayout(droite, 1)
 
+        self._habiller()
         self._interroger_media(silencieux=True)
+
+    def _habiller(self):
+        self.setStyleSheet(feuille_de_style(self.pal))
+        self.apercu.habiller(self.pal)
+
+    def _basculer_theme(self):
+        self.pal = CLAIR if self.pal is SOMBRE else SOMBRE
+        self.b_theme.setText("Thème clair" if self.pal is SOMBRE
+                             else "Thème sombre")
+        self._habiller()
 
     # ---------------------------------------------------------------- UI
     def _colonne_reglages(self):
@@ -193,9 +213,14 @@ class Pupitre(QWidget):
         v.addWidget(g)
 
         self.b_envoyer = QPushButton("Envoyer au traceur")
+        self.b_envoyer.setObjectName("principal")
         self.b_envoyer.setEnabled(False)
         self.b_envoyer.clicked.connect(self._envoyer)
         v.addWidget(self.b_envoyer)
+
+        self.b_theme = QPushButton("Thème clair")
+        self.b_theme.clicked.connect(self._basculer_theme)
+        v.addWidget(self.b_theme)
         v.addStretch(1)
         return boite
 
@@ -282,8 +307,12 @@ class Pupitre(QWidget):
         texte = (f"{n} tracé(s) — emprise {x1 - x0:.1f} × {y1 - y0:.1f} mm, "
                  f"coin à {x0:.1f}, {y0:.1f}")
         if deborde:
-            texte += "  ⚠ LE DESSIN DÉBORDE DE LA ZONE UTILE"
+            texte += "  —  LE DESSIN DÉBORDE DE LA ZONE UTILE"
         self.info.setText(texte)
+        # Un message d'alerte doit aussi en avoir la couleur : un texte
+        # rouge sous un style neutre ne se lit pas comme un refus.
+        self.info.setObjectName("alerte" if deborde else "faible")
+        self.info.setStyleSheet(feuille_de_style(self.pal))
         self.b_envoyer.setEnabled(bool(self.brut) and not deborde)
 
     def _envoyer(self):

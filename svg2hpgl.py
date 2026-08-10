@@ -287,6 +287,10 @@ def main():
                     help="décalage du dessin en mm (défaut 0,0)")
     ap.add_argument("--pivoter", action="store_true",
                     help="rotation de 90° : met le grand côté dans l'avance")
+    ap.add_argument("--echelle", metavar="F",
+                    help="facteur d'échelle, ex. 0.9 ou 90%% (défaut : taille réelle)")
+    ap.add_argument("--ajuster", action="store_true",
+                    help="réduit juste ce qu'il faut pour tenir dans la zone utile")
     ap.add_argument("--brut", action="store_true",
                     help="garde l'ordre du SVG au lieu d'optimiser le trajet")
     ap.add_argument("--envoyer", action="store_true",
@@ -305,6 +309,40 @@ def main():
         marge_x, marge_y = (float(v) for v in args.marge.split(","))
     except ValueError:
         sys.exit("--marge attend deux nombres séparés par une virgule, ex. 5,5")
+
+    if args.echelle and args.ajuster:
+        sys.exit("--echelle et --ajuster se contredisent : choisir l'un des deux")
+
+    limites = limites_machine()
+    facteur = 1.0
+
+    if args.echelle:
+        try:
+            texte = args.echelle.strip().rstrip("%")
+            facteur = float(texte) / (100.0 if "%" in args.echelle else 1.0)
+        except ValueError:
+            sys.exit("--echelle attend un nombre, ex. 0.9 ou 90%")
+        if facteur <= 0:
+            sys.exit("--echelle attend un facteur positif")
+
+    elif args.ajuster:
+        if not limites:
+            sys.exit("--ajuster a besoin de la zone utile : machine allumée et sur READY ?")
+        xmin, ymin, xmax, ymax = cadre(polylignes)
+        dispo_x = limites[0] - 2 * marge_x
+        dispo_y = limites[1] - 2 * marge_y
+        facteur = min(1.0,
+                      dispo_x / (xmax - xmin) if xmax > xmin else 1.0,
+                      dispo_y / (ymax - ymin) if ymax > ymin else 1.0)
+        facteur *= 0.995        # la zone utile varie de quelques dixièmes
+
+    if facteur != 1.0:
+        polylignes = [([(x * facteur, y * facteur) for x, y in pts], ferme)
+                      for pts, ferme in polylignes]
+        print(f"échelle      x{facteur:.4f}  ({facteur * 100:.1f} %)")
+        print("             ATTENTION : les cotes et le cartouche du dessin")
+        print("             annoncent toujours l'échelle d'origine.")
+
     polylignes = recadrer(polylignes, marge_x, marge_y)
 
     # Le plus-proche-voisin est glouton : il ne voit pas le retour final et
@@ -337,7 +375,7 @@ def main():
     if ignorees:
         print(f"{ignorees} chemin(s) plus petits qu'une unité machine, ignorés")
 
-    limites = limites_machine()
+    # `limites` a déjà été interrogée plus haut, --ajuster en dépendant.
     if limites:
         lim_x, lim_y = limites
         print(f"zone utile   {lim_x:.1f} x {lim_y:.1f} mm (média actuellement chargé)")
@@ -345,6 +383,8 @@ def main():
             print("\n  LE DESSIN DÉBORDE DE LA ZONE UTILE.", file=sys.stderr)
             if ymax > lim_y and xmax <= lim_y and ymax <= lim_x:
                 print("  Il tiendrait avec --pivoter.", file=sys.stderr)
+            print("  Ou avec --ajuster, qui réduit juste ce qu'il faut.",
+                  file=sys.stderr)
             if args.envoyer:
                 sys.exit("envoi annulé.")
     else:

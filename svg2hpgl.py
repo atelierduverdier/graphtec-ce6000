@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+"""SVG -> HP-GL pour traceur de découpe Graphtec CE6000-60.
+
+Réutilise le parseur `svg_import.py` de LaserAtelier : il rend des
+polylignes déjà en millimètres, déjà en Y-vers-le-haut, déjà ramenées à
+l'origine du viewBox -- c'est-à-dire déjà dans la convention HP-GL.
+
+Repère vérifié au stylo sur la machine le 10/08/2026 :
+  - 40 unités par millimètre sur les deux axes (confirmé par `OF;`) ;
+  - origine au coin bas-gauche, aucun miroir ;
+  - X = sens d'avance du média, Y = course du chariot.
+
+La compensation d'offset de lame n'est PAS calculée ici : le firmware du
+CE6000 s'en charge (réglage OFFSET de la condition de coupe). On lui
+envoie la polyligne nominale, il place la lame.
+
+Par prudence ce script N'ENVOIE RIEN par défaut : il écrit un fichier.
+L'envoi vers la machine demande `--envoyer` explicitement.
+"""
+
+import argparse
+import math
+import os
+import select
+import sys
+import time
+
+CHEMIN_ATELIER = os.path.expanduser(
+    "~/.local/share/FreeCAD/v1-1/Mod/LaserAtelier")
+sys.path.insert(0, CHEMIN_ATELIER)
+try:
+    import svg_import
+except ImportError:                                    # pragma: no cover
+    sys.exit(f"svg_import.py introuvable dans {CHEMIN_ATELIER}")
+
+PERIPH = "/dev/usb/lp0"
+UNITES_PAR_MM = 40        # mesuré, pas supposé : réponse de `OF;`
+TAILLE_PAQUET = 8         # wMaxPacketSize de l'endpoint 1 OUT
+LARGEUR_LIGNE = 240       # caractères par commande PU/PD groupée
+
+
+# ======================================================================
+# A. GÉOMÉTRIE
+# ======================================================================
+
+# Formes que le parseur traverse sans rien produire NI rien signaler :
+# il ne convertit que les <path>. Un SVG fait de <rect> sortirait vide en
+# silence, ce qui ne se verrait qu'une fois le média gâché.
+_FORMES_NON_CONVERTIES = ("rect", "circle", "ellipse",
+                          "polygon", "polyline", "line")
+
+
+def _formes_perdues(chemin):
+    """Compte les formes géométriques que le parseur va laisser tomber."""
+    import xml.etree.ElementTree as ET
+    perdues = {}
+    for elem in ET.parse(chemin).getroot().iter():
+        tag = elem.tag.rsplit("}", 1)[-1]
+        if tag in _FORMES_NON_CONVERTIES:
+            perdues[tag] = perdues.get(tag, 0) + 1
+    return perdues
+
+
+def charger(chemin):
+    """Fichier SVG -> [(points_mm, ferme), ...] + avertissements."""
+    records, avertissements = svg_import.parse_svg_file(chemin)
+    for tag, nombre in sorted(_formes_perdues(chemin).items()):
+        avertissements.append(
+            f"{nombre} <{tag}> NON converti(s) : le parseur ne lit que les "
+            f"<path>. Dans Inkscape, Chemin > Objet en chemin.")
+    polylignes = []
+    for record in records:
+        for sous in record["subpaths"]:
+            points = list(sous["points"])
+            if sous["closed"] and len(points) >= 3:
+                if _distance(points[0], points[-1]) > 1e-9:
+                    points.append(points[0])
+            if len(points) >= 2:
+                polylignes.append((points, sous["closed"]))
+    return polylignes, avertissements
+
+
+def _distance(a, b):
+    return math.hypot(b[0] - a[0], b[1] - a[1])
+
+
+def pivoter(polylignes):
+    """Rotation de 90° : échange la longueur et la largeur du dessin."""
+    return [([(y, -x) for x, y in points], ferme)
+            for points, ferme in polylignes]
+
+
+def cadre(polylignes):
+    """Rectangle englobant (xmin, ymin, xmax, ymax) en mm."""
+    xs = [x for points, _ in polylignes for x, _ in points]
+    ys = [y for points, _ in polylignes for _, y in points]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def recadrer(polylignes, marge_x, marge_y):
+    """Ramène le dessin au coin bas-gauche, plus la marge demandée."""
+    xmin, ymin, _, _ = cadre(polylignes)
+    dx, dy = marge_x - xmin, marge_y - ymin
+    return [([(x + dx, y + dy) for x, y in points], ferme)
+            for points, ferme in polylignes]
+
+
+def trajet_a_vide(polylignes):
+    """Longueur totale parcourue outil levé, en mm."""
+    total, position = 0.0, (0.0, 0.0)
+    for points, _ in polylignes:
+        total += _distance(position, points[0])
+        position = points[-1]
+    return total + _distance(position, (0.0, 0.0))
+
+
+def ordonner(polylignes):
+    """Range les chemins au plus proche voisin depuis l'origine.
+
+    Les chemins ouverts peuvent être parcourus à l'envers ; les fermés,
+    non : leur sens encode le sens de parcours du contour, et le retourner
+    n'apporte rien puisqu'on repart de toute façon du même point.
+    """
+    restants = list(polylignes)
+    ordonnees = []
+    position = (0.0, 0.0)
+    while restants:
+        meilleur, cout_min, a_retourner = None, float("inf"), False
+        for indice, (points, ferme) in enumerate(restants):
+            cout = _distance(position, points[0])
+            if cout < cout_min:
+                meilleur, cout_min, a_retourner = indice, cout, False
+            if not ferme:
+                cout = _distance(position, points[-1])
+                if cout < cout_min:
+                    meilleur, cout_min, a_retourner = indice, cout, True
+        points, ferme = restants.pop(meilleur)
+        if a_retourner:
+            points = points[::-1]
+        ordonnees.append((points, ferme))
+        position = points[-1]
+    return ordonnees
+
+
+# ======================================================================
+# B. TRADUCTION HP-GL
+# ======================================================================
+
+def en_unites(points):
+    """mm -> unités traceur entières, sans point consécutif redondant.
+
+    L'aplatissement du parseur vise 0,02 mm de flèche alors que la machine
+    ne distingue que 0,025 mm : beaucoup de points tombent sur la même
+    unité. Les garder gonflerait le fichier sans rien changer au tracé.
+    """
+    sortie = []
+    for x, y in points:
+        couple = (int(round(x * UNITES_PAR_MM)), int(round(y * UNITES_PAR_MM)))
+        if not sortie or couple != sortie[-1]:
+            sortie.append(couple)
+    return sortie
+
+
+def _grouper(prefixe, couples):
+    """HP-GL accepte plusieurs couples par PU/PD : on en profite."""
+    lignes, courante = [], prefixe
+    for x, y in couples:
+        morceau = f"{x},{y},"
+        if len(courante) + len(morceau) > LARGEUR_LIGNE:
+            lignes.append(courante.rstrip(",") + ";")
+            courante = prefixe
+        courante += morceau
+    if courante != prefixe:
+        lignes.append(courante.rstrip(",") + ";")
+    return lignes
+
+
+def en_hpgl(polylignes, outil=1, vitesse=None):
+    """Rend le programme HP-GL complet."""
+    lignes = ["IN;"]
+    if vitesse:
+        lignes.append(f"VS{vitesse};")
+    lignes.append(f"SP{outil};")
+
+    ignorees = 0
+    for points, _ in polylignes:
+        couples = en_unites(points)
+        if len(couples) < 2:
+            ignorees += 1        # tout le chemin tient dans une unité
+            continue
+        lignes += _grouper("PU", couples[:1])
+        lignes += _grouper("PD", couples[1:])
+
+    lignes += ["PU0,0;", "SP0;"]
+    return "\n".join(lignes) + "\n", ignorees
+
+
+# ======================================================================
+# C. LIAISON AVEC LA MACHINE
+# ======================================================================
+
+def _ecrire_brut(fd, texte, delai=15.0):
+    donnees = memoryview(texte.encode("ascii"))
+    envoye = 0
+    while envoye < len(donnees):
+        _, prets, _ = select.select([], [fd], [], delai)
+        if not prets:
+            raise TimeoutError("le traceur n'accepte plus de données")
+        try:
+            envoye += os.write(fd, donnees[envoye:envoye + TAILLE_PAQUET])
+        except BlockingIOError:
+            time.sleep(0.01)     # tampon plein : on laisse respirer
+    return envoye
+
+
+def _lire_brut(fd, delai=6.0):
+    morceaux = []
+    while True:
+        prets, _, _ = select.select([fd], [], [], delai)
+        if not prets:
+            break
+        try:
+            bloc = os.read(fd, 64)
+        except BlockingIOError:
+            break
+        if not bloc:
+            break
+        morceaux.append(bloc)
+        if b"\r" in bloc or b"\n" in bloc:
+            break
+        delai = 0.3
+    return b"".join(morceaux)
+
+
+def limites_machine():
+    """Interroge `OH;` -> (largeur_x_mm, largeur_y_mm), ou None."""
+    if not os.path.exists(PERIPH):
+        return None
+    fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
+    try:
+        _ecrire_brut(fd, ";")
+        _lire_brut(fd, delai=0.3)
+        _ecrire_brut(fd, "OH;")
+        reponse = _lire_brut(fd).decode("ascii", "replace").strip()
+    finally:
+        os.close(fd)
+    try:
+        x1, y1, x2, y2 = (float(v) for v in reponse.split(","))
+    except ValueError:
+        return None
+    return (x2 - x1) / UNITES_PAR_MM, (y2 - y1) / UNITES_PAR_MM
+
+
+def envoyer(programme):
+    fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
+    try:
+        return _ecrire_brut(fd, programme)
+    finally:
+        os.close(fd)
+
+
+# ======================================================================
+# D. LIGNE DE COMMANDE
+# ======================================================================
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Convertit un SVG en HP-GL pour le Graphtec CE6000-60.")
+    ap.add_argument("svg", help="fichier SVG à convertir")
+    ap.add_argument("-o", "--sortie", help="fichier .hpgl (défaut : à côté du SVG)")
+    ap.add_argument("--outil", type=int, default=1,
+                    help="condition de coupe du panneau, 1 à 8 (défaut 1)")
+    ap.add_argument("--vitesse", type=int,
+                    help="vitesse en cm/s ; par défaut celle de la condition")
+    ap.add_argument("--marge", default="0,0", metavar="X,Y",
+                    help="décalage du dessin en mm (défaut 0,0)")
+    ap.add_argument("--pivoter", action="store_true",
+                    help="rotation de 90° : met le grand côté dans l'avance")
+    ap.add_argument("--brut", action="store_true",
+                    help="garde l'ordre du SVG au lieu d'optimiser le trajet")
+    ap.add_argument("--envoyer", action="store_true",
+                    help="envoie à la machine (mouvement réel de l'outil)")
+    args = ap.parse_args()
+
+    polylignes, avertissements = charger(args.svg)
+    for message in avertissements:
+        print(f"  attention : {message}", file=sys.stderr)
+    if not polylignes:
+        sys.exit("aucune géométrie exploitable dans ce SVG")
+
+    if args.pivoter:
+        polylignes = pivoter(polylignes)
+    try:
+        marge_x, marge_y = (float(v) for v in args.marge.split(","))
+    except ValueError:
+        sys.exit("--marge attend deux nombres séparés par une virgule, ex. 5,5")
+    polylignes = recadrer(polylignes, marge_x, marge_y)
+
+    # Le plus-proche-voisin est glouton : il ne voit pas le retour final et
+    # peut sortir un ordre PIRE que celui du SVG. On le mesure au lieu de le
+    # croire, et on ne garde son résultat que s'il gagne vraiment.
+    avant = apres = trajet_a_vide(polylignes)
+    if not args.brut:
+        candidat = ordonner(polylignes)
+        gain_candidat = trajet_a_vide(candidat)
+        if gain_candidat < avant:
+            polylignes, apres = candidat, gain_candidat
+
+    programme, ignorees = en_hpgl(polylignes, args.outil, args.vitesse)
+
+    xmin, ymin, xmax, ymax = cadre(polylignes)
+    largeur, hauteur = xmax - xmin, ymax - ymin
+    points = sum(len(p) for p, _ in polylignes)
+
+    print(f"{len(polylignes)} chemin(s), {points} points")
+    print(f"emprise      {largeur:.1f} x {hauteur:.1f} mm"
+          f"   (coin bas-gauche à {xmin:.1f}, {ymin:.1f})")
+    if not args.brut:
+        if apres < avant:
+            gain = (1 - apres / avant) * 100
+            print(f"trajet à vide {avant:.0f} mm -> {apres:.0f} mm  ({gain:.0f} % gagné)")
+        else:
+            print(f"trajet à vide {avant:.0f} mm  (l'ordre du SVG était déjà le meilleur)")
+    if ignorees:
+        print(f"{ignorees} chemin(s) plus petits qu'une unité machine, ignorés")
+
+    limites = limites_machine()
+    if limites:
+        lim_x, lim_y = limites
+        print(f"zone utile   {lim_x:.1f} x {lim_y:.1f} mm (média actuellement chargé)")
+        if xmax > lim_x or ymax > lim_y:
+            print("\n  LE DESSIN DÉBORDE DE LA ZONE UTILE.", file=sys.stderr)
+            if ymax > lim_y and xmax <= lim_y and ymax <= lim_x:
+                print("  Il tiendrait avec --pivoter.", file=sys.stderr)
+            if args.envoyer:
+                sys.exit("envoi annulé.")
+    else:
+        print("zone utile   non interrogée (machine absente ou muette)")
+        if args.envoyer:
+            # Hors de l'état READY, la machine avale les octets sans les lire
+            # ni bouger : l'envoi paraîtrait réussir et il ne se passerait
+            # rien. Si elle ne répond pas à OH;, elle n'écoute pas non plus.
+            sys.exit("elle ne répond pas : média chargé et panneau sur READY ?\n"
+                     "envoi annulé.")
+
+    sortie = args.sortie or os.path.splitext(args.svg)[0] + ".hpgl"
+    with open(sortie, "w", encoding="ascii") as f:
+        f.write(programme)
+    print(f"écrit        {sortie}  ({len(programme)} octets)")
+
+    if args.envoyer:
+        envoye = envoyer(programme)
+        print(f"envoyé       {envoye} octets à {PERIPH}")
+
+
+if __name__ == "__main__":
+    main()

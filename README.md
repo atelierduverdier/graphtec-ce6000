@@ -255,6 +255,47 @@ pas le retour final et peut sortir un ordre pire que celui du SVG. Le script
 mesure les deux et ne garde le sien que s'il gagne — sur 3 chemins il déclare
 forfait, sur 40 pastilles dispersées il économise 70 % du déplacement à vide.
 
+## `pupitre.py` — voir le dessin posé sur le média
+
+```bash
+python3 pupitre.py
+```
+
+Le seul écran que le logiciel Graphtec avait vraiment en plus (sa fenêtre
+« Page »). Il interroge le média à la machine par `OH;` — comme le faisait
+l'original, dont la capture affiche *« Automatique (CE6000-60 (Taille de la
+sonde)) 187,20 × 257,00 mm »*, exactement nos chiffres — puis montre le
+dessin dessus.
+
+Réglages : origine X/Y, rotation par quarts de tour, miroirs, échelle libre
+ou ajustée au média, **copies matricielles** (rangées × colonnes, écarts),
+condition du panneau, vitesse et force. L'envoi se refuse tant que le dessin
+déborde.
+
+Le réordonnancement du trajet ne tourne qu'à l'envoi : il est en n², donc
+trop lourd à rejouer à chaque mouvement d'un réglage, et il ne change rien à
+ce que l'aperçu montre.
+
+**Pas encore fait : la mosaïque.** Découper un grand dessin en panneaux
+demande de couper les polylignes à la frontière de chacun — le seul morceau
+délicat de tout ça, qui mérite d'être traité à part.
+
+### Ce que le logiciel d'origine faisait, et qu'on ne refera pas
+
+Relevé sur 18 captures de Graphtec Studio v2.70. **Sans objet pour du tracé
+au stylo** : repères d'alignement (ARMS), cadre d'échenillage, styles de
+perforation, force et angle d'offset de lame, position initiale de la lame,
+tests de découpe. **Déjà porté par la machine** : les 8 conditions, que le
+fichier sélectionne par `SP1`..`SP8`. **Déjà mesuré comme exact chez nous** :
+l'ajustement de distance X/Y (notre `OF;` donne 40,00 et le carré de 60 mm
+l'a confirmé sur papier).
+
+Deux relevés utiles au passage : le logiciel a un type d'outil **« Stylo
+feutre »** dont les valeurs d'usine sont vitesse 10 cm/s, **accélération 2**,
+force 2. L'accélération se règle au panneau (`CONDITION` → `ACCEL`) et
+n'apparaît dans aucune commande HP-GL — une plume qui accélère fort dérape au
+départ de chaque segment.
+
 ## Quand utiliser quoi
 
 - **Inkscape** pour dessiner et couper au quotidien, réglé comme ci-dessus.

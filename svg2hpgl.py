@@ -90,6 +90,57 @@ def pivoter(polylignes):
             for points, ferme in polylignes]
 
 
+def tourner(polylignes, degres):
+    """Rotation de 0, 90, 180 ou 270°, autour de l'origine."""
+    degres %= 360
+    if degres == 0:
+        return polylignes
+    tables = {90: lambda x, y: (y, -x),
+              180: lambda x, y: (-x, -y),
+              270: lambda x, y: (-y, x)}
+    if degres not in tables:
+        raise ValueError("rotation limitée à 0, 90, 180 ou 270°")
+    f = tables[degres]
+    return [([f(x, y) for x, y in points], ferme)
+            for points, ferme in polylignes]
+
+
+def refleter(polylignes, selon_x=False, selon_y=False):
+    """Miroir. `selon_x` retourne la gauche et la droite, `selon_y` le haut
+    et le bas -- nommés d'après l'AXE inversé, comme dans le logiciel
+    Graphtec."""
+    if not (selon_x or selon_y):
+        return polylignes
+    sx, sy = (-1.0 if selon_x else 1.0), (-1.0 if selon_y else 1.0)
+    return [([(x * sx, y * sy) for x, y in points], ferme)
+            for points, ferme in polylignes]
+
+
+def mettre_a_echelle(polylignes, facteur):
+    if facteur == 1.0:
+        return polylignes
+    return [([(x * facteur, y * facteur) for x, y in points], ferme)
+            for points, ferme in polylignes]
+
+
+def dupliquer(polylignes, rangees, colonnes, ecart_x, ecart_y):
+    """Grille de copies. Le pas est l'emprise du motif PLUS l'écart, sinon
+    deux copies se chevaucheraient dès que l'écart est inférieur à la
+    largeur du dessin."""
+    if rangees <= 1 and colonnes <= 1:
+        return polylignes
+    xmin, ymin, xmax, ymax = cadre(polylignes)
+    pas_x = (xmax - xmin) + ecart_x
+    pas_y = (ymax - ymin) + ecart_y
+    sortie = []
+    for j in range(max(1, rangees)):
+        for i in range(max(1, colonnes)):
+            dx, dy = i * pas_x, j * pas_y
+            sortie += [([(x + dx, y + dy) for x, y in points], ferme)
+                       for points, ferme in polylignes]
+    return sortie
+
+
 def cadre(polylignes):
     """Rectangle englobant (xmin, ymin, xmax, ymax) en mm."""
     xs = [x for points, _ in polylignes for x, _ in points]

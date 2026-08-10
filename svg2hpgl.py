@@ -226,7 +226,7 @@ def _grouper(prefixe, couples):
     return lignes
 
 
-def en_hpgl(polylignes, outil=1, vitesse=None, force=None):
+def en_hpgl(polylignes, outil=1, force=None):
     """Rend le programme HP-GL complet.
 
     `FS` est bien écouté par cette machine : vérifié au nuancier du
@@ -234,10 +234,14 @@ def en_hpgl(polylignes, outil=1, vitesse=None, force=None):
     Laisser `force` à None garde le réglage de la condition du panneau,
     ce qui reste le choix par défaut : les conditions vivent dans la
     machine, réglées sur le vrai matériau.
+
+    **`VS` n'est PAS émis, parce que cette machine l'ignore.** Mesuré le
+    10/08/2026 : le même parcours de 2560 mm envoyé à VS5 puis à VS40 --
+    huit fois l'écart -- a duré 30 s dans les deux cas, soit 85 mm/s, la
+    vitesse de la condition réglée au panneau. Un réglage qui ne fait rien
+    est pire qu'absent : il fait croire qu'on a agi.
     """
     lignes = ["IN;"]
-    if vitesse:
-        lignes.append(f"VS{vitesse};")
     if force:
         lignes.append(f"FS{force};")
     lignes.append(f"SP{outil};")
@@ -330,8 +334,6 @@ def main():
     ap.add_argument("-o", "--sortie", help="fichier .hpgl (défaut : à côté du SVG)")
     ap.add_argument("--outil", type=int, default=1,
                     help="condition de coupe du panneau, 1 à 8 (défaut 1)")
-    ap.add_argument("--vitesse", type=int,
-                    help="vitesse en cm/s ; par défaut celle de la condition")
     ap.add_argument("--force", type=int,
                     help="force de coupe 1 à 38 ; par défaut celle de la condition")
     ap.add_argument("--marge", default="0,0", metavar="X,Y",
@@ -408,7 +410,7 @@ def main():
 
     if args.force is not None and not 1 <= args.force <= 38:
         sys.exit("--force attend une valeur de 1 à 38 (plage du CE6000-60)")
-    programme, ignorees = en_hpgl(polylignes, args.outil, args.vitesse, args.force)
+    programme, ignorees = en_hpgl(polylignes, args.outil, args.force)
 
     xmin, ymin, xmax, ymax = cadre(polylignes)
     largeur, hauteur = xmax - xmin, ymax - ymin

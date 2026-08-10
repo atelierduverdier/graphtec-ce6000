@@ -37,12 +37,10 @@ def u(mm):
     return int(round(mm * UNITES_PAR_MM))
 
 
-def nuancier(force_min, force_max, pas, outil, vitesse):
+def nuancier(force_min, force_max, pas, outil):
     """Rend (programme HP-GL, [(force, longueur_mm, y_mm), ...])."""
     forces = list(range(force_min, force_max + 1, pas))
     lignes = ["IN;"]
-    if vitesse:
-        lignes.append(f"VS{vitesse};")
     lignes.append(f"SP{outil};")
 
     legende = []
@@ -79,7 +77,6 @@ def main():
     ap.add_argument("--max", type=int, default=31, help="force la plus haute (défaut 31)")
     ap.add_argument("--pas", type=int, default=2, help="incrément (défaut 2)")
     ap.add_argument("--outil", type=int, default=1, help="condition du panneau (défaut 1)")
-    ap.add_argument("--vitesse", type=int, default=10, help="vitesse en cm/s (défaut 10)")
     ap.add_argument("--envoyer", action="store_true",
                     help="envoie à la machine (mouvement réel de l'outil)")
     args = ap.parse_args()
@@ -88,7 +85,7 @@ def main():
         sys.exit("plage de force incohérente")
 
     programme, legende = nuancier(args.min, args.max, args.pas,
-                                  args.outil, args.vitesse)
+                                  args.outil)
 
     hauteur = legende[-1][2] + MARGE
     largeur = MARGE + LONGUEUR_BASE + args.max

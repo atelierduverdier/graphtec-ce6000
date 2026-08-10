@@ -28,6 +28,37 @@ Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
 (le 7550 est un traceur de bureau A3 dont l'espace de coordonnées est petit),
 `HP-GL ORIGIN POINT` → coin.
 
+### `FS` est écouté, `VS` ne l'est PAS
+
+Deux commandes voisines, deux réponses opposées, et il a fallu les mesurer
+séparément.
+
+**`FS` (force) passe** : le nuancier du 10/08/2026 montre les quatre valeurs
+basses plus pâles que les suivantes. Si la commande était ignorée, les
+19 lignes seraient identiques.
+
+**`VS` (vitesse) est ignoré** : le même parcours de 2 560 mm envoyé à `VS5`
+puis à `VS40` — huit fois l'écart — a duré **30 s dans les deux cas**, soit
+85 mm/s. C'est la vitesse de la condition réglée au panneau (10 cm/s, moins
+ce que coûtent les virages). Aucun script du dépôt n'émet donc `VS` : un
+réglage qui ne fait rien est pire qu'absent, il fait croire qu'on a agi.
+**Vitesse et accélération se règlent au panneau**, `CONDITION` → `VITESSE` /
+`ACCEL`.
+
+`sonde_vitesse.py` garde la trace de la méthode, et surtout **des deux qui
+ont échoué avant** : `OA;` rend la position **logique**, pas celle du
+chariot, donc il ne mesure aucun mouvement ; et le contrôle de flux ne mord
+pas — 15 ko partent en 3,8 s quelle que soit la vitesse, soit 4 ko/s, qui
+est le débit de l'USB avec ses paquets de 8 octets. Le tampon de la machine
+avale au moins 15 ko. La seule mesure qui a tranché est un **chronomètre à
+la main**.
+
+Piège de raisonnement à ne pas refaire : la première version du verdict
+regardait l'**étendue** des durées, pas leur ordre — n'importe quel bruit la
+satisfaisait, et elle a annoncé un résultat faux avec aplomb. Un verdict doit
+exiger la **croissance**, et se taire quand les mesures ne sont ni
+constantes ni croissantes.
+
 ## Les trois pièges
 
 1. **Hors de l'état `READY`, la machine ne lit pas son tampon d'interface.**

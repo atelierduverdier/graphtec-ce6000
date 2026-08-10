@@ -29,7 +29,9 @@ def figure():
     """Rend la liste des commandes HP-GL du trace de controle."""
     cmd = [
         "IN;",        # initialisation : remet aussi a zero les bits d'erreur
-        "VS10;",      # 10 cm/s : lent, pour un premier mouvement
+        # Pas de VS : cette machine l'ignore (mesure du 10/08/2026, meme
+        # parcours a VS5 et VS40, 30 s dans les deux cas). La vitesse vient
+        # de la condition reglee au panneau.
         "SP1;",       # condition de coupe n1 du panneau
     ]
 

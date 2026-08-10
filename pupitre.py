@@ -205,11 +205,16 @@ class Pupitre(QWidget):
         gl = QGridLayout(g)
         self.cmb_cond = QComboBox()
         self.cmb_cond.addItems([f"condition {i}" for i in range(1, 9)])
-        self.spn_vit = self._entier(1, 60, 10, suffixe=" cm/s")
         self.spn_force = self._entier(1, 38, 12)
         gl.addWidget(QLabel("panneau"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
-        gl.addWidget(QLabel("vitesse"), 1, 0); gl.addWidget(self.spn_vit, 1, 1)
-        gl.addWidget(QLabel("force"), 2, 0); gl.addWidget(self.spn_force, 2, 1)
+        gl.addWidget(QLabel("force"), 1, 0); gl.addWidget(self.spn_force, 1, 1)
+        # Pas de curseur de vitesse : `VS` est ignoré par cette machine
+        # (mesuré le 10/08/2026 -- même parcours à VS5 puis VS40, 30 s dans
+        # les deux cas). Un réglage qui ne fait rien est pire qu'absent.
+        rappel = QLabel("vitesse et accélération : au panneau,\n"
+                        "CONDITION → VITESSE / ACCEL")
+        rappel.setObjectName("faible")
+        gl.addWidget(rappel, 2, 0, 1, 2)
         v.addWidget(g)
 
         self.b_envoyer = QPushButton("Envoyer au traceur")
@@ -326,7 +331,6 @@ class Pupitre(QWidget):
 
         programme, _ = noyau.en_hpgl(chemins,
                                      self.cmb_cond.currentIndex() + 1,
-                                     self.spn_vit.value(),
                                      self.spn_force.value())
         try:
             envoye = noyau.envoyer(programme)

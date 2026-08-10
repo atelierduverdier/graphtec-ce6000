@@ -51,8 +51,16 @@ Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
   place la lame. Ne pas la recalculer côté PC.
 - **La force de coupe** : elle se trouve sur une chute du vrai matériau, en
   montant jusqu'à ce que le film se détache sans entamer le support. Aucun
-  calcul ne donne ce nombre. Le programme dit `SP1..SP8`, la machine applique
-  la condition réglée au panneau.
+  calcul ne donne ce nombre. Par défaut le programme dit `SP1..SP8` et la
+  machine applique la condition réglée au panneau — c'est le choix
+  recommandé. `FS` fonctionne néanmoins (voir `nuancier_force.py`), d'où
+  l'option `--force` pour les cas où l'on veut piloter depuis le PC.
+
+  **La plage utile va de 1 à 38.** Au stylo, la progression ne se voit que
+  jusqu'à ~10 puis sature : un stylo dépose son encre dès qu'il touche, et
+  appuyer plus fort n'y change rien. La force n'est vraiment un réglage
+  continu qu'avec une lame, où elle fixe la profondeur de coupe — c'est donc
+  sur du vinyle, à la lame, que le nuancier prend son sens.
 - **L'ARMS** (détection des marques de repérage, print & cut) : commandes mal
   documentées hors SDK Graphtec.
 
@@ -96,6 +104,7 @@ python3 svg2hpgl.py dessin.svg --pivoter --marge 5,5
 | `--sortie` | fichier `.hpgl` (défaut : à côté du SVG) |
 | `--outil N` | condition de coupe du panneau, 1 à 8 |
 | `--vitesse N` | vitesse en cm/s (défaut : celle de la condition) |
+| `--force N` | force 1 à 38 (défaut : celle de la condition) |
 | `--marge X,Y` | décalage du dessin en mm |
 | `--pivoter` | rotation 90°, met le grand côté dans l'avance |
 | `--brut` | garde l'ordre du SVG au lieu d'optimiser le trajet |

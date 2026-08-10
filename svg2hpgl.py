@@ -175,11 +175,20 @@ def _grouper(prefixe, couples):
     return lignes
 
 
-def en_hpgl(polylignes, outil=1, vitesse=None):
-    """Rend le programme HP-GL complet."""
+def en_hpgl(polylignes, outil=1, vitesse=None, force=None):
+    """Rend le programme HP-GL complet.
+
+    `FS` est bien écouté par cette machine : vérifié au nuancier du
+    10/08/2026, où seules les forces basses donnaient un trait plus pâle.
+    Laisser `force` à None garde le réglage de la condition du panneau,
+    ce qui reste le choix par défaut : les conditions vivent dans la
+    machine, réglées sur le vrai matériau.
+    """
     lignes = ["IN;"]
     if vitesse:
         lignes.append(f"VS{vitesse};")
+    if force:
+        lignes.append(f"FS{force};")
     lignes.append(f"SP{outil};")
 
     ignorees = 0
@@ -272,6 +281,8 @@ def main():
                     help="condition de coupe du panneau, 1 à 8 (défaut 1)")
     ap.add_argument("--vitesse", type=int,
                     help="vitesse en cm/s ; par défaut celle de la condition")
+    ap.add_argument("--force", type=int,
+                    help="force de coupe 1 à 38 ; par défaut celle de la condition")
     ap.add_argument("--marge", default="0,0", metavar="X,Y",
                     help="décalage du dessin en mm (défaut 0,0)")
     ap.add_argument("--pivoter", action="store_true",
@@ -306,7 +317,9 @@ def main():
         if gain_candidat < avant:
             polylignes, apres = candidat, gain_candidat
 
-    programme, ignorees = en_hpgl(polylignes, args.outil, args.vitesse)
+    if args.force is not None and not 1 <= args.force <= 38:
+        sys.exit("--force attend une valeur de 1 à 38 (plage du CE6000-60)")
+    programme, ignorees = en_hpgl(polylignes, args.outil, args.vitesse, args.force)
 
     xmin, ymin, xmax, ymax = cadre(polylignes)
     largeur, hauteur = xmax - xmin, ymax - ymin

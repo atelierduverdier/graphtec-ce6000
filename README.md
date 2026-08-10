@@ -64,6 +64,44 @@ Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
 - **L'ARMS** (détection des marques de repérage, print & cut) : commandes mal
   documentées hors SDK Graphtec.
 
+## Dessiner et couper au quotidien : Inkscape
+
+**Aucun plugin à installer.** Inkscape 1.4 embarque déjà l'équivalent du
+Cutting Master de Graphtec : *Extensions → Exporter → Tracer*, qui envoie
+directement au port. Vérifié le 10/08/2026 — carré de 60 mm sorti à 60,0 mm,
+coins nets.
+
+| Champ | Valeur | Pourquoi |
+|---|---|---|
+| Type de port | **Port parallèle** | |
+| Port parallèle | **`/dev/usb/lp0`** | le défaut proposé est `lp2` |
+| Langage | **HPGL** | ce que dit `COMMAND` au panneau |
+| Résolution X et Y | **1016** dpi | 1016 ÷ 25,4 = 40 unités/mm, la valeur mesurée |
+| Plume | **1** | sélectionne la CONDITION 1 |
+| Force / Vitesse | **0** / **0** | 0 = ne rien envoyer, le panneau garde la main |
+| Surcoupe | **0** | déjà fait par le firmware |
+| Correction d'offset d'outil | **0** | déjà fait par le firmware |
+| Précoupe | **décochée** | |
+| Rotation / miroirs / origine centrée | aucun | le repère est vérifié, ne pas le contrarier |
+| Alignement automatique | décoché | sinon il pousse le dessin dans le coin |
+
+Deux réglages par défaut à corriger impérativement, et ce sont les deux plus
+dangereux :
+
+- **« Correction d'offset d'outil » vaut 0,25 mm** et **« Surcoupe » vaut
+  1,00 mm** d'origine. Or la machine fait déjà ces deux corrections dans son
+  firmware. Les laisser actifs compense **deux fois** : les coins sortent avec
+  de petites cornes au lieu d'être nets. Le contrôle est visuel — un carré,
+  puis on regarde les angles.
+- **« Alignement automatique » déplace le dessin** dans le coin du média et
+  jette la position du SVG. À décocher pour maîtriser la mise en page.
+
+Ce que le logiciel natif faisait et qu'Inkscape ne fait pas : les marques de
+repérage ARMS (print & cut), les lignes de dégagement, le pavage des grands
+dessins et la duplication en série. C'est le territoire d'**Inkcut**, absent
+des dépôts (AUR seulement, et ses dépendances enaml/atom suivent mal les
+Python récents).
+
 ## Les outils
 
 ### `sonde_ce6000.py` — interroger la machine
@@ -126,8 +164,13 @@ pas le retour final et peut sortir un ordre pire que celui du SVG. Le script
 mesure les deux et ne garde le sien que s'il gagne — sur 3 chemins il déclare
 forfait, sur 40 pastilles dispersées il économise 70 % du déplacement à vide.
 
-## Alternatives toutes faites
+## Quand utiliser quoi
 
-Si ces scripts ne suffisent pas : **vpype** (`write --format hpgl`), l'extension
-**Tracer** intégrée à Inkscape, ou **Inkcut** (interface complète, mise en page,
-chenillage).
+- **Inkscape** pour dessiner et couper au quotidien, réglé comme ci-dessus.
+- **`sonde_ce6000.py`** dès que la machine ne répond plus : c'est le premier
+  réflexe, et il ne fait rien bouger.
+- **`svg2hpgl.py`** pour ce qu'Inkscape ne fait pas : refuser d'envoyer hors
+  `READY`, vérifier que le dessin tient dans la zone utile interrogée à la
+  machine, et traiter en lot depuis un terminal.
+- **vpype** (`write --format hpgl`) si un traitement de chemins plus poussé
+  devient nécessaire.

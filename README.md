@@ -280,15 +280,27 @@ ce que l'aperçu montre.
 demande de couper les polylignes à la frontière de chacun — le seul morceau
 délicat de tout ça, qui mérite d'être traité à part.
 
-### Ce que le logiciel d'origine faisait, et qu'on ne refera pas
+### Ce que le logiciel d'origine faisait, et où on en est
 
-Relevé sur 18 captures de Graphtec Studio v2.70. **Sans objet pour du tracé
-au stylo** : repères d'alignement (ARMS), cadre d'échenillage, styles de
-perforation, force et angle d'offset de lame, position initiale de la lame,
-tests de découpe. **Déjà porté par la machine** : les 8 conditions, que le
-fichier sélectionne par `SP1`..`SP8`. **Déjà mesuré comme exact chez nous** :
-l'ajustement de distance X/Y (notre `OF;` donne 40,00 et le carré de 60 mm
-l'a confirmé sur papier).
+Relevé sur 18 captures de Graphtec Studio v2.70.
+
+**Déjà porté par la machine**, rien à écrire : les 8 conditions, que le
+fichier sélectionne par `SP1`..`SP8` ; la compensation d'offset de lame et
+son angle, faits dans le firmware. **Déjà mesuré comme exact chez nous** :
+l'ajustement de distance X/Y (`OF;` donne 40,00 et le carré de 60 mm l'a
+confirmé sur papier).
+
+**Pas encore nécessaire, mais à reprendre le jour où on découpe** — la
+découpe de gabarits papier est le besoin d'origine, elle est seulement
+remise à plus tard :
+
+| | |
+|---|---|
+| Nuancier de force jugé au décollement | `nuancier_force.py` trace déjà la planche ; il lui faut une variante en carrés qu'on essaie de lever, la noirceur ne disant rien d'une coupe |
+| Styles de perforation | une ligne pointillée fait un gabarit détachable — utile, et la machine sait le faire seule |
+| Test de découpe / de force | équivalents déjà couverts par le nuancier |
+| Cadre d'échenillage | propre au vinyle, sans objet sur papier |
+| Repères d'alignement (ARMS) | seulement pour découper au contour un motif **imprimé** ; commandes mal documentées hors SDK |
 
 Deux relevés utiles au passage : le logiciel a un type d'outil **« Stylo
 feutre »** dont les valeurs d'usine sont vitesse 10 cm/s, **accélération 2**,

@@ -102,6 +102,59 @@ dessins et la duplication en série. C'est le territoire d'**Inkcut**, absent
 des dépôts (AUR seulement, et ses dépendances enaml/atom suivent mal les
 Python récents).
 
+## Tracer une planche TechDraw au stylo
+
+Le cas d'usage principal : sortir un plan FreeCAD au stylo, éventuellement à
+l'échelle 1 pour servir de gabarit sur la planche de bois. L'axe chariot
+accepte 600 mm, l'axe d'avance est illimité en rouleau.
+
+**Export depuis FreeCAD.** Sélectionner la planche dans l'arbre, puis
+*TechDraw → Page → Exporter la page en SVG*. Pour plusieurs planches :
+
+```python
+import FreeCAD, TechDrawGui, os
+doc = FreeCAD.getDocument("Tonnelle")
+dossier = os.path.join(os.path.dirname(doc.FileName), "planches_svg")
+os.makedirs(dossier, exist_ok=True)
+for p in doc.Objects:
+    if p.isDerivedFrom("TechDraw::DrawPage"):
+        TechDrawGui.exportPageAsSvg(p, os.path.join(dossier, p.Name + ".svg"))
+```
+
+L'échelle sort juste sans réglage : une planche A3 est lue à 420,0 × 297,0 mm.
+
+**Préparation.** Une planche exportée contient trois familles d'éléments qui
+ne se tracent pas telles quelles — sur `Plan_Debit` du meuble à balais :
+430 `<rect>`, 2 `<circle>`, 10 `<text>`, soit les tableaux et le cartouche.
+
+1. `python3 preparer_planche.py planche.svg` — retire les commentaires XML.
+   **Indispensable** : TechDraw en écrit quatre par planche et l'extension
+   Texte Hershey plante dessus (`'_Comment' object has no attribute
+   'transform'`).
+2. Dans Inkscape, tout sélectionner puis *Chemin → Objet en chemin* pour les
+   `<rect>` et `<circle>`.
+3. **Sélectionner le dessin SEUL, pas le cartouche**, puis *Extensions →
+   Texte → Texte Hershey*. Hershey ne traite que la sélection quand il y en
+   a une, et c'est ce qui sauve : les champs du cartouche vivent hors du
+   groupe `DrawingContent` et de son transform, donc Hershey ignore le
+   facteur 10 du `viewBox` et les rend **dix fois trop grands** — ils
+   débordent alors de 185 mm hors de la page. Les cotes, elles, sont dans le
+   groupe transformé et sortent justes.
+
+Le cartouche se traite ensuite à part : *Objet en chemin* donne des lettres
+creuses, acceptable pour quelques mots.
+
+**Pourquoi passer par `svg2hpgl.py` plutôt que par l'export d'Inkscape**, sur
+une planche réelle :
+
+| Planche | Trajet à vide | Après réordonnancement |
+|---|---|---|
+| Plan_Ensemble | 38 418 mm | **4 809 mm** (−87 %) |
+| Plan_Debit | 24 413 mm | **8 852 mm** (−64 %) |
+
+33 mètres de déplacement à vide évités sur une seule planche : du temps de
+tracé et de l'usure de courroie. L'exporteur d'Inkscape ne réordonne pas.
+
 ## Les outils
 
 ### `sonde_ce6000.py` — interroger la machine

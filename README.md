@@ -123,6 +123,44 @@ for p in doc.Objects:
 
 L'échelle sort juste sans réglage : une planche A3 est lue à 420,0 × 297,0 mm.
 
+### Un gabarit de page taillé pour le traceur
+
+Une planche **A3 au 1:1 ne tient pas sur du A3** : les galets et les marges
+mangent 39 mm dans le sens d'avance et 11 mm en largeur. `gabarit_traceur.py`
+fabrique `gabarits/A3_Traceur_TD.svg`, une page de **375 × 280 mm** qui laisse
+~5 mm de garde pour les variations de chargement.
+
+```bash
+python3 gabarit_traceur.py            # -> gabarits/A3_Traceur_TD.svg
+```
+
+Dans FreeCAD, pointer le modèle de la planche dessus :
+
+```python
+page.Template.Template = "/home/christophe/Projets/graphtec-ce6000/gabarits/A3_Traceur_TD.svg"
+page.KeepUpdated = True
+```
+
+Il reprend les **dix mêmes noms de champs** que le gabarit A3 de l'atelier
+(`FC-Title`, `AuthorName`, `scale`…), donc les remplissages automatiques de
+TechDraw fonctionnent à l'identique. Vérifié : format lu 375,0 × 280,0 mm,
+10 champs reconnus, date et titre remplis seuls.
+
+Sa particularité : **tous les textes fixes sont en monotrait**, dessinés
+glyphe par glyphe depuis les polices de LaserAtelier. Un gabarit ordinaire
+écrit ses libellés en `<text>`, qu'il faut convertir en chemins — ce qui donne
+des lettres **creuses**, parcourues deux fois par la plume. Ici seuls les dix
+champs remplis par TechDraw restent du texte. Emprise mesurée sur une planche
+vide : 365 × 270 mm, 290 tracés.
+
+**Il ne convient pas aux planches A3 existantes** : leurs vues sont placées en
+coordonnées absolues et leurs échelles choisies pour 420 × 297. Les y faire
+entrer changerait l'échelle, donc le cartouche mentirait. Pour celles-là, c'est
+l'A2 ou le rouleau.
+
+**Piège :** une planche dont `KeepUpdated` est faux, ou qui n'a jamais été
+ouverte, s'exporte **vide** — 975 octets au lieu de 29 000, sans erreur.
+
 **Préparation.** Une planche exportée contient trois familles d'éléments qui
 ne se tracent pas telles quelles — sur `Plan_Debit` du meuble à balais :
 430 `<rect>`, 2 `<circle>`, 10 `<text>`, soit les tableaux et le cartouche.

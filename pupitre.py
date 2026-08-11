@@ -222,6 +222,13 @@ class Pupitre(QWidget):
             self.cmb_outil.addItem(icones.icone(nom, self.pal), nom)
             self.cmb_outil.setItemData(self.cmb_outil.count() - 1,
                                        icones.legende(nom), Qt.ToolTipRole)
+        # Retouche d'offset, second champ de TC1002,2. Ce n'est PAS le
+        # déport : celui-là (19 pour la CB09U, 29 pour la CB15U) est appliqué
+        # par le firmware d'après le type de lame. On ne fait que l'ajuster,
+        # et 0 est la bonne réponse tant qu'une pointe ne bave pas.
+        self.spn_offset = self._entier(machine.DEPORT_MINI,
+                                       machine.DEPORT_MAXI, 0)
+        self.cmb_outil.currentTextChanged.connect(self._offset_utile)
         self.spn_force = self._entier(1, 38, 12)
         # La vitesse passe par le protocole propriétaire TC : le `VS` du
         # HP-GL est ignoré par cette machine. Elle MODIFIE DURABLEMENT la
@@ -234,13 +241,16 @@ class Pupitre(QWidget):
         self.chk_regler.setChecked(True)
         gl.addWidget(QLabel("condition"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
         gl.addWidget(QLabel("outil"), 1, 0); gl.addWidget(self.cmb_outil, 1, 1)
-        gl.addWidget(QLabel("vitesse"), 2, 0); gl.addWidget(self.spn_vit, 2, 1)
-        gl.addWidget(QLabel("force"), 3, 0); gl.addWidget(self.spn_force, 3, 1)
-        gl.addWidget(QLabel("accélération"), 4, 0); gl.addWidget(self.spn_accel, 4, 1)
-        gl.addWidget(self.chk_regler, 5, 0, 1, 2)
+        self.lbl_offset = QLabel("offset")
+        gl.addWidget(self.lbl_offset, 2, 0); gl.addWidget(self.spn_offset, 2, 1)
+        gl.addWidget(QLabel("vitesse"), 3, 0); gl.addWidget(self.spn_vit, 3, 1)
+        gl.addWidget(QLabel("force"), 4, 0); gl.addWidget(self.spn_force, 4, 1)
+        gl.addWidget(QLabel("accélération"), 5, 0); gl.addWidget(self.spn_accel, 5, 1)
+        gl.addWidget(self.chk_regler, 6, 0, 1, 2)
         rappel = QLabel("accélération basse = trait net,\nhaute = travail plus court")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 6, 0, 1, 2)
+        gl.addWidget(rappel, 7, 0, 1, 2)
+        self._offset_utile(self.cmb_outil.currentText())
         v.addWidget(g)
 
         self.b_envoyer = QPushButton("Envoyer au traceur")
@@ -261,6 +271,23 @@ class Pupitre(QWidget):
         s.setSuffix(suffixe)
         s.valueChanged.connect(self._recalculer)
         return s
+
+    def _offset_utile(self, outil):
+        """Grise l'offset pour un stylo, que la machine ne compense pas.
+
+        Le manuel est explicite : « Il n'est pas nécessaire de régler ce
+        paramètre pour les outils Plume. » Un champ actif qui ne fait rien
+        vaut moins qu'un champ éteint qui dit pourquoi.
+        """
+        plume = outil == "Stylo feutre"
+        self.spn_offset.setEnabled(not plume)
+        self.lbl_offset.setEnabled(not plume)
+        self.spn_offset.setToolTip(
+            "sans objet pour un stylo : la machine ne compense aucun déport."
+            if plume else
+            "retouche de −5 à +5 autour du déport que le firmware applique\n"
+            "d'après la lame (19 pour une CB09U, 29 pour une CB15U).\n"
+            "Laisser à 0 tant qu'une pointe ne bave pas.")
 
     def _entier(self, mini, maxi, val, suffixe=""):
         s = QSpinBox()
@@ -364,9 +391,13 @@ class Pupitre(QWidget):
                 import conditions
                 fd = os.open(conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
                 try:
+                    # L'offset part avec l'outil : la commande écrit les
+                    # deux champs d'un coup, les séparer effacerait l'un
+                    # des deux.
                     conditions.regler_outil(
                         fd, conditions.OUTILS[self.cmb_outil.currentText()],
-                        condition=condition)
+                        condition=condition,
+                        offset=self.spn_offset.value())
                 finally:
                     os.close(fd)
                 rendu = conditions.appliquer(vitesse=self.spn_vit.value(),

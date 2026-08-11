@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Pupitre de tracé
+GenericName=Traceur de découpe
+Comment=Piloter le Graphtec CE6000-60 : tracer un SVG au stylo, découper, régler la machine
+Exec=@EXEC@
+Icon=@ICON@
+Terminal=false
+Categories=Graphics;
+Keywords=graphtec;traceur;plotter;découpe;svg;hpgl;
+StartupNotify=true

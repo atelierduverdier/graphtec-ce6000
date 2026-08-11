@@ -26,7 +26,8 @@ import conditions as machine                                # noqa: E402
 import icones                                               # noqa: E402
 
 from PySide6.QtCore import Qt, QPointF, QRectF, QSize        # noqa: E402
-from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF  # noqa: E402
+from PySide6.QtGui import (QPainter, QPen, QColor, QPolygonF,  # noqa: E402
+                           QIcon)
 from PySide6.QtWidgets import (                              # noqa: E402
     QApplication, QWidget, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
     QComboBox, QCheckBox, QGridLayout, QVBoxLayout, QHBoxLayout, QGroupBox,
@@ -800,8 +801,18 @@ class Pupitre(QWidget):
                           f"{min(apres, avant):.0f} mm ({gain:.0f} % gagné)")
 
 
+ICONE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "resources", "icons", "traceur.svg")
+
+
 def main():
     app = QApplication(sys.argv)
+    # Le nom de bureau doit correspondre au .desktop, sinon l'environnement
+    # ne rattache pas la fenêtre à son lanceur et affiche une icône vide.
+    app.setDesktopFileName("graphtec-traceur")
+    app.setApplicationName("Pupitre de tracé")
+    if os.path.exists(ICONE):
+        app.setWindowIcon(QIcon(ICONE))
     p = Pupitre()
     p.resize(1000, 620)
     p.show()

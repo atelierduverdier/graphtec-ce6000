@@ -481,6 +481,24 @@ une planche réelle :
 33 mètres de déplacement à vide évités sur une seule planche : du temps de
 tracé et de l'usure de courroie. L'exporteur d'Inkscape ne réordonne pas.
 
+## Par où commencer
+
+```bash
+./installer.sh          # une fois : « Pupitre de tracé » apparaît dans le menu
+```
+
+Ensuite on clique l'icône, et rien d'autre. Le pupitre ouvre un SVG, le
+place sur le média, règle la machine et l'envoie.
+
+Le dépôt s'organise en trois étages, du quotidien vers l'archéologie :
+
+| | |
+|---|---|
+| `pupitre.py` | **l'application** — c'est le seul fichier à lancer |
+| `svg2hpgl.py`, `envoyer_hpgl.py`, `gabarit_traceur.py`, `nuancier_force.py`, `preparer_planche.py` | les outils en ligne de commande, pour ce que l'interface ne fait pas encore |
+| `conditions.py`, `materiaux.py`, `mosaique.py`, `etat_machine.py`, `theme.py`, `icones.py` | le moteur, importé par les précédents |
+| `sondes/` | les huit programmes qui ont servi à **comprendre** la machine, pas à s'en servir. On n'y touche que pour reprendre l'enquête |
+
 ## Les outils
 
 ### `sonde_ce6000.py` — interroger la machine

@@ -153,7 +153,8 @@ def main():
             print(f"écrirait TC1002,{args.balayer},<n>,<n> pour n de 1 à 8 "
                   f"— ajouter --envoyer")
             return
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        sys.path.insert(0, os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
         import conditions
         fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
         try:

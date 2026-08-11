@@ -32,7 +32,10 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Le paquet vit un cran au-dessus : ces sondes sont rangées à part
+# parce qu'elles ont servi à COMPRENDRE la machine, pas à s'en servir.
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
 import conditions as C                                      # noqa: E402
 import etat_machine as E                                    # noqa: E402
 

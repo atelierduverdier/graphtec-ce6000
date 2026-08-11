@@ -465,11 +465,11 @@ def main():
     if args.envoyer:
         if args.vitesse is not None:
             import conditions
-            for nom, valeur, etat in conditions.appliquer(
+            for nom, demande, obtenu, ok in conditions.appliquer(
                     vitesse=args.vitesse, condition=args.outil):
-                marque = "" if etat == "0" else f"  (état {etat!r} — douteux)"
-                print(f"réglé        {nom} = {valeur} sur la condition "
-                      f"{args.outil}{marque}")
+                marque = "" if ok else f"  NON CONFORME : machine à {obtenu}"
+                print(f"réglé        {nom} = {demande} sur la condition "
+                      f"{args.outil} (relu {obtenu}){marque}")
         envoye = envoyer(programme)
         print(f"envoyé       {envoye} octets à {PERIPH}")
 

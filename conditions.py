@@ -13,14 +13,18 @@ RIEN — c'est ce qui a fait croire pendant une soirée qu'elle était sourde.
 
 Paramètres identifiés, chacun vérifié en le lisant sur le panneau :
 
+    2  type d'outil (voir OUTILS), avec un second champ inexpliqué
     3  vitesse, en cm/s × 10   (250 = 25 cm/s), maximum 640
     4  force, 1 à 38
     5  accélération, 1 à 3 SEULEMENT
 
-Les autres (`TC1002,2`, `TC1002,5`, `TC1002,14`, et les familles `TC1004`,
-`TC1006`, `TC1010`) apparaissent dans les captures sans qu'on sache encore
-ce qu'ils portent. La méthode pour les nommer est écrite dans le README :
-une valeur inhabituelle, et on regarde quel champ du panneau bouge.
+**`TC2002` est la LECTURE** du même jeu : `TC2002,<paramètre>,<condition>`
+et la machine répond `<condition>, <valeur>…`. Toute écriture est donc
+vérifiable, et `appliquer` la vérifie.
+
+Restent inconnus `TC1002,14` et les familles `TC1004`, `TC1006`, `TC1010`.
+La méthode pour les nommer est dans le README : une valeur inhabituelle,
+et on regarde quel champ du panneau bouge.
 
 ATTENTION : ces réglages sont PERSISTANTS. Ils modifient la condition
 enregistrée dans la machine, exactement comme le fait le logiciel Graphtec —
@@ -120,6 +124,54 @@ def regler(fd, parametre, valeur, condition=1, patience=30):
     return etats
 
 
+def lire(fd, parametre, condition=1, delai=1.5):
+    """Lit un paramètre : `TC2002,<paramètre>,<condition>`.
+
+    La machine répond `<condition>, <valeur>[, <valeur>…]` en ETX, les
+    nombres cadrés à droite sur des espaces. Rend la liste des valeurs
+    APRÈS le numéro de condition, en entiers.
+
+    C'est le pendant lecture de `TC1002`, et il change la nature du
+    dialogue : on peut désormais VÉRIFIER qu'un réglage a été appliqué
+    au lieu de le supposer. Toute cette enquête a buté là-dessus.
+    """
+    _ecrire(fd, f"\x1b.v:TC2002,{parametre},{condition}\x03")
+    reponse = b""
+    limite = time.monotonic() + delai
+    while time.monotonic() < limite:
+        prets, _, _ = select.select([fd], [], [], 0.05)
+        if not prets:
+            continue
+        try:
+            reponse += os.read(fd, 64)
+        except BlockingIOError:
+            pass
+        if b"\x03" in reponse:
+            break
+    champs = reponse.decode("ascii", "replace").strip("\x03 \r\n").split(",")
+    try:
+        return [int(c.strip()) for c in champs][1:]
+    except ValueError:
+        return []
+
+
+def lire_condition(condition=1, periph=PERIPH):
+    """Rend {nom: valeur} pour tous les paramètres connus d'une condition."""
+    noms = {"outil": OUTIL, "vitesse": VITESSE,
+            "force": FORCE, "acceleration": ACCELERATION}
+    fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
+    try:
+        rendu = {}
+        for nom, param in noms.items():
+            valeurs = lire(fd, param, condition)
+            rendu[nom] = valeurs[0] if valeurs else None
+            if nom == "outil" and len(valeurs) > 1:
+                rendu["outil_indicateur"] = valeurs[1]
+        return rendu
+    finally:
+        os.close(fd)
+
+
 def regler_outil(fd, code, condition=1, indicateur=0, patience=30):
     """Choisit le type d'outil : `TC1002,2,<condition>,<code>,<indicateur>`.
 
@@ -145,22 +197,33 @@ def regler_outil(fd, code, condition=1, indicateur=0, patience=30):
 
 def appliquer(vitesse=None, force=None, acceleration=None,
               condition=1, periph=PERIPH):
-    """Règle vitesse (cm/s), force et accélération. Rend un compte rendu."""
+    """Règle vitesse (cm/s), force et accélération, et RELIT chaque valeur.
+
+    Rend une liste de `(nom, demandé, obtenu, conforme)`. Le dernier champ
+    est le seul qui compte : il vient de la machine, pas de nous.
+    """
     if vitesse is None and force is None and acceleration is None:
         return []
+    demandes = []
+    if vitesse is not None:
+        demandes.append(("vitesse", VITESSE, int(round(vitesse * 10))))
+    if force is not None:
+        demandes.append(("force", FORCE, int(force)))
+    if acceleration is not None:
+        demandes.append(("accélération", ACCELERATION, int(acceleration)))
+
     rendu = []
     fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
     try:
-        if vitesse is not None:
-            etats = regler(fd, VITESSE, int(round(vitesse * 10)), condition)
-            rendu.append(("vitesse", vitesse, etats[-1] if etats else "?"))
-        if force is not None:
-            etats = regler(fd, FORCE, int(force), condition)
-            rendu.append(("force", force, etats[-1] if etats else "?"))
-        if acceleration is not None:
-            etats = regler(fd, ACCELERATION, int(acceleration), condition)
-            rendu.append(("accélération", acceleration,
-                          etats[-1] if etats else "?"))
+        for nom, param, valeur in demandes:
+            regler(fd, param, valeur, condition)
+            # CHAQUE écriture est relue. La machine sait dire ce qu'elle a
+            # retenu (TC2002) : s'en priver reviendrait à supposer, et c'est
+            # une supposition de ce genre qui a fait croire une soirée
+            # entière que la vitesse n'était pas pilotable.
+            relu = lire(fd, param, condition)
+            obtenu = relu[0] if relu else None
+            rendu.append((nom, valeur, obtenu, obtenu == valeur))
     finally:
         os.close(fd)
     return rendu

@@ -401,6 +401,16 @@ valait 0 puis a basculé à 1 en cours de route sans plus en bouger — le code 
 est apparu avec les deux valeurs. C'est un état du logiciel Graphtec, pas une
 propriété du réglage. `conditions.regler_outil` le laisse à 0.
 
+**`TC2002` est la LECTURE du même jeu** : `TC2002,<paramètre>,<condition>`,
+et la machine répond `<condition>, <valeur>…`. On peut donc **vérifier** un
+réglage au lieu de le supposer appliqué — et `conditions.appliquer` relit
+systématiquement ce qu'il vient d'écrire. Toute cette enquête a buté sur
+l'absence de cette vérification : une soirée entière passée à croire la
+machine sourde parce que rien ne disait ce qu'elle avait retenu.
+
+`conditions.lire_condition(n)` rend l'état complet d'une condition, et les
+huit se listent d'un coup — utile pour retrouver ses préréglages.
+
 **La machine ÉCRÊTE sans un mot** : une accélération 4 demandée est appliquée
 à 3, ce qui ressemble d'abord à un décalage d'une unité. `conditions.BORNES`
 refuse la valeur plutôt que de laisser croire qu'on a réglé ce qu'on n'a pas.

@@ -347,11 +347,11 @@ class Pupitre(QWidget):
                 rendu = conditions.appliquer(vitesse=self.spn_vit.value(),
                                              acceleration=self.spn_accel.value(),
                                              condition=condition)
-                douteux = [n for n, _, e in rendu if e != "0"]
+                douteux = [n for n, _, _, ok in rendu if not ok]
                 regle = (f"condition {condition} réglée à "
                          f"{self.spn_vit.value()} cm/s, accél. "
                          f"{self.spn_accel.value()}"
-                         + (f" (états douteux : {douteux})" if douteux else "")
+                         + (f" — NON CONFORME : {douteux}" if douteux else "")
                          + " — ")
             envoye = noyau.envoyer(programme)
         except Exception as e:

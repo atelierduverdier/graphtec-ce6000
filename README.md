@@ -523,6 +523,25 @@ force 2. L'accélération se règle au panneau (`CONDITION` → `ACCEL`) et
 n'apparaît dans aucune commande HP-GL — une plume qui accélère fort dérape au
 départ de chaque segment.
 
+### Le gabarit en deux passes : l'origine tient
+
+Vérifié le 11/08/2026 sur du 80 g A3 : contour tracé au stylo, changement
+d'outil **sans décharger le média**, puis le même contour coupé à la lame.
+**La coupe tombe sur le trait.** Changer d'outil ne déplace donc pas
+l'origine, et un gabarit peut porter ses repères à l'encre et son contour à
+la lame.
+
+Le piège à éviter, sinon on conclut de travers : **le type d'outil déclaré
+doit correspondre à ce qui est physiquement monté**. Avec `CB09U` déclaré
+pendant qu'un stylo est en place, la machine applique une compensation
+d'offset à un outil qui n'en a pas et décale le tracé d'un demi-millimètre
+— ce qui ressemble exactement à une origine qui bouge.
+
+Second piège, physique celui-là : **la hauteur de lame ne suit pas le
+profil**. Elle reste où on l'a laissée, et une lame sortie à 0,55 mm pour du
+300 g laboure un 80 g quelle que soit la force. Aucune commande ne la
+corrige.
+
 ### La perforation, faite en logiciel
 
 ```bash

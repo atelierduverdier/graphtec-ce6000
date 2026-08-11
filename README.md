@@ -93,8 +93,10 @@ en une heure là où trois suppositions avaient échoué. La leçon vaut au-del�
 du traceur : quand deux ou trois essais à l'aveugle échouent sur une question
 fermée, il est temps d'aller regarder ce que fait celui qui sait déjà.
 
-Les chiffres d'accélération ci-dessus, eux, restent valables : c'est bien
-elle qui plafonne, et sa commande n'est pas encore identifiée.
+Les chiffres d'accélération ci-dessus restent valables : c'est bien elle qui
+plafonne les temps de tracé. Sa commande a été identifiée depuis
+(`TC1002,5`), mais elle n'a que **trois crans** — le levier existe et il est
+très court.
 
 ### `FS` est écouté, `VS` ne l'est PAS
 
@@ -110,8 +112,9 @@ puis à `VS40` — huit fois l'écart — a duré **30 s dans les deux cas**, so
 85 mm/s. C'est la vitesse de la condition réglée au panneau (10 cm/s, moins
 ce que coûtent les virages). Aucun script du dépôt n'émet donc `VS` : un
 réglage qui ne fait rien est pire qu'absent, il fait croire qu'on a agi.
-La vitesse passe désormais par le protocole `TC` (voir plus haut) ; seule
-l'**accélération** reste sans commande connue, `CONDITION` → `ACCEL`.
+La vitesse passe désormais par le protocole `TC` (voir plus haut), comme la
+force et l'accélération. `FS` reste utilisable pour une force valable le
+temps d'un travail seulement, sans modifier la condition enregistrée.
 
 `sonde_vitesse.py` garde la trace de la méthode, et surtout **des deux qui
 ont échoué avant** : `OA;` rend la position **logique**, pas celle du

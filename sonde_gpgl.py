@@ -125,7 +125,12 @@ def main():
                          "TC1002,3,1,<cm/s × 10>, relevée le 11/08/2026 dans "
                          "le flux USB de Graphtec Studio")
     ap.add_argument("--condition", type=int, default=1,
-                    help="numéro de condition visé par --tc (défaut 1)")
+                    help="numéro de condition visé (défaut 1)")
+    ap.add_argument("--regler", nargs=2, metavar=("PARAM", "VALEUR"),
+                    help="règle un paramètre quelconque : TC1002,<PARAM>,"
+                         "<condition>,<VALEUR>. Connus : 3 = vitesse (cm/s "
+                         "× 10), 4 = force. Les autres sont à identifier — "
+                         "la machine affiche le résultat, elle tranche.")
     ap.add_argument("--pas", type=int, default=PAS_PAR_MM,
                     help=f"pas par millimètre (défaut {PAS_PAR_MM}, "
                          f"soit 0,1 mm par pas)")
@@ -138,7 +143,10 @@ def main():
     sep = SEPARATEURS[args.separateur]
 
     prefixe = ""
-    if args.tc:
+    if args.regler:
+        param, valeur = args.regler
+        prefixe = f"\x1b.v:TC1002,{param},{args.condition},{valeur}\x03"
+    elif args.tc:
         # Reproduit EXACTEMENT ce que Graphtec Studio écrit : `ESC . v :`
         # colle devant la commande, dans le MÊME transfert, terminaison ETX.
         # Envoyée nue, la commande a fait réagir la machine sans rien régler.
@@ -157,14 +165,12 @@ def main():
         longueur = None
         entete = ("rectangle 60 × 30 mm plus un ergot de 20 mm ; "
                   "AUCUNE vitesse ni force n'est envoyée")
-    elif args.tc:
+    elif args.tc or args.regler:
         # Le meilleur contrôle possible : la machine AFFICHE le réglage. Pas
         # de tracé, pas de chronomètre, pas d'interprétation -- on regarde
         # CONDITION > VITESSE au panneau et on voit si la valeur a changé.
         programme, longueur = prefixe, None
-        entete = (f"règle la condition {args.condition} à {args.tc} cm/s "
-                  f"par TC1002,3,{args.condition},{args.tc * 10} — "
-                  f"AUCUN mouvement")
+        entete = (f"envoie {prefixe[4:-1]!r} — AUCUN mouvement")
     else:
         sys.exit("choisir --rectangle, --vitesse N, ou --tc CM_S")
 
@@ -181,7 +187,7 @@ def main():
     fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
     try:
         duree = ecrire(fd, programme)
-        if args.tc:
+        if args.tc or args.regler:
             # Le logiciel d'origine ne s'arrête pas à l'envoi : il continue
             # d'interroger l'état, qui passe à 8 puis retombe à 0. Envoyer
             # sans mener la transaction à terme laissait peut-être le

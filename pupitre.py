@@ -206,15 +206,19 @@ class Pupitre(QWidget):
         self.cmb_cond = QComboBox()
         self.cmb_cond.addItems([f"condition {i}" for i in range(1, 9)])
         self.spn_force = self._entier(1, 38, 12)
-        gl.addWidget(QLabel("panneau"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
-        gl.addWidget(QLabel("force"), 1, 0); gl.addWidget(self.spn_force, 1, 1)
-        # Pas de curseur de vitesse : `VS` est ignoré par cette machine
-        # (mesuré le 10/08/2026 -- même parcours à VS5 puis VS40, 30 s dans
-        # les deux cas). Un réglage qui ne fait rien est pire qu'absent.
-        rappel = QLabel("vitesse et accélération : au panneau,\n"
-                        "CONDITION → VITESSE / ACCEL")
+        # La vitesse passe par le protocole propriétaire TC : le `VS` du
+        # HP-GL est ignoré par cette machine. Elle MODIFIE DURABLEMENT la
+        # condition enregistrée, comme le fait le logiciel Graphtec.
+        self.spn_vit = self._entier(1, 64, 10, suffixe=" cm/s")
+        self.chk_regler = QCheckBox("régler la machine à l'envoi")
+        self.chk_regler.setChecked(True)
+        gl.addWidget(QLabel("condition"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
+        gl.addWidget(QLabel("vitesse"), 1, 0); gl.addWidget(self.spn_vit, 1, 1)
+        gl.addWidget(QLabel("force"), 2, 0); gl.addWidget(self.spn_force, 2, 1)
+        gl.addWidget(self.chk_regler, 3, 0, 1, 2)
+        rappel = QLabel("l'accélération reste au panneau,\nCONDITION → ACCEL")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 2, 0, 1, 2)
+        gl.addWidget(rappel, 4, 0, 1, 2)
         v.addWidget(g)
 
         self.b_envoyer = QPushButton("Envoyer au traceur")
@@ -329,16 +333,26 @@ class Pupitre(QWidget):
         apres = noyau.trajet_a_vide(candidat)
         chemins = candidat if apres < avant else self.calcule
 
-        programme, _ = noyau.en_hpgl(chemins,
-                                     self.cmb_cond.currentIndex() + 1,
-                                     self.spn_force.value())
+        condition = self.cmb_cond.currentIndex() + 1
+        programme, _ = noyau.en_hpgl(chemins, condition, self.spn_force.value())
+
+        regle = ""
         try:
+            if self.chk_regler.isChecked():
+                import conditions
+                rendu = conditions.appliquer(vitesse=self.spn_vit.value(),
+                                             condition=condition)
+                douteux = [n for n, _, e in rendu if e != "0"]
+                regle = (f"condition {condition} réglée à "
+                         f"{self.spn_vit.value()} cm/s"
+                         + (f" (états douteux : {douteux})" if douteux else "")
+                         + " — ")
             envoye = noyau.envoyer(programme)
         except Exception as e:
             QMessageBox.critical(self, "Envoi impossible", str(e))
             return
         gain = (1 - min(apres, avant) / avant) * 100 if avant else 0
-        self.info.setText(f"{envoye} octets envoyés — trajet à vide "
+        self.info.setText(f"{regle}{envoye} octets envoyés — trajet à vide "
                           f"{min(apres, avant):.0f} mm ({gain:.0f} % gagné)")
 
 

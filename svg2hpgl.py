@@ -336,6 +336,11 @@ def main():
                     help="condition de coupe du panneau, 1 à 8 (défaut 1)")
     ap.add_argument("--force", type=int,
                     help="force de coupe 1 à 38 ; par défaut celle de la condition")
+    ap.add_argument("--vitesse", type=float, metavar="CM_S",
+                    help="vitesse en cm/s. Passe par le protocole propriétaire "
+                         "TC (le VS du HP-GL est ignoré par cette machine) et "
+                         "MODIFIE DURABLEMENT la condition enregistrée. "
+                         "Demande --envoyer.")
     ap.add_argument("--marge", default="0,0", metavar="X,Y",
                     help="décalage du dessin en mm (défaut 0,0)")
     ap.add_argument("--pivoter", action="store_true",
@@ -454,7 +459,17 @@ def main():
         f.write(programme)
     print(f"écrit        {sortie}  ({len(programme)} octets)")
 
+    if args.vitesse is not None and not args.envoyer:
+        sys.exit("--vitesse règle la machine : il faut --envoyer")
+
     if args.envoyer:
+        if args.vitesse is not None:
+            import conditions
+            for nom, valeur, etat in conditions.appliquer(
+                    vitesse=args.vitesse, condition=args.outil):
+                marque = "" if etat == "0" else f"  (état {etat!r} — douteux)"
+                print(f"réglé        {nom} = {valeur} sur la condition "
+                      f"{args.outil}{marque}")
         envoye = envoyer(programme)
         print(f"envoyé       {envoye} octets à {PERIPH}")
 

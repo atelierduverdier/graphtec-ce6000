@@ -366,8 +366,13 @@ dessin dessus.
 
 Réglages : origine X/Y, rotation par quarts de tour, miroirs, échelle libre
 ou ajustée au média, **copies matricielles** (rangées × colonnes, écarts),
-condition du panneau, vitesse et force. L'envoi se refuse tant que le dessin
-déborde.
+condition, **vitesse et force**. L'envoi se refuse tant que le dessin déborde.
+
+La vitesse passe par `conditions.py` et le protocole `TC` — elle **modifie
+durablement** la condition enregistrée dans la machine, exactement comme le
+fait Graphtec Studio, d'où la case « régler la machine à l'envoi » qu'on peut
+décocher. L'accélération n'a pas encore sa commande identifiée : elle reste
+au panneau.
 
 Le réordonnancement du trajet ne tourne qu'à l'envoi : il est en n², donc
 trop lourd à rejouer à chaque mouvement d'un réglage, et il ne change rien à

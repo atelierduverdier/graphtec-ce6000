@@ -262,6 +262,8 @@ class Pupitre(QWidget):
         self._offset_utile(self.cmb_outil.currentText())
         v.addWidget(g)
 
+        v.addWidget(self._groupe_machine())
+
         self.b_envoyer = QPushButton("Envoyer au traceur")
         self.b_envoyer.setObjectName("principal")
         self.b_envoyer.setEnabled(False)
@@ -273,6 +275,195 @@ class Pupitre(QWidget):
         v.addWidget(self.b_theme)
         v.addStretch(1)
         return boite
+
+    # (paramètre, libellé, plage ou choix, échelle, suffixe, infobulle)
+    # L'échelle n'est pas cosmétique : l'angle d'offset se stocke × 100 et
+    # la vitesse relevée × 10. Écrire la valeur affichée réglerait la
+    # machine au centième de ce qu'on croit, sans un mot.
+    CHAMPS_MACHINE = None            # bâti dans _groupe_machine
+
+    def _groupe_machine(self):
+        """Les réglages MACHINE — ceux du menu, pas ceux des conditions.
+
+        Ils ne dépendent d'aucune condition : `TC1004,<p>,<v>` pour écrire,
+        `TC2004,<p>` pour lire. Le groupe reste vide tant qu'on n'a pas
+        appuyé sur « Lire la machine » : afficher des valeurs par défaut
+        laisserait croire qu'on montre l'état réel du traceur.
+        """
+        import conditions as M
+        self.CHAMPS_MACHINE = [
+            (M.PAS, "passe-pas", (0, 20), 1, "",
+             "lissage des courbes. Le manuel recommande 1 : une valeur\n"
+             "élevée déforme les découpes."),
+            (M.FORCE_DEPORT, "force d'offset", (0, 60), 1, "",
+             "le manuel annonce 0 à 20 ; la machine de l'atelier était\n"
+             "à 30. C'est la machine qui a raison."),
+            (M.ANGLE_DEPORT, "angle d'offset", (0, 60), 100, " °",
+             "stocké × 100 dans la machine."),
+            (M.VITESSE_RELEVE, "vitesse outil relevé", (5, 60), 10, " cm/s",
+             "vitesse des trajets à vide : c'est elle, plus que la vitesse\n"
+             "de tracé, qui fixe la durée d'un travail. Stockée × 10."),
+        ]
+        self.CHOIX_MACHINE = [
+            (M.PRIORITE_CONDITION, "priorité",
+             {1: "programme", 0: "panneau"},
+             "Sur « panneau », le VS des fichiers est SILENCIEUSEMENT\n"
+             "ignoré — un réglage qui ne fait rien sans le dire."),
+            (M.LAME_INITIALE, "lame initiale",
+             {0: "2 mm en-deçà", 1: "dehors"}, ""),
+            (M.DEPLACEMENT_RELEVE, "déplacement relevé",
+             {1: "désactivé", 0: "activé"},
+             "1 vaut « désactivé » : vérifié sur la machine, pas déduit."),
+        ]
+
+        g = QGroupBox("Machine")
+        gl = QGridLayout(g)
+        self.widgets_machine = {}
+        ligne = 0
+        for p, libelle, (mini, maxi), _ech, suffixe, bulle in self.CHAMPS_MACHINE:
+            w = QSpinBox(); w.setRange(mini, maxi); w.setSuffix(suffixe)
+            if bulle:
+                w.setToolTip(bulle)
+            gl.addWidget(QLabel(libelle), ligne, 0); gl.addWidget(w, ligne, 1)
+            self.widgets_machine[p] = w
+            ligne += 1
+        for p, libelle, choix, bulle in self.CHOIX_MACHINE:
+            w = QComboBox()
+            for val, texte in choix.items():
+                w.addItem(texte, val)
+            if bulle:
+                w.setToolTip(bulle)
+            gl.addWidget(QLabel(libelle), ligne, 0); gl.addWidget(w, ligne, 1)
+            self.widgets_machine[p] = w
+            ligne += 1
+
+        b_lire = QPushButton("Lire la machine")
+        b_lire.clicked.connect(self._lire_machine)
+        b_ecrire = QPushButton("Appliquer à la machine")
+        b_ecrire.clicked.connect(self._ecrire_machine)
+        b_ecrire.setEnabled(False)
+        self.b_machine_ecrire = b_ecrire
+        gl.addWidget(b_lire, ligne, 0, 1, 2)
+        gl.addWidget(b_ecrire, ligne + 1, 0, 1, 2)
+
+        self.lbl_machine = QLabel("état non lu")
+        self.lbl_machine.setObjectName("faible")
+        self.lbl_machine.setWordWrap(True)
+        gl.addWidget(self.lbl_machine, ligne + 2, 0, 1, 2)
+        g.setEnabled(True)
+        return g
+
+    def _lire_machine(self):
+        """Charge les valeurs réelles, une seule ouverture du périphérique.
+
+        Rouvrir /dev/usb/lp0 entre deux lectures rend la machine muette
+        pour des dizaines de secondes — mesuré le 11/08/2026.
+        """
+        import conditions as M
+        if not os.path.exists(M.PERIPH):
+            QMessageBox.information(self, "Traceur absent",
+                                    f"{M.PERIPH} n'existe pas.")
+            return
+        try:
+            fd = os.open(M.PERIPH, os.O_RDWR | os.O_NONBLOCK)
+        except OSError as e:
+            QMessageBox.warning(self, "Périphérique occupé", str(e))
+            return
+        lus, muets = {}, []
+        try:
+            M.lire_machine(fd, M.PAS)          # coup pour rien
+            for p in self.widgets_machine:
+                v = M.lire_machine(fd, p)
+                if v:
+                    lus[p] = v[0]
+                else:
+                    muets.append(p)
+        finally:
+            os.close(fd)
+
+        if not lus:
+            self.lbl_machine.setText(
+                "aucune réponse — panneau sur READY ?")
+            return
+        echelles = {p: e for p, _l, _pl, e, _s, _b in self.CHAMPS_MACHINE}
+        elargis = []
+        for p, val in lus.items():
+            w = self.widgets_machine[p]
+            if isinstance(w, QComboBox):
+                i = w.findData(val)
+                if i >= 0:
+                    w.setCurrentIndex(i)
+            else:
+                affiche = int(round(val / echelles.get(p, 1)))
+                # NE JAMAIS rabattre une valeur lue. Un QSpinBox écrête en
+                # silence, et « Appliquer » réécrirait alors la valeur
+                # rabattue en croyant obéir à l'utilisateur : c'est arrivé
+                # le 11/08/2026, la force d'offset est passée de 30 à 20
+                # parce que la plage codée ici était trop étroite. Une
+                # valeur hors plage veut dire que la plage est fausse.
+                if affiche < w.minimum():
+                    w.setMinimum(affiche)
+                    elargis.append(p)
+                if affiche > w.maximum():
+                    w.setMaximum(affiche)
+                    elargis.append(p)
+                w.setValue(affiche)
+        self.machine_lue = dict(lus)
+        self.b_machine_ecrire.setEnabled(True)
+        texte = f"{len(lus)} réglage(s) lus sur la machine"
+        if muets:
+            texte += f" — {len(muets)} muet(s)"
+        if elargis:
+            noms = ", ".join(M.REGLAGES_MACHINE[p][0] for p in set(elargis))
+            texte += (f" — plage élargie pour {noms} : la machine "
+                      f"annonçait mieux que prévu")
+        self.lbl_machine.setText(texte)
+
+    def _ecrire_machine(self):
+        """N'écrit que ce qui a CHANGÉ, et relit chaque valeur écrite.
+
+        Écrire tout à chaque fois userait la mémoire de la machine pour
+        rien, et masquerait ce qu'on modifie vraiment.
+        """
+        import conditions as M
+        echelles = {p: e for p, _l, _pl, e, _s, _b in self.CHAMPS_MACHINE}
+        voulu = {}
+        for p, w in self.widgets_machine.items():
+            voulu[p] = (w.currentData() if isinstance(w, QComboBox)
+                        else w.value() * echelles.get(p, 1))
+        change = {p: v for p, v in voulu.items()
+                  if getattr(self, "machine_lue", {}).get(p) != v}
+        if not change:
+            self.lbl_machine.setText("rien à écrire : tout est déjà à cette "
+                                     "valeur.")
+            return
+        try:
+            fd = os.open(M.PERIPH, os.O_RDWR | os.O_NONBLOCK)
+        except OSError as e:
+            QMessageBox.warning(self, "Périphérique occupé", str(e))
+            return
+        rendu = []
+        try:
+            for p, v in change.items():
+                M.regler_machine(fd, p, v)
+                relu = M.lire_machine(fd, p)
+                obtenu = relu[0] if relu else None
+                rendu.append((M.REGLAGES_MACHINE[p][0], v, obtenu, obtenu == v))
+                if obtenu is not None:
+                    self.machine_lue[p] = obtenu
+        finally:
+            os.close(fd)
+        rates = [n for n, _d, _o, ok in rendu if not ok]
+        self.lbl_machine.setText(
+            f"{len(rendu)} écrit(s) et relu(s)"
+            + (f" — NON RETENU : {', '.join(rates)}" if rates else
+               ", tous conformes."))
+        if rates:
+            QMessageBox.warning(
+                self, "Réglage non retenu",
+                "La machine n'a pas retenu : " + ", ".join(rates)
+                + "\n\nElle écrête sans le dire quand une valeur sort de "
+                  "sa plage.")
 
     def _reel(self, mini, maxi, val, suffixe=" mm"):
         s = QDoubleSpinBox()

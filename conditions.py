@@ -311,6 +311,17 @@ REGLAGES_MACHINE = {
     DEPLACEMENT_RELEVE: ("TOOL UP MOVE", 1, "0/1"),
 }
 
+# Les trois réglages à deux états, avec le mot que la machine emploie pour
+# chacun. VÉRIFIÉS le 11/08/2026 en écrivant l'autre valeur et en relisant
+# le vidage en clair, pas déduits : `TOOL UP MOVE` vaut **1 pour
+# DISABLED**, l'inverse de ce que le bon sens souffle. Un libellé deviné
+# aurait offert à l'utilisateur un interrupteur qui ment.
+ETATS_MACHINE = {
+    PRIORITE_CONDITION:  {1: "PROGRAM", 0: "MANUAL"},
+    LAME_INITIALE:       {0: "2mm BELOW", 1: "OUTSIDE"},
+    DEPLACEMENT_RELEVE:  {1: "DISABLED", 0: "ENABLED"},
+}
+
 # Restent sans nom dans cette famille, et c'est dit plutôt que deviné :
 #   TC2004,1  — l'écriture est RETENUE mais aucune ligne du vidage ne bouge.
 #   TC2004,6  — deux champs, à sonder autrement qu'en valeur simple.

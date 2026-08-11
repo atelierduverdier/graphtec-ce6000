@@ -58,6 +58,17 @@ Pourquoi les petits fichiers passaient : la détection tombait juste assez
 souvent. Le porte-manteau (11 Ko) est sorti correctement — avec une erreur
 journalisée à chaque fois, qu'on prenait pour un défaut cosmétique.
 
+**Ce qu'il reste après le passage en HP-GL.** Une erreur, une seule, au
+démarrage d'un envoi précédé de `--materiau`. Isolée avec le détecteur par
+horodatage : c'est la **salve `TC` seule** qui la produit, ni l'HP-GL ni la
+combinaison. Intermittente — un troisième essai contenant la même salve
+n'en a produit aucune — et sans effet : le tracé sort juste.
+
+Elle s'évite sans rien corriger, parce que **les réglages sont persistants**
+dans la machine : `--materiau` n'a d'utilité qu'au changement de matériau,
+pas à chaque envoi. Deux tracés de suite sur le même papier ne demandent
+qu'un `envoyer_hpgl.py fichier.hpgl` tout court.
+
 Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
 (le 7550 est un traceur de bureau A3 dont l'espace de coordonnées est petit),
 `HP-GL ORIGIN POINT` → coin.

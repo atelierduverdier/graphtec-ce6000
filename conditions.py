@@ -135,6 +135,20 @@ def lire(fd, parametre, condition=1, delai=1.5):
     dialogue : on peut désormais VÉRIFIER qu'un réglage a été appliqué
     au lieu de le supposer. Toute cette enquête a buté là-dessus.
     """
+    # Vider d'abord : une écriture laisse derrière elle les réponses de son
+    # sondage d'état, et les lire comme si elles répondaient à la question
+    # suivante décale tout. C'est le piège des toutes premières sondes, revenu
+    # ici parce que `lire` avait été écrit sans lui.
+    while True:
+        prets, _, _ = select.select([fd], [], [], 0.02)
+        if not prets:
+            break
+        try:
+            if not os.read(fd, 64):
+                break
+        except BlockingIOError:
+            break
+
     _ecrire(fd, f"\x1b.v:TC2002,{parametre},{condition}\x03")
     reponse = b""
     limite = time.monotonic() + delai

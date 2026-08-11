@@ -36,8 +36,12 @@ MATERIAUX = {
     "papier 80-90 g": dict(
         vitesse=20, force=10, acceleration=None, passages=1, seuil_coupe=8,
         epaisseur=(0.10, 0.15), hauteur_lame=0.25, perforation=(8.0, 0.25)),
+    # Nuancier du 11/08/2026 sur chute de 300 g, lame à 0,55 : la force 16
+    # laisse le carré tenir par un coin, 18 traverse. On garde le 25 du
+    # carnet -- sept crans de marge, comme le 80 g en garde deux. La marge
+    # est ce qui fait qu'une coupe réussit encore quand la lame s'émousse.
     "papier 300 g": dict(
-        vitesse=7, force=25, acceleration=None, passages=1,
+        vitesse=7, force=25, acceleration=None, passages=1, seuil_coupe=18,
         epaisseur=(0.40, 0.45), hauteur_lame=0.55, perforation=(8.0, 0.25)),
     "aquarelle 200 g": dict(
         vitesse=20, force=14, acceleration=None, passages=1,

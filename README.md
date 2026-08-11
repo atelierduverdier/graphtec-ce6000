@@ -28,6 +28,43 @@ Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
 (le 7550 est un traceur de bureau A3 dont l'espace de coordonnées est petit),
 `HP-GL ORIGIN POINT` → coin.
 
+### La vitesse ne se pilote PAS depuis le PC — mesuré, pas supposé
+
+Trois commandes essayées, deux langages, aucune n'agit. Le même parcours de
+2 560 mm, chronométré à la montre :
+
+| Commande envoyée | Durée |
+|---|---|
+| HP-GL `VS5` … `VS40` | 30 s partout |
+| GP-GL `!5` … `!40` | 30 s et 28 s |
+| GP-GL `S5` (la lettre du panneau) | 21 s = inchangé |
+
+**Seul le panneau commande**, et sa courbe sature — parce que le vrai
+plafond est l'**accélération**, pas la vitesse :
+
+| Vitesse au panneau | Durée | Vitesse réelle | Rendement |
+|---|---|---|---|
+| S10 | 30 s | 85 mm/s | 85 % |
+| S30 | 22 s | 116 mm/s | 39 % |
+| S64 (max) | 21 s | 122 mm/s | 19 % |
+
+Consigne multipliée par 6,4, temps gagné : 30 %. Au-delà de S30, monter la
+vitesse ne sert plus à rien sur un parcours à virages — c'est `ACCEL` qu'il
+faut regarder. Et Graphtec règle l'accélération à **2** pour son outil
+« Stylo feutre » : une plume qui repart brutalement bave dans les angles.
+Garder une condition « plan soigné » et une « rapide » est le bon usage des
+huit emplacements.
+
+Le détour par le GP-GL n'aura donc rien donné sur la vitesse. Il aura prouvé
+que la machine l'accepte : rectangle de 60 × 30 mm exact, syntaxe `M`/`D`,
+séparateur retour-ligne, pas de 0,1 mm (`sonde_gpgl.py`).
+
+**Le seul chemin restant**, si le pilotage depuis le PC devenait nécessaire :
+capturer le flux USB de Graphtec Studio sous Windows (Wireshark + USBPcap).
+Il révélerait tout le protocole réel d'un coup — vitesse, mais aussi
+passages, perforation, mode média épais — au lieu de le deviner commande par
+commande, ce qui a échoué trois fois ici.
+
 ### `FS` est écouté, `VS` ne l'est PAS
 
 Deux commandes voisines, deux réponses opposées, et il a fallu les mesurer

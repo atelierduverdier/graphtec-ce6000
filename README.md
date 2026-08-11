@@ -550,7 +550,7 @@ Studio avait **trois** panneaux là où le pupitre n'en a qu'un.
 
 | Réglage de Studio | Valeur vue sur la capture | État |
 |---|---|---|
-| Passe-pas (Step Pass) | 1 | à nommer — `TC2002,15` vaut 1, hypothèse |
+| Passe-pas (Step Pass) | 1 | **pas dans les conditions** — voir ci-dessous |
 | Force d'offset | 30 | à nommer |
 | Angle d'offset | 30° | à nommer |
 | Position initiale de la lame | 2 mm en-deçà / dehors | à nommer |
@@ -590,8 +590,32 @@ changer UNE chose au panneau, revenir à `READY`, puis :
 python3 chercher_parametre.py --fin "step pass"
 ```
 
-`--reste` liste ce qui manque. Chemin du Step Pass au panneau, pour commencer :
-`[PAUSE/MENU]` → `[1]` (TOOL) → `[2]` (PAS).
+`--reste` liste ce qui manque.
+
+#### Ce que le Step Pass a appris en n'étant pas là où on le croyait
+
+`TC2002,15` valait 1 et le Step Pass a 1 pour défaut : la coïncidence était
+belle. Step Pass porté à **7** au panneau le 11/08/2026, relevé encadrant sur
+les quatre familles — **aucun des onze paramètres ne bouge**. L'hypothèse
+tombe, et elle apprend plus que si elle avait tenu.
+
+Le chemin au panneau dit dans quelle famille chercher :
+
+| Réglage | Chemin au panneau | Famille |
+|---|---|---|
+| offset, vitesse, force, accélération, outil | **`[COND/TEST]`** — écran des conditions | `TC1002`/`TC2002`, indexés par condition |
+| Step Pass | **`[PAUSE/MENU]` → `[1]` TOOL → `[2]` PAS** — menu machine | ailleurs |
+
+Les quatre familles balayées sont **toutes indexées par condition**. Un réglage
+qui ne dépend pas de la condition ne peut pas y être, quel que soit le soin du
+relevé. Autrement dit : la structure des menus de la machine est une carte du
+protocole, et on cherchait dans la mauvaise page.
+
+**Et le premier balayage de familles ne prouvait rien non plus** : il
+interrogeait les paramètres 1 à 3 de chaque famille, alors qu'on savait déjà
+que `TC2004` ne répond qu'au 6 et `TC2006` au 13. Ses « familles muettes »
+étaient un artefact de son étroitesse — une sonde trop courte rend des
+absences qui ressemblent à des faits.
 
 **Déjà porté par la machine**, rien à écrire : les 8 conditions, que le
 fichier sélectionne par `SP1`..`SP8` ; la compensation d'offset de lame et

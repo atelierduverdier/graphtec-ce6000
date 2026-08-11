@@ -18,12 +18,45 @@ coulisse — pas recopié d'une documentation.
 | USB | `0b4d:1122`, classe imprimante, **bidirectionnel** |
 | Périphérique | `/dev/usb/lp0` (`root:lp`) — ni udev, ni libusb, ni pyusb |
 | Endpoints | EP1 OUT **8 octets**, EP2 IN 64 octets |
-| Langage | `INTERFACE` → `COMMANDE` est sur **AUTO** : la machine reconnaît HP-GL et GP-GL à la volée, rien à basculer |
+| Langage | `INTERFACE` → `COMMANDE` doit être sur **HP-GL**, PAS sur `AUTO` — voir ci-dessous |
 | Émulation | **7586** (`OI;` → `7586`), et non 7550 |
 | Résolution | **40 unités/mm** sur les deux axes (`OF;` → `40,40`) |
 | Repère | origine coin bas-gauche, aucun miroir |
 | Axes | **X = avance du média, Y = course du chariot** |
 | Zone utile | `OH;`, dépend du média chargé (A4 → ~256,8 × 187,1 mm) |
+
+### `COMMANDE = AUTO` fait imprimer le fichier au lieu de le tracer
+
+**Résolu le 11/08/2026, après une journée à chercher ailleurs.**
+
+En `AUTO`, la machine devine le langage d'après ce qu'elle reçoit. Quand
+elle ne reconnaît ni HP-GL ni GP-GL, elle **écrit les octets reçus en
+toutes lettres**, à la plume, sur le média : `U572,2620;` tracé au stylo.
+Puis la ligne court vers la droite et le panneau affiche « hors surface »
+— une conséquence, pas une cause, et qui envoie chercher du côté des
+cotes alors que le dessin tenait très bien.
+
+C'était aussi la source de l'`HP-GL ERREUR 1 INSTRUCTION INCONNUE` qui
+accompagnait chaque envoi.
+
+**La machine le disait elle-même**, dans son propre journal, depuis le
+début :
+
+```
+W06001 DANGER COMMANDE = AUTO
+```
+
+Lue trois fois sans être comprise. Ce README affirmait pendant ce temps
+qu'`AUTO` allait très bien « puisque la machine reconnaît les deux à la
+volée » — une commodité jamais vérifiée, contredite par un avertissement
+que la machine répétait dans ses logs.
+
+Mesure : le même fichier de 163 Ko, envoyé plume levée, ajoute une entrée
+au journal en `AUTO` et **aucune** en `HP-GL`.
+
+Pourquoi les petits fichiers passaient : la détection tombait juste assez
+souvent. Le porte-manteau (11 Ko) est sorti correctement — avec une erreur
+journalisée à chaque fois, qu'on prenait pour un défaut cosmétique.
 
 Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
 (le 7550 est un traceur de bureau A3 dont l'espace de coordonnées est petit),

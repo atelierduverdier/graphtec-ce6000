@@ -35,8 +35,21 @@ def _ecrire(fd, texte, delai=20.0):
     return envoye
 
 
-def zone_utile(fd, delai=2.0):
-    """`OH;` -> (largeur, hauteur) en mm, ou None si la machine se tait."""
+def zone_utile(fd, delai=2.0, essais=2):
+    """`OH;` -> (largeur, hauteur) en mm, ou None.
+
+    Rend AUSSI la réponse brute, via `zone_utile.derniere_reponse` : le
+    message d'erreur disait « la machine ne répond pas » aussi bien quand
+    elle se taisait que quand sa réponse ne s'analysait pas. Deux causes
+    différentes derrière une seule phrase, c'est ce qui a fait chercher au
+    mauvais endroit le 11/08/2026 -- `OH;` interrogé seul répondait très
+    bien dans la minute qui suivait.
+
+    Deux tentatives, parce que l'échec observé ce jour-là suivait
+    immédiatement une salve de commandes `TC`, ne s'est pas reproduit, et
+    n'a donc pas de cause établie. Réessayer coûte une demi-seconde ; se
+    tromper de diagnostic coûte une feuille.
+    """
     while True:                                   # repartir propre
         prets, _, _ = select.select([fd], [], [], 0.05)
         if not prets:
@@ -46,25 +59,33 @@ def zone_utile(fd, delai=2.0):
                 break
         except BlockingIOError:
             break
-    _ecrire(fd, "OH;")
-    reponse = b""
-    limite = time.monotonic() + delai
-    while time.monotonic() < limite:
-        prets, _, _ = select.select([fd], [], [], 0.05)
-        if not prets:
-            continue
+    for tentative in range(essais):
+        _ecrire(fd, "OH;")
+        reponse = b""
+        limite = time.monotonic() + delai
+        while time.monotonic() < limite:
+            prets, _, _ = select.select([fd], [], [], 0.05)
+            if not prets:
+                continue
+            try:
+                reponse += os.read(fd, 64)
+            except BlockingIOError:
+                pass
+            if b"\r" in reponse:
+                break
+        zone_utile.derniere_reponse = reponse
         try:
-            reponse += os.read(fd, 64)
-        except BlockingIOError:
-            pass
-        if b"\r" in reponse:
-            break
-    try:
-        x0, y0, x1, y1 = (float(v) for v in
-                          reponse.decode("ascii", "replace").strip().split(","))
-    except ValueError:
-        return None
-    return (x1 - x0) / UNITES_PAR_MM, (y1 - y0) / UNITES_PAR_MM
+            x0, y0, x1, y1 = (float(v) for v in
+                              reponse.decode("ascii", "replace")
+                              .strip().split(","))
+            return (x1 - x0) / UNITES_PAR_MM, (y1 - y0) / UNITES_PAR_MM
+        except ValueError:
+            if tentative + 1 < essais:
+                time.sleep(0.5)
+    return None
+
+
+zone_utile.derniere_reponse = b""
 
 
 def emprise(programme):
@@ -112,6 +133,10 @@ def main():
             sys.exit("profil inconnu ; au choix :\n   "
                      + "\n   ".join(materiaux.MATERIAUX))
         rendu, lame = materiaux.appliquer(args.materiau, args.condition)
+        # Laisser la machine finir de digérer la salve TC avant de lui
+        # parler HP-GL. Le 11/08/2026, un OH; envoyé juste après est resté
+        # sans réponse exploitable, alors qu'il répondait seul.
+        time.sleep(0.5)
         print(f"condition {args.condition} — {materiaux.resume(args.materiau)}")
         for nom, demande, obtenu, ok in rendu:
             print(f"   {nom:<14} demandé {str(demande):<8} obtenu "
@@ -133,8 +158,14 @@ def main():
             nom = os.path.basename(chemin)
 
             if limites is None:
-                sys.exit(f"{nom} : la machine ne répond pas à OH;. Média "
-                         f"chargé et panneau sur READY ?")
+                brut = zone_utile.derniere_reponse
+                sys.exit(
+                    f"{nom} : OH; n'a pas donné de zone utile exploitable.\n"
+                    f"   la machine a répondu : {brut!r}\n"
+                    + ("   (rien du tout — média chargé et panneau sur "
+                       "READY ?)" if not brut else
+                       "   (réponse reçue mais illisible — relancer la "
+                       "commande suffit souvent)"))
             print(f"{nom} : {len(programme)} octets, "
                   f"zone utile {limites[0]:.1f} × {limites[1]:.1f} mm")
             if boite:

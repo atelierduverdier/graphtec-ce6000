@@ -25,9 +25,20 @@ vérifiable, et `appliquer` la vérifie.
 Restent inconnus 6, 8, 9, 14, 15 et les familles `TC1004`, `TC1006`,
 `TC1010`. Pour les nommer : `chercher_parametre.py` relève tout, laisse
 changer une seule chose, relève de nouveau, et la différence désigne le
-paramètre. C'est ainsi qu'on a établi qu'**aucun paramètre ne porte le
-déport de lame** : changer la lame ne modifie que le type d'outil, donc la
-machine déduit le déport au lieu de le stocker.
+paramètre.
+
+**Le déport de lame est parmi ces inconnus, et le relevé ne pouvait pas
+le trouver.** Changer CB15U → CB09U n'a modifié que le type d'outil, d'où
+la conclusion hâtive qu'aucun paramètre ne le portait. Le manuel donne la
+vraie raison : le champ OFFSET n'est pas le déport mais une RETOUCHE de
+±5 autour, et il vaut **0 par défaut pour les deux lames** — le déport
+réel (19 pour la CB09U, 29 pour la CB15U) est appliqué par le firmware
+d'après le type. Un paramètre qui vaut 0 avant et 0 après ne se voit pas
+dans une différence.
+
+Pour le nommer, il faut donc changer la RETOUCHE et non la lame : sur le
+panneau, `CONDITION` puis la touche `[3]` (OFFSET), la porter à 3, et
+relancer `chercher_parametre.py`.
 
 ATTENTION : ces réglages sont PERSISTANTS. Ils modifient la condition
 enregistrée dans la machine, exactement comme le fait le logiciel Graphtec —

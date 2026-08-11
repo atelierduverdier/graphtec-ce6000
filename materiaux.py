@@ -11,6 +11,12 @@ DEUX RÉGLAGES NE SONT PAS PILOTABLES et doivent se faire à la main :
     dépassement de la pointe, et il suit l'épaisseur du support : 0,10 mm
     de papier demande 0,17 de lame, 0,42 en demande 0,55. Aucune commande
     n'y touche, et une lame mal sortie ne se rattrape par aucune force.
+
+    Le carnet sort TOUJOURS la lame au-delà de l'épaisseur, de +0,05 à
+    +0,10 — il faut traverser. Sauf une ligne : le vinyle, +0,03
+    seulement. Ce n'est pas une distraction, c'est l'autre métier de la
+    machine — on coupe le film et on effleure son support, et c'est ce
+    régime-là, et lui seul, que décrit la table du manuel.
   - **la perforation**, tant qu'elle n'est pas faite en logiciel. Notée
     `(coupé, laissé)` en mm : `(8, 0.25)` coupe 8 mm puis épargne 0,25.
 
@@ -18,6 +24,9 @@ Le `passages` est en revanche gratuit chez nous : retracer le même chemin
 deux fois est une affaire de trois lignes, et c'est ce que Christophe
 faisait pour ses plumes — d'où le trait pâle de notre premier essai, dont
 la réponse était dans ce carnet.
+
+`REFERENCE_CONSTRUCTEUR`, plus bas, vient du manuel et ne se mélange PAS
+avec ce carnet : voir le commentaire qui l'introduit.
 """
 
 MATERIAUX = {
@@ -73,6 +82,53 @@ MATERIAUX = {
         vitesse=30, force=10, acceleration=2, passages=2,
         epaisseur=None, hauteur_lame=None, perforation=None),
 }
+
+
+# Table du manuel CE6000 (« Conditions de découpe (lame) pour chaque type de
+# matière »). Elle est TENUE À PART du carnet, et pas par scrupule de
+# rangement : ce ne sont pas les mêmes découpes.
+#
+# Le manuel ne parle que de FILMS adhésifs, qu'on effleure — la lame traverse
+# le film sans entamer son support, et le manuel le dit ailleurs en toutes
+# lettres : « la longueur de la lame doit être légèrement plus courte que
+# l'épaisseur de la matière ». Le carnet, lui, TRAVERSE du papier de part en
+# part et sort donc la lame PLUS que l'épaisseur : 0,10 mm de papier, 0,17 de
+# lame. Les deux règles sont justes, chacune chez elle ; appliquer celle du
+# manuel à du papier ne couperait rien.
+#
+# (épaisseur mini, maxi) en mm, lames possibles, (force mini, maxi),
+# (vitesse mini, maxi) en cm/s, accélération.
+REFERENCE_CONSTRUCTEUR = {
+    "film pour l'extérieur":       ((0.05, 0.08), ("CB09U",), (10, 14), (1, 30), 2),
+    "film décoratif":              ((0.08, 0.10), ("CB09U",), (14, 17), (1, 30), 2),
+    "film transparent":            ((0.08, 0.10), ("CB09U",), (14, 20), (1, 30), 2),
+    "film réfléchissant":          ((0.08, 0.10), ("CB09U",), (14, 20), (1, 30), 2),
+    "film fluorescent":            ((0.20, 0.25), ("CB09U", "CB15U"), (20, 24), (10, 20), 2),
+    "film pour véhicule":          ((0.05, 0.08), ("CB09U",), (14, 20), (5, 15), 2),
+}
+
+
+def encadrer(nom):
+    """Situe un profil du carnet dans la table du manuel, sans le corriger.
+
+    Rend une phrase, ou None si l'épaisseur ne tombe dans aucune ligne du
+    manuel — ce qui est le cas de la plupart des papiers, le manuel ne
+    couvrant que les films. C'est un repère, PAS un correcteur : le carnet
+    a été mesuré sur la vraie machine avec le vrai papier, la table ne l'a
+    pas été. En cas de désaccord, le carnet gagne.
+    """
+    m = MATERIAUX.get(nom)
+    if not m or not m.get("epaisseur"):
+        return None
+    ep = m["epaisseur"][1]
+    for matiere, (plage, lames, forces, _, _) in REFERENCE_CONSTRUCTEUR.items():
+        if plage[0] <= ep <= plage[1]:
+            dedans = forces[0] <= m["force"] <= forces[1]
+            return (f"{ep:g} mm — le manuel range « {matiere} » là, "
+                    f"force {forces[0]} à {forces[1]} ({'compatible' if dedans else 'hors plage'}), "
+                    f"lame {'/'.join(lames)}. Table pour films effleurés, "
+                    f"pas pour du papier traversé.")
+    return None
 
 
 def appliquer(nom, condition=1):

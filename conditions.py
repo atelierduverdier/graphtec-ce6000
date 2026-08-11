@@ -138,8 +138,14 @@ def regler(fd, parametre, valeur, condition=1, patience=30):
     return etats
 
 
-def lire(fd, parametre, condition=1, delai=1.5):
+def lire(fd, parametre, condition=1, delai=1.5, famille=2002):
     """Lit un paramètre : `TC2002,<paramètre>,<condition>`.
+
+    `famille` permet d'interroger les autres jeux relevés à la capture USB
+    (`TC1004`, `TC1006`, `TC1010` en écriture, donc `TC2004`, `TC2006`,
+    `TC2010` en lecture) : une manipulation au panneau se cherche alors
+    dans TOUTES les familles à la fois, plutôt que d'être refaite pour
+    chacune.
 
     La machine répond `<condition>, <valeur>[, <valeur>…]` en ETX, les
     nombres cadrés à droite sur des espaces. Rend la liste des valeurs
@@ -163,7 +169,7 @@ def lire(fd, parametre, condition=1, delai=1.5):
         except BlockingIOError:
             break
 
-    _ecrire(fd, f"\x1b.v:TC2002,{parametre},{condition}\x03")
+    _ecrire(fd, f"\x1b.v:TC{famille},{parametre},{condition}\x03")
     reponse = b""
     limite = time.monotonic() + delai
     while time.monotonic() < limite:
@@ -257,7 +263,8 @@ def appliquer(vitesse=None, force=None, acceleration=None,
     return rendu
 
 
-def instantane(condition=1, plage=range(1, 21), periph=PERIPH):
+def instantane(condition=1, plage=range(1, 21), periph=PERIPH,
+               familles=(2002,)):
     """Relève TOUS les paramètres lisibles d'une condition.
 
     L'idée est de Christophe, et elle vaut mieux que la précédente : la
@@ -268,11 +275,25 @@ def instantane(condition=1, plage=range(1, 21), periph=PERIPH):
     """
     fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
     try:
+        # Interrogation JETÉE. La toute première après ouverture revient
+        # décalée : le 11/08/2026, trois relevés d'affilée donnaient 11
+        # paramètres rigoureusement identiques, mais celui qui les précédait
+        # n'en voyait que 7 -- et y lisait l'accélération (2) à l'index 10
+        # au lieu de 5. Toutes les réponses glissées d'un cran, exactement
+        # la désynchronisation que `lire` purge déjà, mais qui a besoin d'un
+        # aller-retour pour se manifester.
+        #
+        # Sans ce coup pour rien, deux relevés encadrant une manipulation
+        # diffèrent de paramètres qu'on n'a pas touchés, et la différence
+        # désigne n'importe quoi avec la même assurance.
+        lire(fd, 3, condition, delai=0.7)
+
         etat = {}
-        for p in plage:
-            valeurs = lire(fd, p, condition, delai=0.7)
-            if valeurs:
-                etat[p] = valeurs
+        for f in familles:
+            for p in plage:
+                valeurs = lire(fd, p, condition, delai=0.7, famille=f)
+                if valeurs:
+                    etat[(f, p) if len(familles) > 1 else p] = valeurs
         return etat
     finally:
         os.close(fd)

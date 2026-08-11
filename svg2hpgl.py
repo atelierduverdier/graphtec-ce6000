@@ -362,7 +362,12 @@ def main():
                     help="envoie à la machine (mouvement réel de l'outil)")
     args = ap.parse_args()
 
-    polylignes, avertissements = charger(args.svg)
+    if not os.path.exists(args.svg):
+        sys.exit(f"fichier introuvable : {args.svg}")
+    try:
+        polylignes, avertissements = charger(args.svg)
+    except Exception as e:
+        sys.exit(f"lecture impossible de {args.svg} : {e}")
     for message in avertissements:
         print(f"  attention : {message}", file=sys.stderr)
     if not polylignes:

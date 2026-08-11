@@ -21,6 +21,11 @@ la réponse était dans ce carnet.
 """
 
 MATERIAUX = {
+    # Force 10 CONFIRMÉE au nuancier en carrés le 11/08/2026, sur des
+    # chutes de 80 g : le 4e carré est celui qui se détache le mieux. La
+    # valeur venait du carnet, donc de Graphtec Studio sous Windows — la
+    # retrouver par notre chaîne prouve que `FS` produit le même effet
+    # physique que le réglage du logiciel d'origine.
     "papier 80-90 g": dict(
         vitesse=20, force=10, acceleration=None, passages=1,
         epaisseur=(0.10, 0.15), hauteur_lame=0.25, perforation=(8.0, 0.25)),
@@ -30,12 +35,14 @@ MATERIAUX = {
     "aquarelle 200 g": dict(
         vitesse=20, force=14, acceleration=None, passages=1,
         epaisseur=(0.30, 0.30), hauteur_lame=0.35, perforation=(8.0, 0.25)),
-    "canson 224 g": dict(
-        # FORCE À CONFIRMER : le carnet dit 2, or l'aquarelle de même
-        # épaisseur demande 14 et le 300 g en demande 25. Sept fois moins
-        # à épaisseur égale ne colle pas — probable faute de recopie pour
-        # 20. Laissé tel quel et signalé plutôt que corrigé en douce.
-        vitesse=20, force=2, acceleration=2, passages=1, doute="force",
+    # CE N'EST PAS UNE DÉCOUPE. Force 2 sur du 224 g paraissait aberrant --
+    # l'aquarelle de même épaisseur en demande 14, le 300 g en demande 25 --
+    # et j'ai cru à un zéro oublié. Christophe : « c'est juste pour marquer
+    # le papier afin de mieux le plier ». La lame RAINE, elle ne traverse
+    # pas. Corriger aurait effacé un réglage utile et rendu la ligne de pli
+    # impossible à retrouver.
+    "canson 224 g — rainage pour pli": dict(
+        vitesse=20, force=2, acceleration=2, passages=1, usage="rainer",
         epaisseur=(0.30, 0.30), hauteur_lame=0.40, perforation=(8.0, 0.15)),
     "ingres 80 g": dict(
         vitesse=40, force=10, acceleration=1, passages=1,
@@ -52,6 +59,20 @@ MATERIAUX = {
 }
 
 
+def appliquer(nom, condition=1):
+    """Pousse un profil dans la machine et RELIT chaque valeur.
+
+    Ne touche pas à ce qui ne se pilote pas : la hauteur de lame reste à
+    faire à la main, et la fonction le rappelle dans son compte rendu.
+    """
+    import conditions
+    m = MATERIAUX[nom]
+    rendu = conditions.appliquer(vitesse=m["vitesse"], force=m["force"],
+                                 acceleration=m["acceleration"],
+                                 condition=condition)
+    return rendu, m.get("hauteur_lame")
+
+
 def resume(nom):
     """Une ligne lisible, avec ce qui reste à faire à la main."""
     m = MATERIAUX[nom]
@@ -63,6 +84,6 @@ def resume(nom):
     texte = f"{nom} : " + ", ".join(bouts)
     if m.get("hauteur_lame"):
         texte += f"  |  À LA MAIN : lame à {m['hauteur_lame']} mm"
-    if m.get("doute"):
-        texte += f"  |  {m['doute'].upper()} À CONFIRMER"
+    if m.get("usage") == "rainer":
+        texte += "  |  RAINAGE, ne traverse pas"
     return texte

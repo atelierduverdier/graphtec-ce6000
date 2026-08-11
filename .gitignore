@@ -1,3 +1,4 @@
 *.hpgl
 __pycache__/
 .releve_en_cours.json
+etat_avant_sondage.txt

@@ -819,9 +819,15 @@ que `TC2004` ne répond qu'au 6 et `TC2006` au 13. Ses « familles muettes »
 étaient un artefact de son étroitesse — une sonde trop courte rend des
 absences qui ressemblent à des faits.
 
-**Déjà porté par la machine**, rien à écrire : les 8 conditions, que le
-fichier sélectionne par `SP1`..`SP8` ; la compensation d'offset de lame et
-son angle, faits dans le firmware. **Déjà mesuré comme exact chez nous** :
+**Déjà porté par la machine** : les 8 conditions, que le fichier
+sélectionne par `SP1`..`SP8`. Elles s'écrivent aussi, chacune
+séparément — `TC1002,<paramètre>,<condition>,<valeur>` — vérifié le
+11/08/2026 en modifiant la n° 5 et en constatant que ses voisines ne
+bougeaient pas, restauration comprise. Le pupitre affiche le contenu des
+huit dans sa liste déroulante, la condition active marquée d'un point :
+choisir « condition 5 » sans savoir ce qu'elle contient n'aide personne.
+La compensation d'offset de lame et la compensation d'offset de lame et
+son angle sont faits dans le firmware. **Déjà mesuré comme exact chez nous** :
 l'ajustement de distance X/Y (`OF;` donne 40,00 et le carré de 60 mm l'a
 confirmé sur papier).
 

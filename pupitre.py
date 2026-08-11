@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import svg2hpgl as noyau
 import mosaique                                    # noqa: E402
 import materiaux                                   # noqa: E402
+import etat_machine                                # noqa: E402
 from theme import SOMBRE, CLAIR, feuille_de_style           # noqa: E402
 import conditions as machine                                # noqa: E402
 import icones                                               # noqa: E402
@@ -230,6 +231,7 @@ class Pupitre(QWidget):
         # affichent des valeurs par défaut, et « Appliquer maintenant » les
         # écrirait dans la machine en croyant obéir : c'est arrivé le
         # 11/08/2026, un « Stylo feutre » monté est repassé à CB09U.
+        self._resumer_conditions()
         self._lire_condition(silencieux=True)
 
     def _entete(self):
@@ -519,7 +521,8 @@ class Pupitre(QWidget):
             "Pour agir maintenant, utiliser « Appliquer maintenant ».")
 
         b_lire_c = QPushButton("Lire la condition")
-        b_lire_c.clicked.connect(self._lire_condition)
+        b_lire_c.clicked.connect(lambda: (self._resumer_conditions(),
+                                          self._lire_condition()))
         b_appl_c = QPushButton("Appliquer maintenant")
         b_appl_c.clicked.connect(self._appliquer_condition)
         self.lbl_condition = QLabel("condition non lue")
@@ -756,6 +759,33 @@ class Pupitre(QWidget):
         self.lbl_profil.setText("  •  ".join(rappels) if rappels
                                 else "valeurs posées, rien n'est encore envoyé")
 
+    def _resumer_conditions(self, silencieux=True):
+        """Écrit le contenu des huit conditions DANS la liste déroulante.
+
+        « condition 5 » ne dit rien de ce qu'on choisit. La machine les
+        garde toutes les huit et les rend d'un coup en clair : les afficher
+        là où on choisit évite d'aller les lire ailleurs — ou pire, de
+        deviner. La condition ACTIVE est marquée : c'est celle que la
+        machine emploie quand le fichier ne dit rien.
+        """
+        import conditions as M
+        if not os.path.exists(M.PERIPH):
+            return
+        try:
+            sections = etat_machine.analyser(etat_machine.lire())
+        except Exception as e:
+            if not silencieux:
+                QMessageBox.warning(self, "Traceur", str(e))
+            return
+        for i in range(self.cmb_cond.count()):
+            c = sections.get(f"No.{i + 1}")
+            if not c:
+                continue
+            actif = " ●" if "*active*" in c else ""
+            self.cmb_cond.setItemText(
+                i, f"{i + 1}{actif} — {c.get('TOOL', '?')}, "
+                   f"{c.get('SPEED', '?')} cm/s, force {c.get('FORCE', '?')}")
+
     def _lire_condition(self, silencieux=False):
         """Charge la condition choisie depuis la machine.
 
@@ -820,6 +850,7 @@ class Pupitre(QWidget):
         finally:
             os.close(fd)
         rates = [n for n, _d, _o, ok in rendu if not ok]
+        self._resumer_conditions()
         self.lbl_condition.setText(
             f"condition {cond} appliquée et relue"
             + (f" — NON RETENU : {', '.join(rates)}" if rates

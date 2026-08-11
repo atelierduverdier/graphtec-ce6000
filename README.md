@@ -748,12 +748,12 @@ Studio avait **trois** panneaux là où le pupitre n'en a qu'un.
 
 | Réglage de Studio | Valeur vue sur la capture | État |
 |---|---|---|
-| Passe-pas (Step Pass) | 1 | **lu** : `[TOOLS] STEP PASS` |
-| Force d'offset | 30 | **lu** : `OFFSET FORCE` |
-| Angle d'offset | 30° | **lu** : `OFFSET ANGLE` |
-| Position initiale de la lame | 2 mm en-deçà / dehors | **lu** : `INITIAL BLADE` |
-| **Vitesse outil relevé** | 40 cm/s | **lu** : `TOOL UP SPEED`, et probablement `TC2008,2` qui vaut 400 |
-| Déplacer activé/désactivé | — | **lu** : `TOOL UP MOVE` |
+| Passe-pas (Step Pass) | 1 | **réglable** : `TC1004,3` |
+| Force d'offset | 30 | **réglable** : `TC1004,4` |
+| Angle d'offset | 30° | **réglable** : `TC1004,5`, stocké × 100 |
+| Position initiale de la lame | 2 mm en-deçà / dehors | **réglable** : `TC1004,10` |
+| **Vitesse outil relevé** | 40 cm/s | **réglable** : `TC1004,7`, stocké × 10 |
+| Déplacer activé/désactivé | — | **réglable** : `TC1004,11`, où 1 vaut « désactivé » |
 
 Tous lisibles depuis `etat_machine.py`. Reste à trouver comment les **écrire** :
 le relevé encadrant sert encore à ça, et il est maintenant beaucoup plus rapide

@@ -300,6 +300,7 @@ VITESSE_RELEVE = 7        # TOOL UP SPEED, stocké × 10 : la vitesse des
                           # trajets à vide, donc la durée d'un travail
 PRIORITE_CONDITION = 8    # 1 = PROGRAM, 0 = MANUEL. Sur MANUEL, `VS` est
                           # silencieusement ignoré — le piège d'une soirée
+TRI_DONNEES = 6           # DATA SORT, deux champs ; le premier commande
 LAME_INITIALE = 10        # INITIAL BLADE, 2 mm en-deçà / dehors
 DEPLACEMENT_RELEVE = 11   # TOOL UP MOVE, activé / désactivé
 
@@ -313,6 +314,8 @@ REGLAGES_MACHINE = {
     ANGLE_DEPORT:       ("OFFSET ANGLE", 100, "en degrés"),
     VITESSE_RELEVE:     ("TOOL UP SPEED", 10, "cm/s, trajets à vide"),
     PRIORITE_CONDITION: ("CONDITION PRIORITY", 1, "1 = PROGRAM, 0 = MANUEL"),
+    TRI_DONNEES:        ("DATA SORT", 1, "tri des chemins PAR LA MACHINE ; "
+                                          "on le fait déjà en logiciel"),
     LAME_INITIALE:      ("INITIAL BLADE", 1, "position de contrôle initiale"),
     DEPLACEMENT_RELEVE: ("TOOL UP MOVE", 1, "0/1"),
 }
@@ -328,14 +331,35 @@ ETATS_MACHINE = {
     DEPLACEMENT_RELEVE:  {1: "DISABLED", 0: "ENABLED"},
 }
 
-# Restent sans nom dans cette famille, et c'est dit plutôt que deviné :
-#   TC2004,1  — l'écriture est RETENUE mais aucune ligne du vidage ne bouge.
-#   TC2004,6  — deux champs, à sonder autrement qu'en valeur simple.
-#   `DATA SORT` du vidage n'est rattaché à aucun paramètre.
+# `TC2004,6` porte DEUX champs et c'est le PREMIER qui commande : écrire
+# « 1,0 » fait passer `DATA SORT` de OFF à ON, et la relecture rend `[1, 1]`
+# — le second champ suit, sans qu'on sache ce qu'il représente.
+#
+# `DATA SORT` fait trier les chemins PAR LA MACHINE. On le laisse à OFF :
+# `svg2hpgl.ordonner` le fait déjà, et son gain est mesuré (53 % de trajet
+# à vide en moins sur le porte-manteau). Deux tris qui se superposent, c'est
+# un tri dont on ne sait plus lequel agit.
+#
+# Reste sans nom, et c'est dit plutôt que deviné :
+#   TC2004,1 — l'écriture est RETENUE (0 devient 1, relu 1) mais AUCUNE
+#   ligne du vidage ne bouge. C'est donc un réglage réel que le vidage en
+#   clair n'expose pas. Sondé deux fois, le 11/08/2026.
+
+
+# Réglages machine qui s'écrivent à DEUX champs. `TC1004,6,1` seul ne
+# passe pas : il faut `TC1004,6,1,1`. C'est le premier champ qui commande,
+# le second suit sans qu'on sache ce qu'il représente.
+DEUX_CHAMPS = {6}
 
 
 def regler_machine(fd, parametre, valeur, patience=30):
-    """Écrit un réglage machine — celui-là ne dépend d'aucune condition."""
+    """Écrit un réglage machine — celui-là ne dépend d'aucune condition.
+
+    Les paramètres de `DEUX_CHAMPS` reçoivent leur valeur dupliquée : la
+    forme à un seul champ n'est pas acceptée pour eux.
+    """
+    if parametre in DEUX_CHAMPS and "," not in str(valeur):
+        valeur = f"{valeur},{valeur}"
     _ecrire(fd, f"\x1b.v:TC{MACHINE},{parametre},{valeur}\x03")
     etats = []
     for _ in range(patience):

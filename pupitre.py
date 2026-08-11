@@ -618,6 +618,12 @@ class Pupitre(QWidget):
             (M.DEPLACEMENT_RELEVE, "déplacement relevé",
              {1: "désactivé", 0: "activé"},
              "1 vaut « désactivé » : vérifié sur la machine, pas déduit."),
+            (M.TRI_DONNEES, "tri des chemins",
+             {0: "par le logiciel", 1: "par la machine"},
+             "Le pupitre réordonne déjà les chemins avant l'envoi, et son\n"
+             "gain est mesuré : 53 % de trajet à vide en moins sur le\n"
+             "gabarit du porte-manteau. Deux tris superposés, c'est un tri\n"
+             "dont on ne sait plus lequel agit."),
         ]
 
         g = QGroupBox()

@@ -16,6 +16,7 @@ panneau, ce qui est le seul morceau délicat de tout ça et mérite d'être
 traité à part.
 """
 
+import math
 import os
 import sys
 
@@ -369,6 +370,30 @@ class Pupitre(QWidget):
         gl.addWidget(b_ajuster, 5, 0, 1, 2)
         g_placement = g
 
+        # --- nuancier
+        g = QGroupBox("Nuancier de force")
+        gl = QGridLayout(g)
+        self.spn_nu_min = self._entier(1, 38, 8)
+        self.spn_nu_max = self._entier(1, 38, 26)
+        self.spn_nu_pas = self._entier(1, 10, 2)
+        b_nuancier = QPushButton("Tracer le nuancier")
+        b_nuancier.setToolTip(
+            "Une grille de carrés, un par force, À LEVER pour juger.\n"
+            "Une coupe ne se voit pas, elle se sent : le bon réglage est la\n"
+            "force la plus faible où le carré se détache proprement.\n"
+            "N'utilise PAS les réglages ci-dessus : chaque carré porte la\n"
+            "sienne.")
+        b_nuancier.clicked.connect(self._tracer_nuancier)
+        self.lbl_nuancier = QLabel("à lancer sur une chute du papier visé")
+        self.lbl_nuancier.setObjectName("faible")
+        self.lbl_nuancier.setWordWrap(True)
+        gl.addWidget(QLabel("de la force"), 0, 0); gl.addWidget(self.spn_nu_min, 0, 1)
+        gl.addWidget(QLabel("à la force"), 1, 0); gl.addWidget(self.spn_nu_max, 1, 1)
+        gl.addWidget(QLabel("par pas de"), 2, 0); gl.addWidget(self.spn_nu_pas, 2, 1)
+        gl.addWidget(b_nuancier, 3, 0, 1, 2)
+        gl.addWidget(self.lbl_nuancier, 4, 0, 1, 2)
+        g_nuancier = g
+
         # --- mosaïque
         g = QGroupBox("Mosaïque")
         gl = QGridLayout(g)
@@ -396,6 +421,29 @@ class Pupitre(QWidget):
         gl.addWidget(b_pan_media, 4, 0, 1, 2)
         gl.addWidget(self.lbl_mosaique, 5, 0, 1, 2)
         g_mosaique = g
+
+        # --- perforation
+        g = QGroupBox("Perforation")
+        gl = QGridLayout(g)
+        self.chk_perfo = QCheckBox("découper en pointillé")
+        self.chk_perfo.setToolTip(
+            "Coupe par tirets, pour un gabarit qui tient dans la feuille et\n"
+            "se détache à la main. Le carnet d'établi note 8 mm coupés et\n"
+            "0,25 laissés sur la plupart des papiers, 0,15 sur les épais.")
+        self.chk_perfo.stateChanged.connect(self._recalculer)
+        self.spn_coupe = self._reel(0.5, 100, 8.0)
+        self.spn_saut = self._reel(0.05, 20, 0.25)
+        self.spn_saut.setDecimals(2)
+        for w in (self.spn_coupe, self.spn_saut):
+            w.valueChanged.connect(self._recalculer)
+        self.lbl_perfo = QLabel("inactive")
+        self.lbl_perfo.setObjectName("faible")
+        self.lbl_perfo.setWordWrap(True)
+        gl.addWidget(self.chk_perfo, 0, 0, 1, 2)
+        gl.addWidget(QLabel("coupé"), 1, 0); gl.addWidget(self.spn_coupe, 1, 1)
+        gl.addWidget(QLabel("laissé"), 2, 0); gl.addWidget(self.spn_saut, 2, 1)
+        gl.addWidget(self.lbl_perfo, 3, 0, 1, 2)
+        g_perfo = g
 
         # --- copies
         g = QGroupBox("Copies matricielles")
@@ -512,8 +560,9 @@ class Pupitre(QWidget):
 
         self.onglets = QTabWidget()
         self.onglets.addTab(onglet(b_ouvrir, self.lbl_fichier, g_media,
-                                   g_placement, g_mosaique), "Dessin")
-        self.onglets.addTab(onglet(g_outil, g_copies), "Outil")
+                                   g_placement, g_mosaique,
+                                   g_perfo), "Dessin")
+        self.onglets.addTab(onglet(g_outil, g_nuancier, g_copies), "Outil")
         self.onglets.addTab(onglet(self._groupe_machine()), "Machine")
         v.addWidget(self.onglets, 1)
 
@@ -616,6 +665,45 @@ class Pupitre(QWidget):
         g.setEnabled(True)
         return g
 
+    def _tracer_nuancier(self):
+        """Trace la grille de carrés à lever, chacun à sa propre force.
+
+        Il ne passe PAS par l'aperçu : chaque carré porte un `FS` qui lui
+        est propre, ce que la chaîne de polylignes ne sait pas exprimer.
+        C'est le seul travail du pupitre dans ce cas, et il est annoncé.
+        """
+        import nuancier_force
+        mini, maxi = self.spn_nu_min.value(), self.spn_nu_max.value()
+        if mini >= maxi:
+            QMessageBox.information(self, "Nuancier",
+                                    "La force de départ doit être inférieure "
+                                    "à celle d'arrivée.")
+            return
+        condition = self.cmb_cond.currentIndex() + 1
+        programme, legende = nuancier_force.carres(
+            mini, maxi, self.spn_nu_pas.value(), condition)
+        rep = QMessageBox.question(
+            self, "Tracer le nuancier",
+            f"{len(legende)} carrés, force {mini} à {maxi} par pas de "
+            f"{self.spn_nu_pas.value()}.\n\n"
+            f"Charger une CHUTE du papier visé, régler la sortie de lame à "
+            f"la main,\net attendre READY.\n\n"
+            f"Les réglages de l'onglet ne sont pas employés : chaque carré "
+            f"porte sa propre force.",
+            QMessageBox.Ok | QMessageBox.Cancel)
+        if rep != QMessageBox.Ok:
+            return
+        try:
+            envoye = noyau.envoyer(programme)
+        except Exception as e:
+            QMessageBox.critical(self, "Envoi impossible", str(e))
+            return
+        forces = ", ".join(str(f) for f, _x, _y in legende)
+        self.lbl_nuancier.setText(
+            f"{envoye} octets envoyés — forces tracées : {forces}. "
+            f"Lever chaque carré : le bon réglage est le plus FAIBLE qui "
+            f"détache proprement, et le carnet garde deux crans de marge.")
+
     def _appliquer_profil(self):
         """Verse un profil du carnet dans les champs — sans rien envoyer.
 
@@ -655,7 +743,10 @@ class Pupitre(QWidget):
                            f"marge gardée")
         if m.get("perforation"):
             c, sa = m["perforation"]
-            rappels.append(f"perforation du carnet : {c:g} coupés, {sa:g} laissés")
+            self.spn_coupe.setValue(c)
+            self.spn_saut.setValue(sa)
+            rappels.append(f"perforation du carnet posée : {c:g} coupés, "
+                           f"{sa:g} laissés")
         self.lbl_profil.setText("  •  ".join(rappels) if rappels
                                 else "valeurs posées, rien n'est encore envoyé")
 
@@ -973,6 +1064,18 @@ class Pupitre(QWidget):
                 "inactive" if not self.chk_mosaique.isChecked()
                 else "aucun dessin à découper")
 
+        if self.chk_perfo.isChecked():
+            c, sa = self.spn_coupe.value(), self.spn_saut.value()
+            longueur = sum(math.dist(a, b) for pts, _ in self.calcule
+                           for a, b in zip(pts, pts[1:]))
+            tirets = int(longueur / (c + sa)) if c + sa else 0
+            self.lbl_perfo.setText(
+                f"{c:g} coupés, {sa:g} laissés — environ {tirets} tirets "
+                f"sur {longueur / 1000:.1f} m de tracé. Appliqué à l'envoi, "
+                f"l'aperçu montre le trait plein.")
+        else:
+            self.lbl_perfo.setText("inactive")
+
         self.apercu.poser(self.calcule, self.media, deborde,
                           [p[2] for p in panneaux])
 
@@ -1012,7 +1115,13 @@ class Pupitre(QWidget):
             av = noyau.trajet_a_vide(morceaux)
             cand = noyau.ordonner(morceaux)
             ap = noyau.trajet_a_vide(cand)
-            prog, _ = noyau.en_hpgl(cand if ap < av else morceaux, condition,
+            retenu = cand if ap < av else morceaux
+            if self.chk_perfo.isChecked():
+                # APRÈS le réordonnancement : le pointillé multiplie par
+                # vingt le nombre de chemins, et l'ordonnancement est en n².
+                retenu = noyau.perforer(retenu, self.spn_coupe.value(),
+                                        self.spn_saut.value())
+            prog, _ = noyau.en_hpgl(retenu, condition,
                                     self.spn_force.value(),
                                     self.spn_passages.value())
             programmes.append((nom, prog))

@@ -35,14 +35,19 @@ MATERIAUX = {
     # réglage du logiciel d'origine.
     "papier 80-90 g": dict(
         vitesse=20, force=10, acceleration=None, passages=1, seuil_coupe=8,
-        epaisseur=(0.10, 0.15), hauteur_lame=0.25, perforation=(8.0, 0.25)),
+        epaisseur=(0.10, 0.15), hauteur_lame=0.25, perforation=(8.0, 0.25),
+        lame="CB09U"),
     # Nuancier du 11/08/2026 sur chute de 300 g, lame à 0,55 : la force 16
     # laisse le carré tenir par un coin, 18 traverse. On garde le 25 du
     # carnet -- sept crans de marge, comme le 80 g en garde deux. La marge
     # est ce qui fait qu'une coupe réussit encore quand la lame s'émousse.
     "papier 300 g": dict(
         vitesse=7, force=25, acceleration=None, passages=1, seuil_coupe=18,
-        epaisseur=(0.40, 0.45), hauteur_lame=0.55, perforation=(8.0, 0.25)),
+        epaisseur=(0.40, 0.45), hauteur_lame=0.55, perforation=(8.0, 0.25),
+        # 0,42 mm : c'est la plage de la CB15U (0,25 à 0,5), pas celle de la
+        # CB09U (jusqu'à 0,25). Coupé à la CB09U le 11/08/2026 -- ça marche,
+        # mais avec une lame sous-dimensionnée qui s'usera plus vite.
+        lame="CB15U"),
     "aquarelle 200 g": dict(
         vitesse=20, force=14, acceleration=None, passages=1,
         epaisseur=(0.30, 0.30), hauteur_lame=0.35, perforation=(8.0, 0.25)),
@@ -97,6 +102,8 @@ def resume(nom):
         texte += f"  |  À LA MAIN : lame à {m['hauteur_lame']} mm"
     if m.get("seuil_coupe"):
         texte += f"  |  traverse dès {m['seuil_coupe']}, marge gardée"
+    if m.get("lame"):
+        texte += f"  |  lame {m['lame']}"
     if m.get("usage") == "rainer":
         texte += "  |  RAINAGE, ne traverse pas"
     return texte

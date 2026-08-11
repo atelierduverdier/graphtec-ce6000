@@ -28,6 +28,25 @@ LAMES = {
     "CB15UB": (1.5, 60),
 }
 
+# Plages d'épaisseur, relevées dans les descriptions du logiciel Graphtec.
+# C'est du constructeur, pas une déduction -- et ça ne se devine pas.
+EPAISSEURS = {
+    "CB09U": (0.0, 0.25, "supports adhésifs couleur, vinyle standard"),
+    "CB09U-K60": (0.0, 0.25, "variante 60°"),
+    "CB15U": (0.25, 0.50, "supports trop épais pour la CB09U"),
+    "CB15UB": (0.0, 0.50, "petits caractères de moins de 10 mm"),
+}
+
+
+def lame_pour(epaisseur):
+    """Lame recommandée pour une épaisseur donnée, ou None."""
+    for nom, (mini, maxi, _) in EPAISSEURS.items():
+        if nom.endswith("UB"):
+            continue                       # cas particulier, pas un général
+        if mini <= epaisseur <= maxi:
+            return nom
+    return None
+
 
 def _dessiner_lame(p, rect, palette, diametre, angle):
     """Corps de porte-lame, puis une pointe dont la forme porte l'information."""
@@ -98,8 +117,12 @@ def legende(nom):
     """Ce que l'icône montre, en toutes lettres — pour l'infobulle."""
     if nom in LAMES:
         d, a = LAMES[nom]
-        return (f"lame Ø {d} mm, pointe à {a}°. "
-                f"L'icône en dessine la largeur et l'angle.")
+        texte = (f"lame Ø {d} mm, pointe à {a}°. "
+                 f"L'icône en dessine la largeur et l'angle.")
+        if nom in EPAISSEURS:
+            mini, maxi, usage = EPAISSEURS[nom]
+            texte += f"\nSupports de {mini:g} à {maxi:g} mm — {usage}."
+        return texte
     if nom == "Stylo feutre":
         return "plume : aucun déport, la machine ne compense pas."
     return "outil non répertorié : déport inconnu."

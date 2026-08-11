@@ -1,2 +1,3 @@
 *.hpgl
 __pycache__/
+.releve_en_cours.json

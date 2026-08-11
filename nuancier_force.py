@@ -37,6 +37,35 @@ def u(mm):
     return int(round(mm * UNITES_PAR_MM))
 
 
+def carres(force_min, force_max, pas, outil, cote=12.0, ecart=6.0,
+           par_rangee=8):
+    """Une grille de carrés, un par force, À LEVER pour juger.
+
+    Le nuancier en LIGNES se juge à l'oeil : bon pour une plume, inutile
+    pour une lame. Une coupe ne se voit pas, elle se sent — le bon réglage
+    est le plus faible où le carré se détache proprement, sans que la lame
+    entame la bande de coupe dessous.
+
+    Les carrés sont identiques et rangés par force croissante : un carré
+    non coupé reste visible (la lame griffe même sans traverser), donc on
+    peut compter depuis le premier. La légende imprimée donne les positions.
+    """
+    forces = list(range(force_min, force_max + 1, pas))
+    lignes = ["IN;", f"SP{outil};"]
+    legende = []
+    for rang, force in enumerate(forces):
+        col, rangee = rang % par_rangee, rang // par_rangee
+        x = MARGE + col * (cote + ecart)
+        y = MARGE + rangee * (cote + ecart)
+        lignes.append(f"FS{force};")
+        lignes.append(f"PU{u(x)},{u(y)};")
+        for dx, dy in ((cote, 0), (cote, cote), (0, cote), (0, 0)):
+            lignes.append(f"PD{u(x + dx)},{u(y + dy)};")
+        legende.append((force, x, y))
+    lignes += ["PU0,0;", "SP0;"]
+    return "\n".join(lignes) + "\n", legende
+
+
 def nuancier(force_min, force_max, pas, outil):
     """Rend (programme HP-GL, [(force, longueur_mm, y_mm), ...])."""
     forces = list(range(force_min, force_max + 1, pas))
@@ -77,6 +106,11 @@ def main():
     ap.add_argument("--max", type=int, default=31, help="force la plus haute (défaut 31)")
     ap.add_argument("--pas", type=int, default=2, help="incrément (défaut 2)")
     ap.add_argument("--outil", type=int, default=1, help="condition du panneau (défaut 1)")
+    ap.add_argument("--carres", action="store_true",
+                    help="carrés À LEVER au lieu de lignes : le seul jugement "
+                         "valable pour une lame, une coupe ne se voyant pas")
+    ap.add_argument("--cote", type=float, default=12.0,
+                    help="côté des carrés en mm (défaut 12)")
     ap.add_argument("--envoyer", action="store_true",
                     help="envoie à la machine (mouvement réel de l'outil)")
     args = ap.parse_args()
@@ -84,20 +118,35 @@ def main():
     if args.min < 1 or args.max < args.min or args.pas < 1:
         sys.exit("plage de force incohérente")
 
-    programme, legende = nuancier(args.min, args.max, args.pas,
-                                  args.outil)
+    if args.carres:
+        programme, legende = carres(args.min, args.max, args.pas,
+                                    args.outil, args.cote)
+    else:
+        programme, legende = nuancier(args.min, args.max, args.pas,
+                                      args.outil)
 
-    hauteur = legende[-1][2] + MARGE
-    largeur = MARGE + LONGUEUR_BASE + args.max
-    print(f"{len(legende)} lignes, force {args.min} à {args.max} par pas de {args.pas}")
-    print(f"emprise {largeur:.0f} x {hauteur:.0f} mm\n")
-    print("  force   longueur   position Y")
-    for force, longueur, y in legende:
-        print(f"  {force:>5}   {longueur:>6.0f} mm   {y:>6.1f} mm")
-    print("\nLecture : mesurer la longueur d'une ligne au pied à coulisse,")
-    print(f"          la force vaut cette longueur moins {LONGUEUR_BASE:.0f} mm.")
-    print("Si toutes les lignes sont identiques, FS est ignoré : tout se")
-    print("règle alors au panneau, CONDITION > FORCE.")
+    if args.carres:
+        xs = [x for _, x, _ in legende]; ys = [y for _, _, y in legende]
+        print(f"{len(legende)} carrés de {args.cote:.0f} mm, force {args.min} "
+              f"à {args.max} par pas de {args.pas}")
+        print(f"emprise {max(xs) + args.cote + MARGE:.0f} x "
+              f"{max(ys) + args.cote + MARGE:.0f} mm\n")
+        print("  force        position (x, y)")
+        for force, x, y in legende:
+            print(f"  {force:>5}   {x:>10.1f}, {y:.1f}")
+        print("\nLecture AU DOIGT : le bon réglage est la force la PLUS FAIBLE")
+        print("dont le carré se détache proprement. Au-delà, on n'y gagne rien")
+        print("et la lame entame la bande de coupe -- qui, elle, s'use.")
+    else:
+        hauteur = legende[-1][2] + MARGE
+        largeur = MARGE + LONGUEUR_BASE + args.max
+        print(f"{len(legende)} lignes, force {args.min} à {args.max} par pas de {args.pas}")
+        print(f"emprise {largeur:.0f} x {hauteur:.0f} mm\n")
+        print("  force   longueur   position Y")
+        for force, longueur, y in legende:
+            print(f"  {force:>5}   {longueur:>6.0f} mm   {y:>6.1f} mm")
+        print("\nLecture : mesurer la longueur d'une ligne au pied à coulisse,")
+        print(f"          la force vaut cette longueur moins {LONGUEUR_BASE:.0f} mm.")
 
     if not args.envoyer:
         print("\n(rien n'a été envoyé ; ajouter --envoyer pour tracer)")

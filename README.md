@@ -504,7 +504,7 @@ remise à plus tard :
 
 | | |
 |---|---|
-| Nuancier de force jugé au décollement | `nuancier_force.py` trace déjà la planche ; il lui faut une variante en carrés qu'on essaie de lever, la noirceur ne disant rien d'une coupe |
+| Nuancier de force jugé au décollement | **fait** : `nuancier_force.py --carres`, une grille de carrés à lever |
 | Styles de perforation | une ligne pointillée fait un gabarit détachable — utile, et la machine sait le faire seule |
 | Test de découpe / de force | équivalents déjà couverts par le nuancier |
 | Cadre d'échenillage | propre au vinyle, sans objet sur papier |
@@ -515,6 +515,39 @@ feutre »** dont les valeurs d'usine sont vitesse 10 cm/s, **accélération 2**,
 force 2. L'accélération se règle au panneau (`CONDITION` → `ACCEL`) et
 n'apparaît dans aucune commande HP-GL — une plume qui accélère fort dérape au
 départ de chaque segment.
+
+## Les réglages de l'établi
+
+`materiaux.py` porte le carnet de Christophe — huit matériaux réglés à
+l'usage, sous Windows, avant tout ce travail. Ce ne sont pas des valeurs
+calculées : elles ont été trouvées en coupant du papier.
+
+| Matériau | Vitesse | Force | Épaisseur | Lame |
+|---|---|---|---|---|
+| ingres 80 g | 40 | 10 | 0,10 | 0,17 |
+| vinyle 0,20 mm | 20 | 12 | 0,10 | 0,13 |
+| papier 80-90 g | 20 | 10 | 0,10-0,15 | 0,25 |
+| aquarelle 200 g | 20 | 14 | 0,30 | 0,35 |
+| canson 224 g | 20 | **2 ?** | 0,30 | 0,40 |
+| papier 300 g | 7 | 25 | 0,40-0,45 | 0,55 |
+| feutre Staedtler | 27 | 15 | — | 2 passages |
+| stylo Bic | 30 | 10 | — | 2 passages |
+
+Trois choses qu'on n'aurait pas devinées :
+
+**La hauteur de lame suit l'épaisseur** — 0,10 mm de papier demande 0,17 de
+lame, 0,42 en demande 0,55. C'est un réglage **physique sur le porte-lame**,
+qu'aucune commande ne touche et qu'aucune force ne rattrape.
+
+**La perforation s'écrit `8 mm / 0,25 mm`** : longueur coupée, longueur
+laissée. Voilà ce que sont les « Style 1 à 9 » du logiciel Graphtec.
+
+**Les plumes se tracent en DEUX passages.** La réponse au trait pâle de nos
+premiers essais était dans ce carnet.
+
+Une valeur reste douteuse et n'est pas corrigée en douce : le canson 224 g
+à force **2**, quand l'aquarelle de même épaisseur en demande 14 et le 300 g
+en demande 25. Probable faute de recopie pour 20 — à retrouver au nuancier.
 
 ## Quand utiliser quoi
 

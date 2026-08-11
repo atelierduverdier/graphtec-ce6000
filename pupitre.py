@@ -27,7 +27,8 @@ import icones                                               # noqa: E402
 
 from PySide6.QtCore import Qt, QPointF, QRectF, QSize        # noqa: E402
 from PySide6.QtGui import (QPainter, QPen, QColor, QPolygonF,  # noqa: E402
-                           QIcon)
+                           QIcon, QPixmap)
+from PySide6.QtSvg import QSvgRenderer                        # noqa: E402
 from PySide6.QtWidgets import (                              # noqa: E402
     QApplication, QWidget, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
     QComboBox, QCheckBox, QGridLayout, QVBoxLayout, QHBoxLayout, QGroupBox,
@@ -160,12 +161,22 @@ class Pupitre(QWidget):
         la mise au point : « la machine écoute-t-elle ? »
         """
         h = QHBoxLayout()
+        h.setSpacing(10)
+
+        self.lbl_chapeau = QLabel()
+        self.lbl_chapeau.setToolTip("Atelier du Verdier")
+        h.addWidget(self.lbl_chapeau)
+
+        colonne = QVBoxLayout()
+        colonne.setSpacing(0)
         titre = QLabel("Pupitre de tracé")
         titre.setObjectName("titre")
-        h.addWidget(titre)
-        sous = QLabel("Graphtec CE6000-60")
+        colonne.addWidget(titre)
+        sous = QLabel("Atelier du Verdier — Graphtec CE6000-60")
         sous.setObjectName("faible")
-        h.addWidget(sous)
+        colonne.addWidget(sous)
+        h.addLayout(colonne)
+
         h.addStretch(1)
         self.lbl_liaison = QLabel("liaison inconnue")
         self.lbl_liaison.setObjectName("pastille")
@@ -179,9 +190,38 @@ class Pupitre(QWidget):
         self.lbl_liaison.style().unpolish(self.lbl_liaison)
         self.lbl_liaison.style().polish(self.lbl_liaison)
 
+    def _chapeau(self, hauteur=34):
+        """Le chapeau de l'atelier, teinté selon le thème.
+
+        Son corps est déclaré `#2f3540` dans le fichier — l'ardoise de la
+        maison — et se confondrait donc avec le fond sombre. On le repeint
+        de la couleur du texte : la forme et la bande orange, qui font le
+        logo, ne bougent pas.
+        """
+        chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "resources", "icons", "chapeau.svg")
+        if not os.path.exists(chemin):
+            return QPixmap()
+        texte = open(chemin, encoding="utf-8").read().replace(
+            "fill:#2f3540", f"fill:{self.pal.texte}")
+        rendu = QSvgRenderer(texte.encode())
+        if not rendu.isValid():
+            return QPixmap()
+        taille = rendu.defaultSize()
+        largeur = int(round(hauteur * taille.width() / taille.height()))
+        pix = QPixmap(largeur, hauteur)
+        pix.fill(Qt.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.Antialiasing)
+        rendu.render(p)
+        p.end()
+        return pix
+
     def _habiller(self):
         self.setStyleSheet(feuille_de_style(self.pal))
         self.apercu.habiller(self.pal)
+        if hasattr(self, "lbl_chapeau"):
+            self.lbl_chapeau.setPixmap(self._chapeau())
         # Les icônes sont dessinées, pas chargées : elles doivent donc être
         # refaites quand la palette change, sinon elles gardent les couleurs
         # de l'autre thème.

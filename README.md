@@ -421,7 +421,7 @@ machine à l'envoi » qu'on peut décocher.
 | vitesse | `TC1002,3,<cond>,<cm/s × 10>` | 1 à 640, soit 64 cm/s |
 | force | `TC1002,4,<cond>,<n>` | 1 à 38 |
 | accélération | `TC1002,5,<cond>,<n>` | **1 à 3 seulement** |
-| type d'outil | `TC1002,2,<cond>,<code>,<indicateur>` | voir la table ci-dessous |
+| type d'outil **+ offset** | `TC1002,2,<cond>,<code>,<offset>` | voir la table ci-dessous ; offset −5 à +5 |
 
 Les codes d'outil ont été relevés en parcourant la liste du logiciel Graphtec
 **deux fois de haut en bas** — la même suite les deux fois, donc une mesure
@@ -433,11 +433,35 @@ reproduite et non une déduction sur un seul passage :
 | CB09U-K60 | 10 | | Autre | 6 |
 | CB15U | 2 | | Stylo feutre | 9 |
 
-Le second champ de cette commande **reste inexpliqué**, et c'est le second
-essai qui l'a montré : il ne dépend pas de l'outil. Au premier parcours il
-valait 0 puis a basculé à 1 en cours de route sans plus en bouger — le code 6
-est apparu avec les deux valeurs. C'est un état du logiciel Graphtec, pas une
-propriété du réglage. `conditions.regler_outil` le laisse à 0.
+#### Le second champ est l'offset — et il était visible depuis le début
+
+Longtemps porté ici comme « inexpliqué ». Nommé le 11/08/2026 par un relevé
+encadrant : offset porté à 3 au panneau (`[COND/TEST]`, `[2]` OUTIL, `[3]`
+OFFSET), et de onze paramètres relevés **un seul bouge**, `TC2002,2`, de
+`[1, 0]` à `[1, 3]`. Gamme lue sur l'écran : **−5 à +5**, conforme au manuel.
+
+Il s'écrit depuis le PC, négatifs compris — `−2`, `5`, `0` demandés, les trois
+relus conformes.
+
+Deux tentatives avaient échoué avant, chacune pour sa raison. Changer
+CB15U → CB09U ne montre rien : la retouche vaut 0 pour les deux lames, et un
+paramètre identique avant et après ne se voit dans aucune différence. Et le
+relevé lui-même mentait tant qu'il ne jetait pas sa première interrogation.
+
+Mais la leçon n'est pas là. **Le champ se donnait à voir depuis le premier
+jour** : dans la capture USB il passait de 0 à 1 pendant que le logiciel
+Graphtec parcourait sa liste d'outils, et les captures d'écran de ce même
+logiciel affichaient « Offset : 1 ». Deux indices concordants, écartés d'une
+phrase — « un état du logiciel, pas une propriété du réglage » — faute d'avoir
+cherché ce qu'ils avaient en commun. La mesure qui a fini par trancher n'a rien
+appris que ces deux indices ne disaient déjà.
+
+**Et ça cachait un bug.** `regler_outil` envoyait ce champ à 0 en dur : comme
+la commande écrit les deux valeurs d'un coup, **choisir un outil effaçait
+l'offset**. Le réglage posé au panneau disparaissait au premier profil appliqué,
+sans rien afficher. Corrigé : `offset=None` relit la valeur en place et la
+conserve, `regler_offset()` fait la symétrique (changer l'offset sans toucher à
+la lame). Vérifié en posant 4, en choisissant un outil, et en relisant 4.
 
 **`TC2002` est la LECTURE du même jeu** : `TC2002,<paramètre>,<condition>`,
 et la machine répond `<condition>, <valeur>…`. On peut donc **vérifier** un
@@ -581,6 +605,12 @@ est en n².
 avec une CB09U : **toutes les pointes sortent franches, jusqu'à 30°**. La
 compensation du firmware fait son travail, et le type d'outil `TC1002,2`
 est bien ce qui la commande.
+
+La retouche d'offset — le second champ de cette même commande — valait **0**
+pendant cet essai, sa valeur d'usine. Des pointes franches à 30° avec une
+retouche nulle veulent dire qu'il n'y a rien à retoucher pour ce couple
+lame/papier. Si un jour une pointe bavait ou rentrait, c'est ce champ-là qu'il
+faudrait bouger, d'un cran à la fois, dans la gamme −5 à +5.
 
 **Le carré témoin ne prouve rien**, et c'est pour ça qu'il est là : un
 angle droit pardonne tout, et sur 12 mm le défaut se devine à peine. Le

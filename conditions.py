@@ -13,7 +13,7 @@ RIEN — c'est ce qui a fait croire pendant une soirée qu'elle était sourde.
 
 Paramètres identifiés, chacun vérifié en le lisant sur le panneau :
 
-    2  type d'outil (voir OUTILS), avec un second champ inexpliqué
+    2  type d'outil (voir OUTILS) ET retouche d'offset, deux champs
     3  vitesse, en cm/s × 10   (250 = 25 cm/s), maximum 640
     4  force, 1 à 38
     5  accélération, 1 à 3 SEULEMENT
@@ -22,23 +22,28 @@ Paramètres identifiés, chacun vérifié en le lisant sur le panneau :
 et la machine répond `<condition>, <valeur>…`. Toute écriture est donc
 vérifiable, et `appliquer` la vérifie.
 
-Restent inconnus 6, 8, 9, 14, 15 et les familles `TC1004`, `TC1006`,
-`TC1010`. Pour les nommer : `chercher_parametre.py` relève tout, laisse
-changer une seule chose, relève de nouveau, et la différence désigne le
-paramètre.
+Restent inconnus 8, 9, 14, 15, le reste de `TC1002,6` et les familles
+`TC2004,6`, `TC2006,13`. Pour les nommer : `chercher_parametre.py` relève
+tout, laisse changer une seule chose, relève de nouveau, et la différence
+désigne le paramètre.
 
-**Le déport de lame est parmi ces inconnus, et le relevé ne pouvait pas
-le trouver.** Changer CB15U → CB09U n'a modifié que le type d'outil, d'où
-la conclusion hâtive qu'aucun paramètre ne le portait. Le manuel donne la
-vraie raison : le champ OFFSET n'est pas le déport mais une RETOUCHE de
-±5 autour, et il vaut **0 par défaut pour les deux lames** — le déport
-réel (19 pour la CB09U, 29 pour la CB15U) est appliqué par le firmware
-d'après le type. Un paramètre qui vaut 0 avant et 0 après ne se voit pas
-dans une différence.
+**L'offset a été nommé ainsi le 11/08/2026**, et il n'était pas là où on
+le cherchait : c'est le SECOND champ de `TC1002,2`, celui qu'on avait
+laissé de côté comme « inexpliqué ». Offset porté à 3 au panneau, seul
+`TC2002,2` bouge, de `[1, 0]` à `[1, 3]`.
 
-Pour le nommer, il faut donc changer la RETOUCHE et non la lame : sur le
-panneau, `CONDITION` puis la touche `[3]` (OFFSET), la porter à 3, et
-relancer `chercher_parametre.py`.
+Deux essais avaient échoué avant. Changer CB15U → CB09U ne montre rien,
+parce que la retouche vaut 0 pour les deux lames — le déport réel (19 et
+29) est appliqué par le firmware d'après le type, et un paramètre qui
+vaut 0 avant comme après ne se voit dans aucune différence. Et le relevé
+lui-même mentait tant qu'il ne jetait pas sa première interrogation.
+
+Ce qui laisse une leçon plus utile que le numéro trouvé : le champ était
+visible depuis le début, il passait de 0 à 1 dans la capture USB pendant
+que le logiciel Graphtec parcourait ses outils, et les captures d'écran
+de ce logiciel affichaient « Offset : 1 ». J'avais écarté les deux d'une
+phrase — « un état du logiciel, pas une propriété du réglage » — au lieu
+de chercher ce qu'ils avaient en commun.
 
 ATTENTION : ces réglages sont PERSISTANTS. Ils modifient la condition
 enregistrée dans la machine, exactement comme le fait le logiciel Graphtec —
@@ -66,7 +71,18 @@ BORNES = {
     ACCELERATION: (1, 3),
 }
 
-OUTIL = 2                 # forme particulière : deux valeurs, pas une
+OUTIL = 2                 # forme particulière : type de lame ET offset
+
+# Le second champ de TC1002,2 est la RETOUCHE d'offset, et non le déport.
+# Le déport réel (19 pour la CB09U, 29 pour la CB15U) est appliqué par le
+# firmware d'après le type de lame ; ce champ ne fait que l'ajuster. Gamme
+# lue sur le panneau le 11/08/2026, conforme au manuel.
+DEPORT_MINI, DEPORT_MAXI = -5, 5
+
+# Déport intrinsèque de chaque lame, en unités machine (manuel CE6000).
+# Donné pour comprendre ce que la retouche retouche : on ne l'écrit pas.
+DEPORTS_LAME = {"CB09U": 19, "CB09U-K60": 19, "CB15U": 29, "CB15UB": 29,
+                "Stylo feutre": 0}
 
 # Codes relevés en parcourant la liste du logiciel Graphtec DEUX FOIS de
 # haut en bas : la même suite les deux fois, donc une mesure reproduite et
@@ -200,25 +216,45 @@ def lire_condition(condition=1, periph=PERIPH):
             valeurs = lire(fd, param, condition)
             rendu[nom] = valeurs[0] if valeurs else None
             if nom == "outil" and len(valeurs) > 1:
-                rendu["outil_indicateur"] = valeurs[1]
+                rendu["offset"] = valeurs[1]
         return rendu
     finally:
         os.close(fd)
 
 
-def regler_outil(fd, code, condition=1, indicateur=0, patience=30):
-    """Choisit le type d'outil : `TC1002,2,<condition>,<code>,<indicateur>`.
+def regler_outil(fd, code, condition=1, offset=None, patience=30):
+    """Choisit le type d'outil : `TC1002,2,<condition>,<code>,<offset>`.
 
-    Cette commande porte DEUX valeurs là où les autres n'en ont qu'une, d'où
-    sa fonction propre.
+    Cette commande porte DEUX valeurs là où les autres n'en ont qu'une : le
+    type de lame ET sa retouche d'offset. C'est ce qui lui vaut sa fonction
+    propre — et ce qui la rend dangereuse.
 
-    L'`indicateur` reste à 0 faute de savoir ce qu'il fait. Ce qu'on sait :
-    il ne dépend PAS de l'outil. Sur deux parcours de la liste, il valait 0
-    puis a basculé à 1 en cours de route et n'en a plus bougé — le code 6 est
-    apparu avec les deux valeurs. C'est un état du logiciel Graphtec, pas une
-    propriété du réglage.
+    `offset=None` **relit la valeur en place et la conserve**. Il le faut :
+    la commande écrit les deux champs d'un coup, donc choisir un outil en
+    passant l'offset en dur l'EFFACE. C'est ce que faisait cette fonction,
+    qui envoyait 0 systématiquement — le réglage patiemment posé au panneau
+    disparaissait au premier `appliquer` d'un profil.
+
+    Le second champ est resté « inexpliqué » une journée entière. Il a été
+    nommé le 11/08/2026 par un relevé encadrant : offset porté à 3 sur le
+    panneau (`[COND/TEST]`, `[2]` OUTIL, `[3]` OFFSET), et seul
+    `TC2002,2` a bougé, de `[1, 0]` à `[1, 3]`.
+
+    Rétrospectivement il se donnait à voir dans la capture USB, où il
+    passait de 0 à 1 pendant que le logiciel Graphtec parcourait la liste
+    des outils — et les captures d'écran de ce logiciel affichaient
+    « Offset : 1 ». J'avais conclu que c'était « un état du logiciel, pas
+    une propriété du réglage ». Deux indices concordants écartés d'une
+    phrase, faute d'avoir cherché ce qu'ils avaient en commun.
     """
-    _ecrire(fd, f"\x1b.v:TC1002,{OUTIL},{condition},{code},{indicateur}\x03")
+    if offset is None:
+        actuel = lire(fd, OUTIL, condition)
+        offset = actuel[1] if len(actuel) > 1 else 0
+    elif not DEPORT_MINI <= int(offset) <= DEPORT_MAXI:
+        raise ValueError(
+            f"offset {offset} hors de [{DEPORT_MINI}, {DEPORT_MAXI}] — "
+            f"gamme confirmée au panneau le 11/08/2026")
+    _ecrire(fd, f"\x1b.v:TC1002,{OUTIL},{condition},{code},{offset}\x03")
     etats = []
     for _ in range(patience):
         e = _etat(fd)
@@ -229,14 +265,29 @@ def regler_outil(fd, code, condition=1, indicateur=0, patience=30):
     return etats
 
 
-def appliquer(vitesse=None, force=None, acceleration=None,
+def regler_offset(fd, offset, condition=1):
+    """Règle la seule retouche d'offset, sans toucher au type de lame.
+
+    La commande écrivant les deux champs ensemble, on relit le type en
+    place et on le réécrit tel quel. Sans cette précaution, ajuster
+    l'offset changerait la lame déclarée — la faute symétrique de celle
+    que `regler_outil` faisait sur l'offset.
+    """
+    actuel = lire(fd, OUTIL, condition)
+    if not actuel:
+        raise RuntimeError("type d'outil illisible — la machine est-elle "
+                           "sur READY ?")
+    return regler_outil(fd, actuel[0], condition, offset=offset)
+
+
+def appliquer(vitesse=None, force=None, acceleration=None, offset=None,
               condition=1, periph=PERIPH):
     """Règle vitesse (cm/s), force et accélération, et RELIT chaque valeur.
 
     Rend une liste de `(nom, demandé, obtenu, conforme)`. Le dernier champ
     est le seul qui compte : il vient de la machine, pas de nous.
     """
-    if vitesse is None and force is None and acceleration is None:
+    if all(v is None for v in (vitesse, force, acceleration, offset)):
         return []
     demandes = []
     if vitesse is not None:
@@ -249,6 +300,11 @@ def appliquer(vitesse=None, force=None, acceleration=None,
     rendu = []
     fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
     try:
+        if offset is not None:
+            regler_offset(fd, offset, condition)
+            relu = lire(fd, OUTIL, condition)
+            obtenu = relu[1] if len(relu) > 1 else None
+            rendu.append(("offset", int(offset), obtenu, obtenu == int(offset)))
         for nom, param, valeur in demandes:
             regler(fd, param, valeur, condition)
             # CHAQUE écriture est relue. La machine sait dire ce qu'elle a

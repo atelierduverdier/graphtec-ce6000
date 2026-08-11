@@ -402,7 +402,14 @@ dessin dessus.
 
 Réglages : origine X/Y, rotation par quarts de tour, miroirs, échelle libre
 ou ajustée au média, **copies matricielles** (rangées × colonnes, écarts),
-condition, **vitesse et force**. L'envoi se refuse tant que le dessin déborde.
+condition, **type d'outil**, vitesse, force et accélération.
+
+Les **icônes d'outil** (`icones.py`) sont dessinées d'après ce qui distingue
+les lames : la largeur de la pointe suit le diamètre, son angle suit celui
+de la lame. Ce n'est pas décoratif — le type déclaré doit correspondre à
+l'outil monté, et un « Stylo feutre » oublié a arrondi tous les angles d'une
+découpe le 11/08/2026. La plume n'a pas de pointe triangulaire, parce
+qu'elle n'a pas de déport. L'envoi se refuse tant que le dessin déborde.
 
 Vitesse, force et accélération passent par `conditions.py` et le protocole
 `TC` — elles **modifient durablement** la condition enregistrée dans la

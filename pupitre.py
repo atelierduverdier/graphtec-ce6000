@@ -22,8 +22,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import svg2hpgl as noyau                                    # noqa: E402
 from theme import SOMBRE, CLAIR, feuille_de_style           # noqa: E402
+import conditions as machine                                # noqa: E402
+import icones                                               # noqa: E402
 
-from PySide6.QtCore import Qt, QPointF, QRectF               # noqa: E402
+from PySide6.QtCore import Qt, QPointF, QRectF, QSize        # noqa: E402
 from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF  # noqa: E402
 from PySide6.QtWidgets import (                              # noqa: E402
     QApplication, QWidget, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
@@ -134,6 +136,13 @@ class Pupitre(QWidget):
     def _habiller(self):
         self.setStyleSheet(feuille_de_style(self.pal))
         self.apercu.habiller(self.pal)
+        # Les icônes sont dessinées, pas chargées : elles doivent donc être
+        # refaites quand la palette change, sinon elles gardent les couleurs
+        # de l'autre thème.
+        if hasattr(self, "cmb_outil"):
+            for i in range(self.cmb_outil.count()):
+                self.cmb_outil.setItemIcon(
+                    i, icones.icone(self.cmb_outil.itemText(i), self.pal))
 
     def _basculer_theme(self):
         self.pal = CLAIR if self.pal is SOMBRE else SOMBRE
@@ -205,6 +214,14 @@ class Pupitre(QWidget):
         gl = QGridLayout(g)
         self.cmb_cond = QComboBox()
         self.cmb_cond.addItems([f"condition {i}" for i in range(1, 9)])
+        # L'outil DÉCLARÉ doit correspondre à celui qui est monté : sinon la
+        # machine compense un déport que l'outil n'a pas, ou l'inverse.
+        self.cmb_outil = QComboBox()
+        self.cmb_outil.setIconSize(QSize(22, 22))
+        for nom in machine.OUTILS:
+            self.cmb_outil.addItem(icones.icone(nom, self.pal), nom)
+            self.cmb_outil.setItemData(self.cmb_outil.count() - 1,
+                                       icones.legende(nom), Qt.ToolTipRole)
         self.spn_force = self._entier(1, 38, 12)
         # La vitesse passe par le protocole propriétaire TC : le `VS` du
         # HP-GL est ignoré par cette machine. Elle MODIFIE DURABLEMENT la
@@ -216,13 +233,14 @@ class Pupitre(QWidget):
         self.chk_regler = QCheckBox("régler la machine à l'envoi")
         self.chk_regler.setChecked(True)
         gl.addWidget(QLabel("condition"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
-        gl.addWidget(QLabel("vitesse"), 1, 0); gl.addWidget(self.spn_vit, 1, 1)
-        gl.addWidget(QLabel("force"), 2, 0); gl.addWidget(self.spn_force, 2, 1)
-        gl.addWidget(QLabel("accélération"), 3, 0); gl.addWidget(self.spn_accel, 3, 1)
-        gl.addWidget(self.chk_regler, 4, 0, 1, 2)
+        gl.addWidget(QLabel("outil"), 1, 0); gl.addWidget(self.cmb_outil, 1, 1)
+        gl.addWidget(QLabel("vitesse"), 2, 0); gl.addWidget(self.spn_vit, 2, 1)
+        gl.addWidget(QLabel("force"), 3, 0); gl.addWidget(self.spn_force, 3, 1)
+        gl.addWidget(QLabel("accélération"), 4, 0); gl.addWidget(self.spn_accel, 4, 1)
+        gl.addWidget(self.chk_regler, 5, 0, 1, 2)
         rappel = QLabel("accélération basse = trait net,\nhaute = travail plus court")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 5, 0, 1, 2)
+        gl.addWidget(rappel, 6, 0, 1, 2)
         v.addWidget(g)
 
         self.b_envoyer = QPushButton("Envoyer au traceur")
@@ -344,6 +362,13 @@ class Pupitre(QWidget):
         try:
             if self.chk_regler.isChecked():
                 import conditions
+                fd = os.open(conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
+                try:
+                    conditions.regler_outil(
+                        fd, conditions.OUTILS[self.cmb_outil.currentText()],
+                        condition=condition)
+                finally:
+                    os.close(fd)
                 rendu = conditions.appliquer(vitesse=self.spn_vit.value(),
                                              acceleration=self.spn_accel.value(),
                                              condition=condition)

@@ -109,27 +109,54 @@ def paves(emprise, panneau, recouvrement):
              for i in range(nx)] for j in range(ny)]
 
 
-def reperes(rect, voisins, taille=8.0):
-    """Petites croix au MILIEU des bandes de recouvrement partagées.
+def reperes(rect, voisins, dessin=None, taille=8.0):
+    """DEUX croix par bord partagé, aussi écartées que possible.
 
-    Placées au milieu, elles tombent au même endroit physique sur les deux
-    panneaux voisins : on superpose, on colle. Une croix posée sur le bord
-    d'un panneau, elle, ne serait pas sur l'autre.
+    Elles sont posées au milieu de la bande de recouvrement dans le sens
+    du raccord — donc au même endroit physique sur les deux panneaux
+    voisins : on superpose, on colle. Une croix posée sur le bord d'un
+    panneau, elle, ne serait pas sur l'autre.
+
+    **Deux, et non une.** Christophe, le 11/08/2026 : « 1 croix ne me
+    semble pas suffisant non ? ». C'est géométrique et il a raison — un
+    point unique ne fixe que la translation, il laisse les deux feuilles
+    libres de pivoter autour de lui. Il en faut deux pour bloquer l'angle,
+    et l'erreur angulaire résiduelle est inversement proportionnelle à
+    leur écartement : d'où le choix de les pousser aux extrémités plutôt
+    que de les grouper.
+
+    `dessin` est l'emprise `(x0, y0, x1, y1)` du tracé. Les croix s'y
+    bornent, au lieu de suivre la tuile : sur une pièce plus basse que le
+    panneau, des repères calés sur la tuile flotteraient loin du dessin,
+    et on alignerait deux marques perdues dans le vide.
     """
     x0, y0, x1, y1 = rect
     croix = []
+
+    def paire(fixe, a, b, horizontal):
+        """Deux croix le long du raccord, à 15 % et 85 % de sa longueur."""
+        for t in (0.15, 0.85):
+            u = a + t * (b - a)
+            cx, cy = (u, fixe) if horizontal else (fixe, u)
+            h = taille / 2.0
+            croix.append(([(cx - h, cy), (cx + h, cy)], False))
+            croix.append(([(cx, cy - h), (cx, cy + h)], False))
+
     for (bord, autre) in voisins:
-        if bord == "droite":
-            cx, cy = (x1 + autre) / 2.0, (y0 + y1) / 2.0
-        elif bord == "gauche":
-            cx, cy = (x0 + autre) / 2.0, (y0 + y1) / 2.0
-        elif bord == "haut":
-            cx, cy = (x0 + x1) / 2.0, (y1 + autre) / 2.0
+        if bord in ("droite", "gauche"):
+            fixe = (x1 + autre) / 2.0 if bord == "droite" else (x0 + autre) / 2.0
+            a, b = y0, y1
+            if dessin:                      # se borner au tracé, pas à la tuile
+                a, b = max(y0, dessin[1]), min(y1, dessin[3])
+            if b > a:
+                paire(fixe, a, b, horizontal=False)
         else:
-            cx, cy = (x0 + x1) / 2.0, (y0 + autre) / 2.0
-        h = taille / 2.0
-        croix.append(([(cx - h, cy), (cx + h, cy)], False))
-        croix.append(([(cx, cy - h), (cx, cy + h)], False))
+            fixe = (y1 + autre) / 2.0 if bord == "haut" else (y0 + autre) / 2.0
+            a, b = x0, x1
+            if dessin:
+                a, b = max(x0, dessin[0]), min(x1, dessin[2])
+            if b > a:
+                paire(fixe, a, b, horizontal=True)
     return croix
 
 
@@ -161,7 +188,9 @@ def mosaique(polylignes, panneau, recouvrement, avec_reperes=True):
                     voisins.append(("haut", grille[j + 1][i][1] + oy))
                 if j > 0:
                     voisins.append(("bas", grille[j - 1][i][3] + oy))
-                morceaux = morceaux + reperes(absolu, voisins)
+                morceaux = morceaux + reperes(
+                    absolu, voisins,
+                    dessin=(ox, oy, ox + emprise[0], oy + emprise[1]))
             recadre = [([(x - absolu[0], y - absolu[1]) for x, y in pts], f)
                        for pts, f in morceaux]
             sortie.append((i, j, absolu, recadre))

@@ -8,6 +8,249 @@ lit des commandes texte. Le « driver » Windows (Cutting Master / Graphtec Stud
 ne fait que traduire des courbes en HP-GL et pousser le résultat sur le port.
 Tout ce travail se refait en Python.
 
+Au bout : **une application**, `pupitre.py`, qui ouvre un SVG, le place, le
+découpe en panneaux, le perfore, règle la machine et l'envoie. Le reste du
+dépôt est ce qu'il a fallu comprendre pour l'écrire — y compris le protocole
+propriétaire de Graphtec, relevé en capturant le flux USB de son propre
+logiciel.
+
+- [Par où commencer](#par-où-commencer)
+- [Le pupitre](#le-pupitre)
+- [Vérifier qu'on n'a rien cassé](#vérifier-quon-na-rien-cassé)
+- [Les outils](#les-outils)
+- [Les réglages de l'établi](#les-réglages-de-létabli)
+- [Les pièges](#les-pièges)
+- [Ce qui a été mesuré sur la machine](#ce-qui-a-été-mesuré-sur-la-machine)
+- [Tracer une planche TechDraw au stylo](#tracer-une-planche-techdraw-au-stylo)
+- [Dessiner et couper au quotidien : Inkscape](#dessiner-et-couper-au-quotidien--inkscape)
+- [Le protocole propriétaire `TC`, et l'enquête qui l'a percé](#le-protocole-propriétaire-tc-et-lenquête-qui-la-percé)
+- [Quand utiliser quoi](#quand-utiliser-quoi)
+- [L'état des lieux au 11/08/2026](#létat-des-lieux-au-11082026)
+- [Ce qui n'est PAS fait ici](#ce-qui-nest-pas-fait-ici)
+
+## Par où commencer
+
+```bash
+./installer.sh          # une fois : « Pupitre de tracé » apparaît dans le menu
+```
+
+Ensuite on clique l'icône, et rien d'autre. Le pupitre ouvre un SVG, le
+place sur le média, le découpe en panneaux s'il est trop grand, règle la
+machine et l'envoie — feuille par feuille s'il le faut.
+
+Le dépôt s'organise en trois étages, du quotidien vers l'archéologie :
+
+| | |
+|---|---|
+| `pupitre.py` | **l'application** — c'est le seul fichier à lancer |
+| `svg2hpgl.py`, `envoyer_hpgl.py`, `gabarit_traceur.py`, `nuancier_force.py`, `preparer_planche.py` | les mêmes traitements en ligne de commande, pour le lot et les scripts |
+| `conditions.py`, `materiaux.py`, `mosaique.py`, `etat_machine.py`, `theme.py`, `icones.py` | le moteur, importé par les précédents |
+| `sondes/` | les huit programmes qui ont servi à **comprendre** la machine, pas à s'en servir. On n'y touche que pour reprendre l'enquête |
+| `tests/` | trois suites, dont une qui vérifie que les deux autres savent échouer |
+
+## Le pupitre
+
+C'est l'application, et le seul fichier à lancer. Trois onglets.
+
+**Dessin** — ouvrir un SVG, le placer sur le média (origine, rotation,
+miroirs, échelle, « ajuster au média »), le **découper en panneaux** quand
+il est plus grand que la feuille, le **perforer** en pointillé pour un
+gabarit détachable. L'aperçu montre le média, la zone utile, le tracé et
+les tuiles numérotées ; molette pour zoomer, glisser pour déplacer,
+double-clic pour recadrer.
+
+**Outil** — le **carnet d'établi** en tête : choisir « papier 300 g » pose
+d'un coup le type de lame, la vitesse, la force, l'accélération, les
+passages et les cotes de perforation, puis rappelle ce qui ne se pilote
+pas (la sortie de lame se règle à la main). En dessous, les huit
+**conditions** de la machine avec leur contenu affiché — la condition
+active marquée d'un point — qu'on peut lire et écrire une par une. Et le
+**nuancier de force**, une grille de carrés à lever pour trouver le bon
+réglage sur un papier neuf.
+
+**Machine** — les huit réglages du menu de la machine, lus à la demande et
+écrits un par un avec relecture : passe-pas, force et angle d'offset, tri
+des chemins, vitesse de l'outil relevé, priorité de condition, position de
+lame initiale, déplacement relevé.
+
+Tout ce qui est écrit dans la machine est **relu derrière**, et l'envoi est
+annulé si un réglage n'a pas été retenu : tracer avec des réglages qu'on
+croit posés et qui ne le sont pas gâche le média.
+
+## Vérifier qu'on n'a rien cassé
+
+```bash
+python3 tests/lancer.py     # les trois suites
+```
+
+`tests/test_traceur.py` vérifie dix propriétés sans la machine.
+`tests/verifier_les_tests.py` casse chacune et exige que le test la voie.
+`tests/test_pupitre.py` inspecte l'interface elle-même.
+
+Chaque test rejoue une faute RÉELLE de la mise au point, pas une faute
+imaginable : coordonnées décimales, croix de raccord unique, repassage qui
+coûte un trajet de retour, rainage « corrigé » en découpe, réglage hors des
+bornes que la machine écrête en silence.
+
+**Le second programme est le plus important.** Une suite qui passe ne
+prouve rien — elle peut ne rien surveiller. Cette journée a produit **cinq
+détecteurs successifs** qui annonçaient « aucune erreur » sur des séquences
+qui en produisaient : l'un comptait un journal vide comme zéro, l'autre
+comptait les entrées d'un tampon circulaire dont le total ne peut pas
+bouger, un troisième polluait ce qu'il mesurait. Aucun n'avait été éprouvé
+avant de servir.
+
+`tests/verifier_les_tests.py` introduit chaque faute en mémoire et exige que le
+test correspondant échoue. Un test qui passe malgré la faute est signalé
+comme aveugle.
+
+`tests/test_pupitre.py` vient d'une faute que seule une capture d'écran avait
+vue : la liste « outil » avait DISPARU de l'interface, une renumérotation
+des lignes s'étant appliquée en cascade — 1 devient 3, puis 3 devient 5,
+puis 5 devient 7 — jusqu'à ce que le champ occupe la case d'un autre. Rien
+n'avait protesté : le fichier compilait, le champ existait, il répondait
+aux réglages. Il n'était plus visible, voilà tout. Qt empile deux widgets
+rangés dans la même case sans un mot. Le test le dit maintenant, et il a
+été éprouvé en remettant la faute.
+
+## Les outils
+
+### `sondes/sonde_ce6000.py` — interroger la machine
+
+N'envoie que des requêtes de lecture : aucun mouvement.
+
+```bash
+python3 sondes/sonde_ce6000.py
+```
+
+Rend l'émulation active, la zone utile, la position, le statut et la
+résolution. C'est le premier réflexe quand quelque chose ne répond plus.
+
+### `sondes/trace_controle.py` — un F dans un rectangle de 100 × 50 mm
+
+**Fait bouger le chariot.** À n'exécuter qu'avec un stylo monté.
+
+```bash
+python3 sondes/trace_controle.py --simuler   # affiche le HP-GL, n'envoie rien
+python3 sondes/trace_controle.py             # trace
+```
+
+Le F n'est pas décoratif : c'est la seule lettre qui trahit d'un coup d'œil une
+rotation *et* un miroir, là où un rectangle seul ne dit rien. Le rectangle se
+contrôle au pied à coulisse — un écart de 2 % ne se voit pas à l'œil et se
+retrouve ensuite sur chaque pièce.
+
+### `svg2hpgl.py` — convertir un SVG
+
+```bash
+python3 svg2hpgl.py dessin.svg                    # écrit dessin.hpgl
+python3 svg2hpgl.py dessin.svg --envoyer          # + envoie à la machine
+python3 svg2hpgl.py dessin.svg --pivoter --marge 5,5
+```
+
+| Option | Effet |
+|---|---|
+| `--sortie` | fichier `.hpgl` (défaut : à côté du SVG) |
+| `--outil N` | condition de coupe du panneau, 1 à 8 |
+| `--vitesse N` | vitesse en cm/s (défaut : celle de la condition) |
+| `--force N` | force 1 à 38 (défaut : celle de la condition) |
+| `--marge X,Y` | décalage du dessin en mm |
+| `--pivoter` | rotation 90°, met le grand côté dans l'avance |
+| `--brut` | garde l'ordre du SVG au lieu d'optimiser le trajet |
+| `--envoyer` | envoi réel — sans cette option, rien ne part |
+
+Il réutilise `parse_svg_file()` de **LaserAtelier**
+(`~/.local/share/FreeCAD/v1-1/Mod/LaserAtelier/svg_import.py`) : ses points
+sortent déjà en millimètres, déjà en Y-vers-le-haut, déjà ramenés à l'origine
+du viewBox — c'est-à-dire déjà dans la convention HP-GL. Le retournement d'axe
+écrit pour FreeCAD sert ici tel quel.
+
+**Attention : `svg_import.py` (de LaserAtelier) ne convertit que les `<path>`.** Un `<rect>`,
+`<circle>` ou `<polygon>` serait traversé sans géométrie et sans avertissement —
+le SVG sortirait vide, en silence. `svg2hpgl.py` les détecte et le dit. Dans
+Inkscape : *Chemin → Objet en chemin*.
+
+L'optimisation de trajet est un plus-proche-voisin, donc glouton : il ne voit
+pas le retour final et peut sortir un ordre pire que celui du SVG. Le script
+mesure les deux et ne garde le sien que s'il gagne — sur 3 chemins il déclare
+forfait, sur 40 pastilles dispersées il économise 70 % du déplacement à vide.
+
+## Les réglages de l'établi
+
+`materiaux.py` porte le carnet de Christophe — huit matériaux réglés à
+l'usage, sous Windows, avant tout ce travail. Ce ne sont pas des valeurs
+calculées : elles ont été trouvées en coupant du papier.
+
+| Matériau | Vitesse | Force | Épaisseur | Lame |
+|---|---|---|---|---|
+| ingres 80 g | 40 | 10 | 0,10 | 0,17 |
+| vinyle 0,20 mm | 20 | 12 | 0,10 | 0,13 |
+| papier 80-90 g | 20 | 10 | 0,10-0,15 | 0,25 |
+| aquarelle 200 g | 20 | 14 | 0,30 | 0,35 |
+| canson 224 g | 20 | **2 ?** | 0,30 | 0,40 |
+| papier 300 g | 7 | 25 | 0,40-0,45 | 0,55 |
+| feutre Staedtler | 27 | 15 | — | 2 passages |
+| stylo Bic | 30 | 10 | — | 2 passages |
+
+Trois choses qu'on n'aurait pas devinées :
+
+**La hauteur de lame suit l'épaisseur** — 0,10 mm de papier demande 0,17 de
+lame, 0,42 en demande 0,55. C'est un réglage **physique sur le porte-lame**,
+qu'aucune commande ne touche et qu'aucune force ne rattrape.
+
+**La perforation s'écrit `8 mm / 0,25 mm`** : longueur coupée, longueur
+laissée. Voilà ce que sont les « Style 1 à 9 » du logiciel Graphtec.
+
+**Les plumes se tracent en DEUX passages.** La réponse au trait pâle de nos
+premiers essais était dans ce carnet.
+
+Une valeur reste douteuse et n'est pas corrigée en douce : le canson 224 g
+à force **2**, quand l'aquarelle de même épaisseur en demande 14 et le 300 g
+en demande 25. Probable faute de recopie pour 20 — à retrouver au nuancier.
+
+## Les pièges
+
+1. **Hors de l'état `READY`, la machine ne lit pas son tampon d'interface.**
+   Elle avale les octets sans répondre ni bouger — le symptôme est identique à
+   une panne de liaison. Après un redémarrage elle redemande le type de média ;
+   tant qu'on n'a pas répondu, rien ne se passe. `svg2hpgl.py` refuse d'envoyer
+   si `OH;` reste muet, précisément pour ça.
+
+2. **L'endpoint d'envoi fait 8 octets et refuse les données quand la machine
+   sature** (`EAGAIN` en `O_NONBLOCK`). Écrire sans attendre tronque les gros
+   fichiers en silence. C'est le contrôle de flux du port série sous une autre
+   forme — l'USB ne l'a pas supprimé.
+
+3. **« Charger le vinyle » qui ne part pas : la feuille est trop étroite.**
+   Les capteurs de média sont sur la table, et une feuille qui ne les couvre
+   pas n'est jamais détectée — le levier descend, tout a l'air normal, et la
+   machine réclame indéfiniment. Vérifier aussi que chaque galet presseur est
+   **à la fois** sur le papier et au-dessus d'une bande d'entraînement
+   granuleuse : un galet qui pince dans le vide donne le même symptôme.
+
+4. **Les réponses se terminent par `\r` et s'accumulent.** Sans vider le tampon
+   d'entrée avant chaque requête, elles se chevauchent. Et la toute première
+   interrogation après ouverture revient **décalée** : `conditions.instantane`
+   en jette une pour rien, sans quoi trois relevés identiques n'en donnent que
+   sept paramètres sur onze, l'accélération lue à l'index d'un autre.
+
+5. **`COMMANDE = AUTO` fait IMPRIMER le fichier au lieu de le tracer.** La
+   machine devine le langage d'après ce qu'elle reçoit ; quand elle se trompe,
+   elle écrit les octets en toutes lettres, à la plume, sur le média — puis
+   affiche « hors surface » quand la ligne sort de la feuille. Une conséquence
+   qu'on prend volontiers pour la cause. Mettre `COMMANDE` sur **`HP-GL`** au
+   panneau. La machine met elle-même en garde, dans son journal :
+   `W06001 DANGER COMMANDE = AUTO`.
+
+6. **Fermer et rouvrir `/dev/usb/lp0` entre deux étapes rend la machine
+   MUETTE**, pour des dizaines de secondes. Une lecture du journal suivie d'un
+   `OH;` répond du premier coup sur un même descripteur, et se tait plus de 44
+   secondes si l'on referme entre les deux. Toute la chasse aux « pannes
+   intermittentes » d'une journée se réduit à ça. Chaque programme n'ouvre donc
+   le périphérique **qu'une fois**, et passe son descripteur.
+
+   Corollaire d'usage : ne pas lancer `etat_machine.py` juste avant un envoi.
+
 ## Ce qui a été mesuré sur la machine
 
 Relevé à l'établi le 10/08/2026, en interrogeant le traceur et au pied à
@@ -213,7 +456,7 @@ huit emplacements.
 
 Le détour par le GP-GL n'aura donc rien donné sur la vitesse. Il aura prouvé
 que la machine l'accepte : rectangle de 60 × 30 mm exact, syntaxe `M`/`D`,
-séparateur retour-ligne, pas de 0,1 mm (`sonde_gpgl.py`).
+séparateur retour-ligne, pas de 0,1 mm (`sondes/sonde_gpgl.py`).
 
 **C'est cette impasse qui a mené à la capture USB**, et elle a tout débloqué
 en une heure là où trois suppositions avaient échoué. La leçon vaut au-delà
@@ -241,7 +484,7 @@ qui, mal placé, le rend muet sans le moindre signe.
 
 Les scripts du dépôt utilisent `TC` par défaut, pour cette raison.
 
-`sonde_vitesse.py` garde la trace de la méthode, et surtout **des deux qui
+`sondes/sonde_vitesse.py` garde la trace de la méthode, et surtout **des deux qui
 ont échoué avant** : `OA;` rend la position **logique**, pas celle du
 chariot, donc il ne mesure aucun mouvement ; et le contrôle de flux ne mord
 pas — 15 ko partent en 3,8 s quelle que soit la vitesse, soit 4 ko/s, qui
@@ -308,87 +551,6 @@ haut : négatif, il compte en arrière depuis maintenant.
 ```bash
 python3 etat_machine.py --journal | head -3
 ```
-
-## Les quatre pièges
-
-1. **Hors de l'état `READY`, la machine ne lit pas son tampon d'interface.**
-   Elle avale les octets sans répondre ni bouger — le symptôme est identique à
-   une panne de liaison. Après un redémarrage elle redemande le type de média ;
-   tant qu'on n'a pas répondu, rien ne se passe. `svg2hpgl.py` refuse d'envoyer
-   si `OH;` reste muet, précisément pour ça.
-
-2. **L'endpoint d'envoi fait 8 octets et refuse les données quand la machine
-   sature** (`EAGAIN` en `O_NONBLOCK`). Écrire sans attendre tronque les gros
-   fichiers en silence. C'est le contrôle de flux du port série sous une autre
-   forme — l'USB ne l'a pas supprimé.
-
-3. **« Charger le vinyle » qui ne part pas : la feuille est trop étroite.**
-   Les capteurs de média sont sur la table, et une feuille qui ne les couvre
-   pas n'est jamais détectée — le levier descend, tout a l'air normal, et la
-   machine réclame indéfiniment. Vérifier aussi que chaque galet presseur est
-   **à la fois** sur le papier et au-dessus d'une bande d'entraînement
-   granuleuse : un galet qui pince dans le vide donne le même symptôme.
-
-4. **Les réponses se terminent par `\r` et s'accumulent.** Sans vider le tampon
-   d'entrée avant chaque requête, elles se chevauchent.
-
-## Ce qui n'est PAS fait ici
-
-- **La compensation d'offset de lame** : le firmware s'en charge (réglage
-  `OFFSET` de la condition de coupe). On lui envoie la polyligne nominale, il
-  place la lame. Ne pas la recalculer côté PC.
-- **La force de coupe** : elle se trouve sur une chute du vrai matériau, en
-  montant jusqu'à ce que le film se détache sans entamer le support. Aucun
-  calcul ne donne ce nombre. Par défaut le programme dit `SP1..SP8` et la
-  machine applique la condition réglée au panneau — c'est le choix
-  recommandé. `FS` fonctionne néanmoins (voir `nuancier_force.py`), d'où
-  l'option `--force` pour les cas où l'on veut piloter depuis le PC.
-
-  **La plage utile va de 1 à 38.** Au stylo, la progression ne se voit que
-  jusqu'à ~10 puis sature : un stylo dépose son encre dès qu'il touche, et
-  appuyer plus fort n'y change rien. La force n'est vraiment un réglage
-  continu qu'avec une lame, où elle fixe la profondeur de coupe — c'est donc
-  sur du vinyle, à la lame, que le nuancier prend son sens.
-- **L'ARMS** (détection des marques de repérage, print & cut) : commandes mal
-  documentées hors SDK Graphtec.
-
-## Dessiner et couper au quotidien : Inkscape
-
-**Aucun plugin à installer.** Inkscape 1.4 embarque déjà l'équivalent du
-Cutting Master de Graphtec : *Extensions → Exporter → Tracer*, qui envoie
-directement au port. Vérifié le 10/08/2026 — carré de 60 mm sorti à 60,0 mm,
-coins nets.
-
-| Champ | Valeur | Pourquoi |
-|---|---|---|
-| Type de port | **Port parallèle** | |
-| Port parallèle | **`/dev/usb/lp0`** | le défaut proposé est `lp2` |
-| Langage | **HPGL** | ce que dit `COMMAND` au panneau |
-| Résolution X et Y | **1016** dpi | 1016 ÷ 25,4 = 40 unités/mm, la valeur mesurée |
-| Plume | **1** | sélectionne la CONDITION 1 |
-| Force / Vitesse | **0** / **0** | 0 = ne rien envoyer, le panneau garde la main |
-| Surcoupe | **0** | déjà fait par le firmware |
-| Correction d'offset d'outil | **0** | déjà fait par le firmware |
-| Précoupe | **décochée** | |
-| Rotation / miroirs / origine centrée | aucun | le repère est vérifié, ne pas le contrarier |
-| Alignement automatique | décoché | sinon il pousse le dessin dans le coin |
-
-Deux réglages par défaut à corriger impérativement, et ce sont les deux plus
-dangereux :
-
-- **« Correction d'offset d'outil » vaut 0,25 mm** et **« Surcoupe » vaut
-  1,00 mm** d'origine. Or la machine fait déjà ces deux corrections dans son
-  firmware. Les laisser actifs compense **deux fois** : les coins sortent avec
-  de petites cornes au lieu d'être nets. Le contrôle est visuel — un carré,
-  puis on regarde les angles.
-- **« Alignement automatique » déplace le dessin** dans le coin du média et
-  jette la position du SVG. À décocher pour maîtriser la mise en page.
-
-Ce que le logiciel natif faisait et qu'Inkscape ne fait pas : les marques de
-repérage ARMS (print & cut), les lignes de dégagement, le pavage des grands
-dessins et la duplication en série. C'est le territoire d'**Inkcut**, absent
-des dépôts (AUR seulement, et ses dépendances enaml/atom suivent mal les
-Python récents).
 
 ## Tracer une planche TechDraw au stylo
 
@@ -481,124 +643,45 @@ une planche réelle :
 33 mètres de déplacement à vide évités sur une seule planche : du temps de
 tracé et de l'usure de courroie. L'exporteur d'Inkscape ne réordonne pas.
 
-## Vérifier qu'on n'a rien cassé
+## Dessiner et couper au quotidien : Inkscape
 
-```bash
-python3 tests/lancer.py     # les trois suites
-```
+**Aucun plugin à installer.** Inkscape 1.4 embarque déjà l'équivalent du
+Cutting Master de Graphtec : *Extensions → Exporter → Tracer*, qui envoie
+directement au port. Vérifié le 10/08/2026 — carré de 60 mm sorti à 60,0 mm,
+coins nets.
 
-`test_traceur.py` vérifie dix propriétés sans la machine.
-`verifier_les_tests.py` casse chacune et exige que le test la voie.
-`test_pupitre.py` inspecte l'interface elle-même.
+| Champ | Valeur | Pourquoi |
+|---|---|---|
+| Type de port | **Port parallèle** | |
+| Port parallèle | **`/dev/usb/lp0`** | le défaut proposé est `lp2` |
+| Langage | **HPGL** | ce que dit `COMMAND` au panneau |
+| Résolution X et Y | **1016** dpi | 1016 ÷ 25,4 = 40 unités/mm, la valeur mesurée |
+| Plume | **1** | sélectionne la CONDITION 1 |
+| Force / Vitesse | **0** / **0** | 0 = ne rien envoyer, le panneau garde la main |
+| Surcoupe | **0** | déjà fait par le firmware |
+| Correction d'offset d'outil | **0** | déjà fait par le firmware |
+| Précoupe | **décochée** | |
+| Rotation / miroirs / origine centrée | aucun | le repère est vérifié, ne pas le contrarier |
+| Alignement automatique | décoché | sinon il pousse le dessin dans le coin |
 
-Chaque test rejoue une faute RÉELLE de la mise au point, pas une faute
-imaginable : coordonnées décimales, croix de raccord unique, repassage qui
-coûte un trajet de retour, rainage « corrigé » en découpe, réglage hors des
-bornes que la machine écrête en silence.
+Deux réglages par défaut à corriger impérativement, et ce sont les deux plus
+dangereux :
 
-**Le second programme est le plus important.** Une suite qui passe ne
-prouve rien — elle peut ne rien surveiller. Cette journée a produit **cinq
-détecteurs successifs** qui annonçaient « aucune erreur » sur des séquences
-qui en produisaient : l'un comptait un journal vide comme zéro, l'autre
-comptait les entrées d'un tampon circulaire dont le total ne peut pas
-bouger, un troisième polluait ce qu'il mesurait. Aucun n'avait été éprouvé
-avant de servir.
+- **« Correction d'offset d'outil » vaut 0,25 mm** et **« Surcoupe » vaut
+  1,00 mm** d'origine. Or la machine fait déjà ces deux corrections dans son
+  firmware. Les laisser actifs compense **deux fois** : les coins sortent avec
+  de petites cornes au lieu d'être nets. Le contrôle est visuel — un carré,
+  puis on regarde les angles.
+- **« Alignement automatique » déplace le dessin** dans le coin du média et
+  jette la position du SVG. À décocher pour maîtriser la mise en page.
 
-`verifier_les_tests.py` introduit chaque faute en mémoire et exige que le
-test correspondant échoue. Un test qui passe malgré la faute est signalé
-comme aveugle.
+Ce que le logiciel natif faisait et qu'Inkscape ne fait pas : les marques de
+repérage ARMS (print & cut), les lignes de dégagement, le pavage des grands
+dessins et la duplication en série. C'est le territoire d'**Inkcut**, absent
+des dépôts (AUR seulement, et ses dépendances enaml/atom suivent mal les
+Python récents).
 
-`test_pupitre.py` vient d'une faute que seule une capture d'écran avait
-vue : la liste « outil » avait DISPARU de l'interface, une renumérotation
-des lignes s'étant appliquée en cascade — 1 devient 3, puis 3 devient 5,
-puis 5 devient 7 — jusqu'à ce que le champ occupe la case d'un autre. Rien
-n'avait protesté : le fichier compilait, le champ existait, il répondait
-aux réglages. Il n'était plus visible, voilà tout. Qt empile deux widgets
-rangés dans la même case sans un mot. Le test le dit maintenant, et il a
-été éprouvé en remettant la faute.
-
-## Par où commencer
-
-```bash
-./installer.sh          # une fois : « Pupitre de tracé » apparaît dans le menu
-```
-
-Ensuite on clique l'icône, et rien d'autre. Le pupitre ouvre un SVG, le
-place sur le média, le découpe en panneaux s'il est trop grand, règle la
-machine et l'envoie — feuille par feuille s'il le faut.
-
-Le dépôt s'organise en trois étages, du quotidien vers l'archéologie :
-
-| | |
-|---|---|
-| `pupitre.py` | **l'application** — c'est le seul fichier à lancer |
-| `svg2hpgl.py`, `envoyer_hpgl.py`, `gabarit_traceur.py`, `nuancier_force.py`, `preparer_planche.py` | les outils en ligne de commande, pour ce que l'interface ne fait pas encore |
-| `conditions.py`, `materiaux.py`, `mosaique.py`, `etat_machine.py`, `theme.py`, `icones.py` | le moteur, importé par les précédents |
-| `sondes/` | les huit programmes qui ont servi à **comprendre** la machine, pas à s'en servir. On n'y touche que pour reprendre l'enquête |
-
-## Les outils
-
-### `sonde_ce6000.py` — interroger la machine
-
-N'envoie que des requêtes de lecture : aucun mouvement.
-
-```bash
-python3 sonde_ce6000.py
-```
-
-Rend l'émulation active, la zone utile, la position, le statut et la
-résolution. C'est le premier réflexe quand quelque chose ne répond plus.
-
-### `trace_controle.py` — un F dans un rectangle de 100 × 50 mm
-
-**Fait bouger le chariot.** À n'exécuter qu'avec un stylo monté.
-
-```bash
-python3 trace_controle.py --simuler   # affiche le HP-GL, n'envoie rien
-python3 trace_controle.py             # trace
-```
-
-Le F n'est pas décoratif : c'est la seule lettre qui trahit d'un coup d'œil une
-rotation *et* un miroir, là où un rectangle seul ne dit rien. Le rectangle se
-contrôle au pied à coulisse — un écart de 2 % ne se voit pas à l'œil et se
-retrouve ensuite sur chaque pièce.
-
-### `svg2hpgl.py` — convertir un SVG
-
-```bash
-python3 svg2hpgl.py dessin.svg                    # écrit dessin.hpgl
-python3 svg2hpgl.py dessin.svg --envoyer          # + envoie à la machine
-python3 svg2hpgl.py dessin.svg --pivoter --marge 5,5
-```
-
-| Option | Effet |
-|---|---|
-| `--sortie` | fichier `.hpgl` (défaut : à côté du SVG) |
-| `--outil N` | condition de coupe du panneau, 1 à 8 |
-| `--vitesse N` | vitesse en cm/s (défaut : celle de la condition) |
-| `--force N` | force 1 à 38 (défaut : celle de la condition) |
-| `--marge X,Y` | décalage du dessin en mm |
-| `--pivoter` | rotation 90°, met le grand côté dans l'avance |
-| `--brut` | garde l'ordre du SVG au lieu d'optimiser le trajet |
-| `--envoyer` | envoi réel — sans cette option, rien ne part |
-
-Il réutilise `parse_svg_file()` de **LaserAtelier**
-(`~/.local/share/FreeCAD/v1-1/Mod/LaserAtelier/svg_import.py`) : ses points
-sortent déjà en millimètres, déjà en Y-vers-le-haut, déjà ramenés à l'origine
-du viewBox — c'est-à-dire déjà dans la convention HP-GL. Le retournement d'axe
-écrit pour FreeCAD sert ici tel quel.
-
-**Attention : `svg_import.py` ne convertit que les `<path>`.** Un `<rect>`,
-`<circle>` ou `<polygon>` serait traversé sans géométrie et sans avertissement —
-le SVG sortirait vide, en silence. `svg2hpgl.py` les détecte et le dit. Dans
-Inkscape : *Chemin → Objet en chemin*.
-
-L'optimisation de trajet est un plus-proche-voisin, donc glouton : il ne voit
-pas le retour final et peut sortir un ordre pire que celui du SVG. Le script
-mesure les deux et ne garde le sien que s'il gagne — sur 3 chemins il déclare
-forfait, sur 40 pastilles dispersées il économise 70 % du déplacement à vide.
-
-## `pupitre.py` — voir le dessin posé sur le média
+## Le protocole propriétaire `TC`, et l'enquête qui l'a percé
 
 ```bash
 python3 pupitre.py
@@ -756,7 +839,7 @@ Studio avait **trois** panneaux là où le pupitre n'en a qu'un.
 | Motif de ligne de découpe (styles 1-9 + 3 utilisateur) | **autrement** : perforation logicielle en longueurs exactes, `--perforation 8,0.25`. Studio lui-même offrait le choix entre « perforation du cutter » et « du logiciel » |
 | Passages | **non** — présent dans `materiaux.py` (2 pour les plumes) mais pas branché dans la chaîne. C'est la réponse au trait pâle du premier essai |
 
-#### Panneau « Paramètres outil » — celui qu'on ne couvre pas du tout
+#### Panneau « Paramètres outil » — couvert depuis
 
 | Réglage de Studio | Valeur vue sur la capture | État |
 |---|---|---|
@@ -788,20 +871,20 @@ réordonnancement des chemins pour raccourcir les trajets à vide, relecture
 systématique de chaque réglage écrit, et un gabarit TechDraw à la taille utile
 du traceur.
 
-#### Comment combler le reste
+#### Comment le reste a été comblé
 
 Onze paramètres répondent sur la condition 1, **cinq sont nommés**. Les six
-autres sont très probablement dans les tableaux ci-dessus. `chercher_parametre.py`
+autres sont très probablement dans les tableaux ci-dessus. `sondes/chercher_parametre.py`
 les nomme un par un, en trois minutes chacun :
 
 ```bash
-python3 chercher_parametre.py --debut
+python3 sondes/chercher_parametre.py --debut
 ```
 
 changer UNE chose au panneau, revenir à `READY`, puis :
 
 ```bash
-python3 chercher_parametre.py --fin "step pass"
+python3 sondes/chercher_parametre.py --fin "step pass"
 ```
 
 `--reste` liste ce qui manque.
@@ -907,7 +990,7 @@ est en n².
 
 ### La compensation d'offset, vérifiée sur des pointes
 
-`sonde_offset.py` découpe quatre triangles dont le sommet se ferme — 90°,
+`sondes/sonde_offset.py` découpe quatre triangles dont le sommet se ferme — 90°,
 60°, 45°, 30° — plus un carré témoin. Vérifié le 11/08/2026 sur du 300 g
 avec une CB09U : **toutes les pointes sortent franches, jusqu'à 30°**. La
 compensation du firmware fait son travail, et le type d'outil `TC1002,2`
@@ -933,46 +1016,58 @@ plusieurs heures plus tôt.
 oriente sa lame par un court mouvement préalable avant d'attaquer
 (`PARAM OUTIL` → `LAME INITIALE`, « 2 mm en-deçà » ou « dehors »).
 
-## Les réglages de l'établi
-
-`materiaux.py` porte le carnet de Christophe — huit matériaux réglés à
-l'usage, sous Windows, avant tout ce travail. Ce ne sont pas des valeurs
-calculées : elles ont été trouvées en coupant du papier.
-
-| Matériau | Vitesse | Force | Épaisseur | Lame |
-|---|---|---|---|---|
-| ingres 80 g | 40 | 10 | 0,10 | 0,17 |
-| vinyle 0,20 mm | 20 | 12 | 0,10 | 0,13 |
-| papier 80-90 g | 20 | 10 | 0,10-0,15 | 0,25 |
-| aquarelle 200 g | 20 | 14 | 0,30 | 0,35 |
-| canson 224 g | 20 | **2 ?** | 0,30 | 0,40 |
-| papier 300 g | 7 | 25 | 0,40-0,45 | 0,55 |
-| feutre Staedtler | 27 | 15 | — | 2 passages |
-| stylo Bic | 30 | 10 | — | 2 passages |
-
-Trois choses qu'on n'aurait pas devinées :
-
-**La hauteur de lame suit l'épaisseur** — 0,10 mm de papier demande 0,17 de
-lame, 0,42 en demande 0,55. C'est un réglage **physique sur le porte-lame**,
-qu'aucune commande ne touche et qu'aucune force ne rattrape.
-
-**La perforation s'écrit `8 mm / 0,25 mm`** : longueur coupée, longueur
-laissée. Voilà ce que sont les « Style 1 à 9 » du logiciel Graphtec.
-
-**Les plumes se tracent en DEUX passages.** La réponse au trait pâle de nos
-premiers essais était dans ce carnet.
-
-Une valeur reste douteuse et n'est pas corrigée en douce : le canson 224 g
-à force **2**, quand l'aquarelle de même épaisseur en demande 14 et le 300 g
-en demande 25. Probable faute de recopie pour 20 — à retrouver au nuancier.
-
 ## Quand utiliser quoi
 
-- **Inkscape** pour dessiner et couper au quotidien, réglé comme ci-dessus.
-- **`sonde_ce6000.py`** dès que la machine ne répond plus : c'est le premier
-  réflexe, et il ne fait rien bouger.
-- **`svg2hpgl.py`** pour ce qu'Inkscape ne fait pas : refuser d'envoyer hors
-  `READY`, vérifier que le dessin tient dans la zone utile interrogée à la
-  machine, et traiter en lot depuis un terminal.
+- **Le pupitre** pour tout ce qui est ordinaire : ouvrir, placer, découper en
+  panneaux, perforer, régler, envoyer. Il relit chaque réglage écrit et refuse
+  de tracer si l'un n'a pas été retenu.
+- **`envoyer_hpgl.py --materiau`** quand le fichier HP-GL existe déjà, ou pour
+  enchaîner plusieurs envois depuis un script.
+- **`svg2hpgl.py`** pour le traitement en lot d'un dossier de SVG.
+- **`sondes/sonde_ce6000.py`** dès que la machine ne répond plus : c'est le
+  premier réflexe, et il ne fait rien bouger.
+- **`etat_machine.py --comparer`** quand un réglage semble avoir changé tout
+  seul : il nomme ce qui diffère d'un état enregistré. **Pas juste avant un
+  envoi** — voir le piège n° 6.
+- **Inkscape** pour dessiner, réglé comme ci-dessus ; l'extension HP-GL sait
+  aussi couper directement pour un travail rapide.
 - **vpype** (`write --format hpgl`) si un traitement de chemins plus poussé
   devient nécessaire.
+
+## L'état des lieux au 11/08/2026
+
+**Ce qui marche et a été éprouvé sur du papier** : tracé au stylo d'une
+planche TechDraw, mosaïque sur deux feuilles raccordées aux croix, découpe
+au nuancier sur 80 g et 300 g, perforation d'un carré de 60 mm qui se
+détache à la main, réglage complet de la machine depuis le PC, lecture de
+sa configuration entière en clair.
+
+**Ce qui reste ouvert**, dit plutôt que caché :
+
+- `TC2004,1` accepte une écriture — 0 devient 1, relu 1 — sans qu'aucune
+  ligne du vidage en clair ne bouge. Un réglage réel que la machine n'expose
+  nulle part. Sondé deux fois, sans résultat.
+- Une `HP-GL ERREUR 1 INSTRUCTION INCONNUE` naît par intermittence d'une
+  salve `TC`. Sans effet sur le tracé, et évitable : les réglages étant
+  persistants, `--materiau` ne sert qu'au changement de matériau.
+- L'ARMS reste hors de portée, faute de documentation publique.
+
+## Ce qui n'est PAS fait ici
+
+- **La compensation d'offset de lame** : le firmware s'en charge (réglage
+  `OFFSET` de la condition de coupe). On lui envoie la polyligne nominale, il
+  place la lame. Ne pas la recalculer côté PC.
+- **La force de coupe** : elle se trouve sur une chute du vrai matériau, en
+  montant jusqu'à ce que le film se détache sans entamer le support. Aucun
+  calcul ne donne ce nombre. Par défaut le programme dit `SP1..SP8` et la
+  machine applique la condition réglée au panneau — c'est le choix
+  recommandé. `FS` fonctionne néanmoins (voir `nuancier_force.py`), d'où
+  l'option `--force` pour les cas où l'on veut piloter depuis le PC.
+
+  **La plage utile va de 1 à 38.** Au stylo, la progression ne se voit que
+  jusqu'à ~10 puis sature : un stylo dépose son encre dès qu'il touche, et
+  appuyer plus fort n'y change rien. La force n'est vraiment un réglage
+  continu qu'avec une lame, où elle fixe la profondeur de coupe — c'est donc
+  sur du vinyle, à la lame, que le nuancier prend son sens.
+- **L'ARMS** (détection des marques de repérage, print & cut) : commandes mal
+  documentées hors SDK Graphtec.

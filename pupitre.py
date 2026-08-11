@@ -191,20 +191,20 @@ class Pupitre(QWidget):
         self.lbl_liaison.style().polish(self.lbl_liaison)
 
     def _chapeau(self, hauteur=34):
-        """Le chapeau de l'atelier, teinté selon le thème.
+        """Le chapeau de l'atelier, rendu tel qu'il est.
 
-        Son corps est déclaré `#2f3540` dans le fichier — l'ardoise de la
-        maison — et se confondrait donc avec le fond sombre. On le repeint
-        de la couleur du texte : la forme et la bande orange, qui font le
-        logo, ne bougent pas.
+        **On ne le repeint pas.** Une première version teintait son corps
+        selon le thème pour qu'il se détache du fond sombre — Christophe,
+        le 11/08/2026 : « il est pas beau en blanc, c'est pas mon logo, il
+        est noir normalement ». Adapter un logo n'est pas le colorier. Il
+        porte désormais un liseré blanc, dans le fichier, qui le détache
+        sans toucher à sa couleur.
         """
         chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "resources", "icons", "chapeau.svg")
         if not os.path.exists(chemin):
             return QPixmap()
-        texte = open(chemin, encoding="utf-8").read().replace(
-            "fill:#2f3540", f"fill:{self.pal.texte}")
-        rendu = QSvgRenderer(texte.encode())
+        rendu = QSvgRenderer(chemin)
         if not rendu.isValid():
             return QPixmap()
         taille = rendu.defaultSize()

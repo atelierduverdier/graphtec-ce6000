@@ -21,13 +21,20 @@ la réponse était dans ce carnet.
 """
 
 MATERIAUX = {
-    # Force 10 CONFIRMÉE au nuancier en carrés le 11/08/2026, sur des
-    # chutes de 80 g : le 4e carré est celui qui se détache le mieux. La
-    # valeur venait du carnet, donc de Graphtec Studio sous Windows — la
-    # retrouver par notre chaîne prouve que `FS` produit le même effet
-    # physique que le réglage du logiciel d'origine.
+    # Nuancier en carrés du 11/08/2026, sur chutes de 80 g : la force 8
+    # traverse déjà, la 10 est celle qui se détache le mieux. On garde 10,
+    # et le seuil est noté — un réglage posé SUR son seuil finit par
+    # lâcher : le papier varie, la lame s'émousse. Les deux crans de marge
+    # du carnet ne sont pas du gaspillage.
+    #
+    # Mon critère annoncé était « la force la plus faible qui détache »,
+    # ce qui aurait retenu 8. Le carnet avait raison contre le critère.
+    #
+    # La valeur venait de Graphtec Studio sous Windows ; la retrouver par
+    # notre chaîne prouve que `FS` produit le même effet physique que le
+    # réglage du logiciel d'origine.
     "papier 80-90 g": dict(
-        vitesse=20, force=10, acceleration=None, passages=1,
+        vitesse=20, force=10, acceleration=None, passages=1, seuil_coupe=8,
         epaisseur=(0.10, 0.15), hauteur_lame=0.25, perforation=(8.0, 0.25)),
     "papier 300 g": dict(
         vitesse=7, force=25, acceleration=None, passages=1,
@@ -84,6 +91,8 @@ def resume(nom):
     texte = f"{nom} : " + ", ".join(bouts)
     if m.get("hauteur_lame"):
         texte += f"  |  À LA MAIN : lame à {m['hauteur_lame']} mm"
+    if m.get("seuil_coupe"):
+        texte += f"  |  traverse dès {m['seuil_coupe']}, marge gardée"
     if m.get("usage") == "rainer":
         texte += "  |  RAINAGE, ne traverse pas"
     return texte

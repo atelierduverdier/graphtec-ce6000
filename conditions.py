@@ -131,8 +131,14 @@ def _etat(fd, delai=1.0):
     return reponse.decode("ascii", "replace").strip("\x03 \r\n")
 
 
-def regler(fd, parametre, valeur, condition=1, patience=30):
-    """Écrit un paramètre de condition et attend la fin du traitement.
+def regler(fd, parametre, valeur, condition=1, patience=30, famille=1002):
+    """Écrit un paramètre et attend la fin du traitement.
+
+    `famille` : `1002` écrit une condition de découpe (le second argument
+    est alors le numéro de condition) ; `1004` écrit un réglage MACHINE,
+    qui ne dépend d'aucune condition — et là le second argument n'est plus
+    un numéro de condition mais fait partie de l'adresse. D'où
+    `regler_machine`, qui évite la confusion.
 
     Rend la liste des états observés — utile pour comprendre, et pour
     prouver que la transaction s'est bien déroulée : on doit y voir des
@@ -143,7 +149,7 @@ def regler(fd, parametre, valeur, condition=1, patience=30):
         raise ValueError(
             f"paramètre {parametre} : {valeur} hors de [{mini}, {maxi}] — "
             f"la machine écrêterait en silence")
-    _ecrire(fd, f"\x1b.v:TC1002,{parametre},{condition},{valeur}\x03")
+    _ecrire(fd, f"\x1b.v:TC{famille},{parametre},{condition},{valeur}\x03")
     etats = []
     for _ in range(patience):
         e = _etat(fd)
@@ -263,6 +269,102 @@ def regler_outil(fd, code, condition=1, offset=None, patience=30):
             break
         time.sleep(0.1)
     return etats
+
+
+# Réglages MACHINE, hors conditions. Forme trouvée le 11/08/2026 :
+#
+#     ESC.v:TC1004,<paramètre>,<valeur>␃      écriture, PAS de condition
+#     ESC.v:TC2004,<paramètre>␃               lecture
+#
+# La structure du protocole reflète celle du panneau : ce qui se règle sous
+# [COND/TEST] vit dans TC1002/TC2002 avec un numéro de condition, ce qui se
+# règle sous [PAUSE/MENU] vit dans TC1004/TC2004 sans. Écrire un réglage
+# machine à la forme des conditions ne produit RIEN — la transaction se
+# déroule normalement, l'état passe par 8 puis 0, et la valeur ne bouge pas.
+MACHINE = 1004
+MACHINE_LECTURE = 2004
+
+# Nommés en écrivant une valeur et en relisant le vidage en clair de
+# `etat_machine.py`, qui désigne la ligne par son nom. Aucune manipulation
+# au panneau n'a été nécessaire.
+PAS = 3                   # STEP PASS, lissage des courbes, 0 à 20
+FORCE_DEPORT = 4          # OFFSET FORCE
+ANGLE_DEPORT = 5          # OFFSET ANGLE, stocké × 100
+VITESSE_RELEVE = 7        # TOOL UP SPEED, stocké × 10 : la vitesse des
+                          # trajets à vide, donc la durée d'un travail
+PRIORITE_CONDITION = 8    # 1 = PROGRAM, 0 = MANUEL. Sur MANUEL, `VS` est
+                          # silencieusement ignoré — le piège d'une soirée
+LAME_INITIALE = 10        # INITIAL BLADE, 2 mm en-deçà / dehors
+DEPLACEMENT_RELEVE = 11   # TOOL UP MOVE, activé / désactivé
+
+# (nom dans le vidage, facteur d'échelle, commentaire). L'échelle compte :
+# `TOOL UP SPEED` s'affiche 40 et se stocke 400, `OFFSET ANGLE` s'affiche 30
+# et se stocke 3000. Écrire la valeur affichée réglerait la machine à un
+# dixième ou un centième de ce qu'on croit, sans le moindre avertissement.
+REGLAGES_MACHINE = {
+    PAS:                ("STEP PASS", 1, "lissage des courbes, 0 à 20"),
+    FORCE_DEPORT:       ("OFFSET FORCE", 1, "0 à 20"),
+    ANGLE_DEPORT:       ("OFFSET ANGLE", 100, "en degrés"),
+    VITESSE_RELEVE:     ("TOOL UP SPEED", 10, "cm/s, trajets à vide"),
+    PRIORITE_CONDITION: ("CONDITION PRIORITY", 1, "1 = PROGRAM, 0 = MANUEL"),
+    LAME_INITIALE:      ("INITIAL BLADE", 1, "position de contrôle initiale"),
+    DEPLACEMENT_RELEVE: ("TOOL UP MOVE", 1, "0/1"),
+}
+
+# Restent sans nom dans cette famille, et c'est dit plutôt que deviné :
+#   TC2004,1  — l'écriture est RETENUE mais aucune ligne du vidage ne bouge.
+#   TC2004,6  — deux champs, à sonder autrement qu'en valeur simple.
+#   `DATA SORT` du vidage n'est rattaché à aucun paramètre.
+
+
+def regler_machine(fd, parametre, valeur, patience=30):
+    """Écrit un réglage machine — celui-là ne dépend d'aucune condition."""
+    _ecrire(fd, f"\x1b.v:TC{MACHINE},{parametre},{valeur}\x03")
+    etats = []
+    for _ in range(patience):
+        e = _etat(fd)
+        etats.append(e)
+        if e == "0":
+            break
+        time.sleep(0.1)
+    return etats
+
+
+def lire_machine(fd, parametre, delai=0.8):
+    """Lit un réglage machine : `TC2004,<paramètre>`, sans condition.
+
+    Rend la liste des champs, TOUS conservés — contrairement à `lire`, qui
+    laisse tomber le premier parce qu'il y répète le numéro de condition.
+    Ici il n'y en a pas, et le jeter perdrait la valeur.
+    """
+    while True:
+        prets, _, _ = select.select([fd], [], [], 0.02)
+        if not prets:
+            break
+        try:
+            if not os.read(fd, 64):
+                break
+        except BlockingIOError:
+            break
+
+    _ecrire(fd, f"\x1b.v:TC{MACHINE_LECTURE},{parametre}\x03")
+    reponse = b""
+    limite = time.monotonic() + delai
+    while time.monotonic() < limite:
+        prets, _, _ = select.select([fd], [], [], 0.05)
+        if not prets:
+            continue
+        try:
+            reponse += os.read(fd, 64)
+        except BlockingIOError:
+            pass
+        if b"\x03" in reponse:
+            break
+    champs = reponse.decode("ascii", "replace").strip("\x03 \r\n").split(",")
+    try:
+        return [int(c.strip()) for c in champs]
+    except ValueError:
+        return []
 
 
 def regler_offset(fd, offset, condition=1):

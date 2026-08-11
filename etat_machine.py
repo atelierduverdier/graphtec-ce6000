@@ -78,30 +78,42 @@ def _lire_long(fd, commande, delai=6.0):
     return reponse.decode("ascii", "replace").strip("\x03")
 
 
-def lire(periph=C.PERIPH):
-    """Rend le vidage complet, en texte."""
-    fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
+def lire(periph=C.PERIPH, fd=None):
+    """Rend le vidage complet, en texte.
+
+    `fd` sert à réutiliser un descripteur déjà ouvert : le périphérique
+    n'accepte qu'une ouverture à la fois, et un appelant qui le tient déjà
+    récolterait sinon un « Device or resource busy » — ce qui est arrivé au
+    premier lancement de `nommer_reglages.py`.
+    """
+    propre = fd is None
+    if propre:
+        fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
     try:
         texte = _lire_long(fd, VIDAGE)
     finally:
-        os.close(fd)
+        if propre:
+            os.close(fd)
     if "CONDITIONS" not in texte:
         raise RuntimeError("réponse inattendue — la machine est-elle sur "
                            f"READY ? Reçu : {texte[:80]!r}")
     return texte
 
 
-def lire_journal(periph=C.PERIPH):
+def lire_journal(periph=C.PERIPH, fd=None):
     """Rend le journal d'erreurs horodaté de la machine.
 
     Les horodatages sont NÉGATIFS : ce sont des heures écoulées depuis
     maintenant, pas des dates. `-3:22:06` veut dire il y a trois heures.
     """
-    fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
+    propre = fd is None
+    if propre:
+        fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
     try:
         return _lire_long(fd, JOURNAL)
     finally:
-        os.close(fd)
+        if propre:
+            os.close(fd)
 
 
 def analyser(texte):

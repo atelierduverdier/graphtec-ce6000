@@ -141,6 +141,61 @@ def dupliquer(polylignes, rangees, colonnes, ecart_x, ecart_y):
     return sortie
 
 
+def perforer(polylignes, coupe, saut):
+    """Transforme chaque tracé en pointillé : `coupe` mm coupés, `saut` laissés.
+
+    Le découpage se fait en abscisse CURVILIGNE, pas segment par segment :
+    un tiret peut enjamber plusieurs segments d'une courbe aplatie, et un
+    segment long en porte plusieurs. Les extrémités de tiret sont
+    interpolées exactement, sinon le pas dériverait le long du tracé.
+
+    Cotes du carnet d'établi : 8 mm / 0,25 mm sur la plupart des papiers,
+    8 / 0,15 sur les plus épais. C'est ce que le logiciel Graphtec appelle
+    « Style 1 à 9 » ; le faire ici donne les longueurs exactes plutôt que
+    neuf motifs figés.
+    """
+    periode = coupe + saut
+    if periode <= 0:
+        raise ValueError("longueurs de perforation incohérentes")
+    sortie = []
+    for points, _ in polylignes:
+        parcouru = 0.0          # abscisse depuis le début du tracé
+        courant = []
+        for a, b in zip(points, points[1:]):
+            d = _distance(a, b)
+            if d <= 0:
+                continue
+            debut = 0.0
+            while debut < d:
+                # où en est-on dans le motif à cette abscisse ?
+                phase = (parcouru + debut) % periode
+                if phase < coupe:
+                    reste = coupe - phase          # jusqu'à la fin du tiret
+                    dedans = True
+                else:
+                    reste = periode - phase        # jusqu'au tiret suivant
+                    dedans = False
+                fin = min(d, debut + reste)
+                if dedans:
+                    p0 = (a[0] + (b[0]-a[0])*debut/d, a[1] + (b[1]-a[1])*debut/d)
+                    p1 = (a[0] + (b[0]-a[0])*fin/d,   a[1] + (b[1]-a[1])*fin/d)
+                    if courant and _distance(courant[-1], p0) < 1e-9:
+                        courant.append(p1)
+                    else:
+                        if len(courant) >= 2:
+                            sortie.append((courant, False))
+                        courant = [p0, p1]
+                else:
+                    if len(courant) >= 2:
+                        sortie.append((courant, False))
+                    courant = []
+                debut = fin
+            parcouru += d
+        if len(courant) >= 2:
+            sortie.append((courant, False))
+    return sortie
+
+
 def cadre(polylignes):
     """Rectangle englobant (xmin, ymin, xmax, ymax) en mm."""
     xs = [x for points, _ in polylignes for x, _ in points]
@@ -356,6 +411,11 @@ def main():
                     help="bande partagée entre panneaux voisins (défaut 15). "
                          "Des repères y sont tracés, au milieu, donc aux "
                          "mêmes points sur les deux voisins.")
+    ap.add_argument("--perforation", metavar="COUPE,SAUT",
+                    help="découpe en pointillé : COUPE mm coupés, SAUT laissés. "
+                         "Carnet d'établi : 8,0.25 sur la plupart des papiers, "
+                         "8,0.15 sur les plus épais. Fait un gabarit détachable "
+                         "à la main.")
     ap.add_argument("--brut", action="store_true",
                     help="garde l'ordre du SVG au lieu d'optimiser le trajet")
     ap.add_argument("--envoyer", action="store_true",
@@ -424,6 +484,20 @@ def main():
         gain_candidat = trajet_a_vide(candidat)
         if gain_candidat < avant:
             polylignes, apres = candidat, gain_candidat
+
+    if args.perforation:
+        try:
+            coupe, saut = (float(v) for v in args.perforation.split(","))
+        except ValueError:
+            sys.exit("--perforation attend COUPE,SAUT en mm, par exemple 8,0.25")
+        if coupe <= 0 or saut < 0:
+            sys.exit("--perforation : longueurs incohérentes")
+        avant_perf = len(polylignes)
+        # APRÈS le réordonnancement : perforer d'abord multiplierait par
+        # vingt le nombre de chemins, et l'ordonnancement est en n².
+        polylignes = perforer(polylignes, coupe, saut)
+        print(f"perforation  {coupe:g} mm coupés / {saut:g} laissés — "
+              f"{avant_perf} tracé(s) -> {len(polylignes)} tirets")
 
     if args.force is not None and not 1 <= args.force <= 38:
         sys.exit("--force attend une valeur de 1 à 38 (plage du CE6000-60)")

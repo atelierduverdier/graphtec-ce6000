@@ -512,7 +512,7 @@ remise à plus tard :
 | | |
 |---|---|
 | Nuancier de force jugé au décollement | **fait** : `nuancier_force.py --carres`, une grille de carrés à lever |
-| Styles de perforation | une ligne pointillée fait un gabarit détachable — utile, et la machine sait le faire seule |
+| Styles de perforation | **fait en logiciel** : `--perforation 8,0.25` |
 | Test de découpe / de force | équivalents déjà couverts par le nuancier |
 | Cadre d'échenillage | propre au vinyle, sans objet sur papier |
 | Repères d'alignement (ARMS) | seulement pour découper au contour un motif **imprimé** ; commandes mal documentées hors SDK |
@@ -522,6 +522,31 @@ feutre »** dont les valeurs d'usine sont vitesse 10 cm/s, **accélération 2**,
 force 2. L'accélération se règle au panneau (`CONDITION` → `ACCEL`) et
 n'apparaît dans aucune commande HP-GL — une plume qui accélère fort dérape au
 départ de chaque segment.
+
+### La perforation, faite en logiciel
+
+```bash
+python3 svg2hpgl.py gabarit.svg --perforation 8,0.25 --envoyer
+```
+
+8 mm coupés, 0,25 laissés — les cotes du carnet d'établi. C'est ce que le
+logiciel Graphtec appelle « Style 1 à 9 » ; le faire ici donne **les
+longueurs exactes** au lieu de neuf motifs figés, et Graphtec lui-même
+offrait le choix entre « perforation du cutter » et « du logiciel ».
+
+Le découpage se fait en **abscisse curviligne** : un tiret enjambe
+plusieurs segments d'une courbe aplatie, et le motif franchit les angles
+sans se remettre à zéro. Vérifié sur une ligne de 100 mm — 97,000 mm
+coupés là où 8/8,25 en prédit 96,970.
+
+**Vérifié sur le papier le 11/08/2026** : un carré de 60 mm perforé tient
+dans la feuille et se détache à la main. La réserve annoncée — 0,25 mm
+paraissant trop court pour lever une lame — était infondée, et c'est le
+papier qui l'a tranché.
+
+La perforation est appliquée **après** le réordonnancement : la faire
+avant multiplierait par vingt le nombre de chemins, et l'ordonnancement
+est en n².
 
 ### La compensation d'offset, vérifiée sur des pointes
 

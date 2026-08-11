@@ -29,10 +29,38 @@ Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
 (le 7550 est un traceur de bureau A3 dont l'espace de coordonnées est petit),
 `HP-GL ORIGIN POINT` → coin.
 
-### La vitesse ne se pilote PAS depuis le PC — mesuré, pas supposé
+### La vitesse SE pilote — par le protocole propriétaire `TC`
 
-Trois commandes essayées, deux langages, aucune n'agit. Le même parcours de
-2 560 mm, chronométré à la montre :
+**Correction du 11/08/2026.** Ce fichier a d'abord affirmé, en gras, que la
+vitesse ne se pilotait pas depuis le PC. C'était vrai des trois commandes
+essayées et faux comme conclusion : la bonne était introuvable par
+supposition, il fallait regarder ce que le logiciel d'origine envoie.
+
+```
+ESC . v : TC1002,3,<condition>,<vitesse en cm/s × 10> ␃
+```
+
+puis **continuer d'interroger l'état** — `ESC.v:ESC.C1:`, qui répond `8` tant
+que la machine traite et `0` quand c'est fini. **C'est la partie qu'on
+oubliait** : envoyée seule, la commande fait réagir la machine et ne règle
+rien. Menée à son terme, la valeur change sous les yeux, sur le panneau.
+
+Relevé en capturant le flux USB de Graphtec Studio pendant qu'on tournait
+la molette de vitesse : trois crans, trois commandes, `,270` puis `,260`
+puis `,250`. La valeur est lisible en clair, ce qui rend l'identification
+immédiate — d'où le choix d'une valeur inhabituelle (25) pour la chercher.
+
+`sonde_gpgl.py --tc 25` reproduit la transaction complète.
+
+**La même méthode nommera les autres réglages** : une capture en changeant
+un champ, et la commande se désigne elle-même par sa valeur. `TC1002,1,…`,
+`TC1002,6,…`, `TC2002`, `TC2006`, `TC2008`, `TC2009` sont déjà visibles dans
+les captures, sans qu'on sache encore ce qu'ils portent.
+
+### Ce qui a échoué avant, et pourquoi c'est instructif
+
+Trois commandes essayées à l'aveugle, deux langages, aucune n'agit. Le même
+parcours de 2 560 mm, chronométré à la montre :
 
 | Commande envoyée | Durée |
 |---|---|

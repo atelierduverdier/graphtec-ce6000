@@ -120,6 +120,12 @@ def main():
                     help="zigzag à chronométrer, à cette vitesse")
     ap.add_argument("--commande-vitesse", default="!",
                     help="lettre de la commande de vitesse (défaut « ! »)")
+    ap.add_argument("--tc", type=int, metavar="CM_S",
+                    help="règle la vitesse par la commande PROPRIÉTAIRE "
+                         "TC1002,3,1,<cm/s × 10>, relevée le 11/08/2026 dans "
+                         "le flux USB de Graphtec Studio")
+    ap.add_argument("--condition", type=int, default=1,
+                    help="numéro de condition visé par --tc (défaut 1)")
     ap.add_argument("--pas", type=int, default=PAS_PAR_MM,
                     help=f"pas par millimètre (défaut {PAS_PAR_MM}, "
                          f"soit 0,1 mm par pas)")
@@ -131,9 +137,17 @@ def main():
 
     sep = SEPARATEURS[args.separateur]
 
+    prefixe = ""
+    if args.tc:
+        # Reproduit EXACTEMENT ce que Graphtec Studio écrit : `ESC . v :`
+        # colle devant la commande, dans le MÊME transfert, terminaison ETX.
+        # Envoyée nue, la commande a fait réagir la machine sans rien régler.
+        prefixe = f"\x1b.v:TC1002,3,{args.condition},{args.tc * 10}\x03"
+
     if args.vitesse:
         programme, longueur = programme_zigzag(
             args.vitesse, args.commande_vitesse, args.pas, sep)
+        programme = prefixe + programme
         attendu = longueur / (args.vitesse * 10.0)
         entete = (f"zigzag {longueur:.0f} mm à {args.commande_vitesse}"
                   f"{args.vitesse} — si la commande passe, environ "
@@ -143,8 +157,16 @@ def main():
         longueur = None
         entete = ("rectangle 60 × 30 mm plus un ergot de 20 mm ; "
                   "AUCUNE vitesse ni force n'est envoyée")
+    elif args.tc:
+        # Le meilleur contrôle possible : la machine AFFICHE le réglage. Pas
+        # de tracé, pas de chronomètre, pas d'interprétation -- on regarde
+        # CONDITION > VITESSE au panneau et on voit si la valeur a changé.
+        programme, longueur = prefixe, None
+        entete = (f"règle la condition {args.condition} à {args.tc} cm/s "
+                  f"par TC1002,3,{args.condition},{args.tc * 10} — "
+                  f"AUCUN mouvement")
     else:
-        sys.exit("choisir --rectangle (essai de syntaxe) ou --vitesse N")
+        sys.exit("choisir --rectangle, --vitesse N, ou --tc CM_S")
 
     print(entete)
     print(f"{len(programme)} octets, séparateur « {args.separateur} », "
@@ -159,6 +181,31 @@ def main():
     fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
     try:
         duree = ecrire(fd, programme)
+        if args.tc:
+            # Le logiciel d'origine ne s'arrête pas à l'envoi : il continue
+            # d'interroger l'état, qui passe à 8 puis retombe à 0. Envoyer
+            # sans mener la transaction à terme laissait peut-être le
+            # réglage en suspens.
+            print("état après envoi :", end=" ", flush=True)
+            for _ in range(30):
+                ecrire(fd, "\x1b.v:\x1b.C1:")
+                reponse = b""
+                for _ in range(20):
+                    prets, _, _ = select.select([fd], [], [], 0.05)
+                    if not prets:
+                        continue
+                    try:
+                        reponse += os.read(fd, 64)
+                    except BlockingIOError:
+                        pass
+                    if b"\x03" in reponse:
+                        break
+                etat = reponse.decode("ascii", "replace").strip("\x03 \r\n")
+                print(etat or "?", end=" ", flush=True)
+                if etat == "0" and reponse:
+                    break
+                time.sleep(0.1)
+            print()
     finally:
         os.close(fd)
     print(f"\nenvoyé en {duree:.1f} s d'écriture.")

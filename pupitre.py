@@ -667,34 +667,46 @@ class Pupitre(QWidget):
                                      self.spn_force.value(),
                                      self.spn_passages.value())
 
+        # UN SEUL descripteur pour régler PUIS envoyer. Le pupitre en
+        # ouvrait trois d'affilée — outil, conditions, envoi — et fermer
+        # /dev/usb/lp0 entre deux étapes rend la machine muette pour des
+        # dizaines de secondes. Le correctif avait été porté à
+        # envoyer_hpgl.py le 11/08/2026 et OUBLIÉ ici, où il manquait le
+        # plus : c'est le pupitre qu'on utilise.
+        import conditions
         regle = ""
+        fd = None
         try:
+            fd = os.open(conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
             if self.chk_regler.isChecked():
-                import conditions
-                fd = os.open(conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
-                try:
-                    # L'offset part avec l'outil : la commande écrit les
-                    # deux champs d'un coup, les séparer effacerait l'un
-                    # des deux.
-                    conditions.regler_outil(
-                        fd, conditions.OUTILS[self.cmb_outil.currentText()],
-                        condition=condition,
-                        offset=self.spn_offset.value())
-                finally:
-                    os.close(fd)
+                # L'offset part avec l'outil : la commande écrit les deux
+                # champs d'un coup, les séparer effacerait l'un des deux.
+                conditions.regler_outil(
+                    fd, conditions.OUTILS[self.cmb_outil.currentText()],
+                    condition=condition,
+                    offset=self.spn_offset.value())
                 rendu = conditions.appliquer(vitesse=self.spn_vit.value(),
                                              acceleration=self.spn_accel.value(),
-                                             condition=condition)
+                                             condition=condition, fd=fd)
                 douteux = [n for n, _, _, ok in rendu if not ok]
+                if douteux:
+                    QMessageBox.warning(
+                        self, "Réglage non retenu",
+                        "La machine n'a pas retenu : " + ", ".join(douteux)
+                        + "\n\nEnvoi annulé : tracer avec des réglages "
+                          "qu'on croit posés et qui ne le sont pas gâche "
+                          "le média.")
+                    return
                 regle = (f"condition {condition} réglée à "
                          f"{self.spn_vit.value()} cm/s, accél. "
-                         f"{self.spn_accel.value()}"
-                         + (f" — NON CONFORME : {douteux}" if douteux else "")
-                         + " — ")
-            envoye = noyau.envoyer(programme)
+                         f"{self.spn_accel.value()} — ")
+            envoye = noyau.envoyer(programme, fd=fd)
         except Exception as e:
             QMessageBox.critical(self, "Envoi impossible", str(e))
             return
+        finally:
+            if fd is not None:
+                os.close(fd)
         gain = (1 - min(apres, avant) / avant) * 100 if avant else 0
         self.info.setText(f"{regle}{envoye} octets envoyés — trajet à vide "
                           f"{min(apres, avant):.0f} mm ({gain:.0f} % gagné)")

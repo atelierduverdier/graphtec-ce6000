@@ -388,12 +388,21 @@ def limites_machine():
     return (x2 - x1) / UNITES_PAR_MM, (y2 - y1) / UNITES_PAR_MM
 
 
-def envoyer(programme):
-    fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
+def envoyer(programme, fd=None):
+    """Écrit le programme sur le traceur.
+
+    `fd` réutilise un descripteur déjà ouvert. Fermer et rouvrir
+    /dev/usb/lp0 entre le réglage et l'envoi rend la machine muette pour
+    des dizaines de secondes — mesuré le 11/08/2026.
+    """
+    propre = fd is None
+    if propre:
+        fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
     try:
         return _ecrire_brut(fd, programme)
     finally:
-        os.close(fd)
+        if propre:
+            os.close(fd)
 
 
 # ======================================================================

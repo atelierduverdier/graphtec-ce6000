@@ -454,9 +454,29 @@ l'atelier. Quand le dessin déborde, les tracés, l'emprise et le message
 passent au rouge **et** le bouton d'envoi se grise : un message d'alerte sous
 un style neutre ne se lit pas comme un refus.
 
-**Pas encore fait : la mosaïque.** Découper un grand dessin en panneaux
-demande de couper les polylignes à la frontière de chacun — le seul morceau
-délicat de tout ça, qui mérite d'être traité à part.
+**La mosaïque** est dans `mosaique.py`, et s'appelle depuis la ligne de
+commande :
+
+```bash
+python3 svg2hpgl.py gabarit.svg --mosaique 380x280 --recouvrement 15
+```
+
+Elle écrit un fichier par panneau. Le découpage est un Liang-Barsky par
+segment : une polyligne qui traverse la frontière est coupée EXACTEMENT
+dessus, et ce qui dépasse disparaît. Un contour fermé coupé devient ouvert —
+ce n'est plus un contour.
+
+**La propriété qui compte, c'est que rien ne se perde**, et elle est
+vérifiée par deux mesures indépendantes du code testé : un dessin de 25 m
+découpé en 20 panneaux **sans** recouvrement redonne 25 563,307 mm, contre
+25 563,307 mm à l'original — écart nul au millionième. Et la longueur
+retenue dans un panneau donné correspond, à 0,045 mm près sur 3 m, à ce que
+donne un échantillonnage du dessin tous les 0,05 mm.
+
+Les **repères en croix** sont posés au MILIEU des bandes de recouvrement,
+donc au même endroit physique sur les deux voisins : on superpose, on colle,
+le trait est continu. Une croix posée sur le bord d'un panneau, elle, ne
+serait pas sur l'autre.
 
 ### Ce que le logiciel d'origine faisait, et où on en est
 

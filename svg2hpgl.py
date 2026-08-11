@@ -349,6 +349,13 @@ def main():
                     help="facteur d'échelle, ex. 0.9 ou 90%% (défaut : taille réelle)")
     ap.add_argument("--ajuster", action="store_true",
                     help="réduit juste ce qu'il faut pour tenir dans la zone utile")
+    ap.add_argument("--mosaique", metavar="LxH",
+                    help="découpe en panneaux de L x H mm et écrit un fichier "
+                         "par panneau. Par défaut la zone utile de la machine.")
+    ap.add_argument("--recouvrement", type=float, default=15.0, metavar="MM",
+                    help="bande partagée entre panneaux voisins (défaut 15). "
+                         "Des repères y sont tracés, au milieu, donc aux "
+                         "mêmes points sur les deux voisins.")
     ap.add_argument("--brut", action="store_true",
                     help="garde l'ordre du SVG au lieu d'optimiser le trajet")
     ap.add_argument("--envoyer", action="store_true",
@@ -453,6 +460,36 @@ def main():
             # rien. Si elle ne répond pas à OH;, elle n'écoute pas non plus.
             sys.exit("elle ne répond pas : média chargé et panneau sur READY ?\n"
                      "envoi annulé.")
+
+    if args.mosaique:
+        import mosaique as mos
+        try:
+            px, py = (float(v) for v in args.mosaique.lower().split("x"))
+        except ValueError:
+            sys.exit("--mosaique attend LxH, par exemple 380x280")
+        racine = os.path.splitext(args.sortie or args.svg)[0]
+        panneaux = mos.mosaique(polylignes, (px, py), args.recouvrement)
+        print(f"\nmosaïque   {len(panneaux)} panneau(x) de {px:.0f} x {py:.0f} mm, "
+              f"recouvrement {args.recouvrement:.0f} mm")
+        for i, j, _, morceaux in panneaux:
+            if not morceaux:
+                print(f"   ({i},{j}) vide, ignoré")
+                continue
+            morceaux = recadrer(morceaux, marge_x, marge_y)
+            if not args.brut:
+                candidat = ordonner(morceaux)
+                if trajet_a_vide(candidat) < trajet_a_vide(morceaux):
+                    morceaux = candidat
+            prog, _ = en_hpgl(morceaux, args.outil, args.force)
+            nom = f"{racine}_p{i}{j}.hpgl"
+            with open(nom, "w", encoding="ascii") as f:
+                f.write(prog)
+            x0, y0, x1, y1 = cadre(morceaux)
+            print(f"   ({i},{j}) {len(morceaux):>4} tracés, "
+                  f"{x1-x0:>6.1f} x {y1-y0:>6.1f} mm -> {os.path.basename(nom)}")
+        print("\nTracer les panneaux l'un après l'autre, en superposant les")
+        print("repères en croix des bandes de recouvrement pour les raccorder.")
+        return
 
     sortie = args.sortie or os.path.splitext(args.svg)[0] + ".hpgl"
     with open(sortie, "w", encoding="ascii") as f:

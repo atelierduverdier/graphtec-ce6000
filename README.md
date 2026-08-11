@@ -226,15 +226,37 @@ retirées après mesure :
 - « elle sort la machine de `READY`, d'où les silences d'`OH;` » — faux, la
   machine répond après chacune ;
 - « les commandes `TC` commencent par `ESC.` et l'analyseur HP-GL les
-  refuse » — plausible, mais un compteur d'erreurs encadrant chaque envoi
-  ne trouve RIEN : ni `OH;`, ni `IN;/SP/PU`, ni l'état `TC`, ni une lecture
-  `TC2002`, ni une écriture `TC1002`, ni un choix d'outil, ni l'ouverture-
+  refuse » — un détecteur par horodatage, celui-là fiable, ne trouve RIEN :
+  ni `OH;`, ni `IN;/SP/PU`, ni l'état `TC`, ni une lecture `TC2002`, ni une
+  écriture `TC1002`, ni un choix d'outil, ni le vidage, ni l'ouverture-
   fermeture du périphérique.
 
-La première version de ce compteur était d'ailleurs cassée : un journal lu
-VIDE était compté comme zéro erreur, ce qui a donné un verdict de `+13`
-puis `-13`. Un détecteur dont la panne ressemble à une mesure — pour la
-troisième fois de cette enquête. Il exige maintenant une lecture non vide.
+Ce qui en produit une, en revanche, c'est **un envoi complet qui trace
+réellement**. Reste donc une seule chose non éprouvée : le `PD`, plume
+baissée. L'essai du fichier entier avait été fait plume levée, tous les
+`PD` remplacés par des `PU` — sans erreur. Trancher coûte une feuille :
+envoyer un panneau SANS `--materiau`, puis regarder l'horodatage du haut.
+
+**Ce compteur s'est trompé deux fois, et la seconde est la plus
+instructive.** D'abord un journal lu VIDE compté comme zéro erreur, d'où un
+verdict de `+13` puis `-13`. Puis, une fois cette panne bouchée, il a
+encore conclu « aucune erreur » sur une séquence qui en produisait deux —
+visibles dans le journal six minutes plus tard, horodatées.
+
+La raison : **le journal est un tampon circulaire**. Une entrée nouvelle
+en chasse une ancienne, donc le NOMBRE d'« instruction inconnue » ne
+bouge pas pendant qu'elles se renouvellent. Compter une grandeur qui ne
+peut pas varier, c'est mesurer avec certitude quelque chose qui n'existe
+pas.
+
+La bonne mesure est l'**horodatage du haut** : une entrée plus jeune que
+l'action qu'on vient de faire est une entrée neuve. Ce détecteur-là a été
+validé avant de servir — 25 secondes d'attente sans rien envoyer, l'entrée
+du haut a vieilli de 26 secondes et aucune n'est née.
+
+Et c'est Christophe qui l'a débusqué, en lançant simplement la commande
+qu'on lui avait donnée : la ligne du haut affichait 35 secondes là où mon
+compteur venait de jurer que rien ne s'était produit.
 
 Pour savoir si un envoi vient d'en produire une, regarder l'horodatage du
 haut : négatif, il compte en arrière depuis maintenant.

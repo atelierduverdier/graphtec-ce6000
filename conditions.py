@@ -173,6 +173,12 @@ def lire(fd, parametre, condition=1, delai=1.5, famille=2002):
     nombres cadrés à droite sur des espaces. Rend la liste des valeurs
     APRÈS le numéro de condition, en entiers.
 
+    Le nombre de champs VARIE : `TC2002,2` rend deux valeurs pour une lame
+    (type et retouche d'offset) mais UNE SEULE pour une plume, qui n'a pas
+    d'offset — conforme au manuel, « il n'est pas nécessaire de régler ce
+    paramètre pour les outils Plume ». Un appelant qui suppose deux champs
+    se trompe dès qu'un stylo est monté.
+
     C'est le pendant lecture de `TC1002`, et il change la nature du
     dialogue : on peut désormais VÉRIFIER qu'un réglage a été appliqué
     au lieu de le supposer. Toute cette enquête a buté là-dessus.

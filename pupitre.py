@@ -145,6 +145,11 @@ class Pupitre(QWidget):
 
         self._habiller()
         self._interroger_media(silencieux=True)
+        # Charger la condition RÉELLE au démarrage. Sans ça les champs
+        # affichent des valeurs par défaut, et « Appliquer maintenant » les
+        # écrirait dans la machine en croyant obéir : c'est arrivé le
+        # 11/08/2026, un « Stylo feutre » monté est repassé à CB09U.
+        self._lire_condition(silencieux=True)
 
     def _entete(self):
         """Titre et état de liaison.
@@ -263,6 +268,11 @@ class Pupitre(QWidget):
         gl = QGridLayout(g)
         self.cmb_cond = QComboBox()
         self.cmb_cond.addItems([f"condition {i}" for i in range(1, 9)])
+        # Changer de numéro relit la condition : sans ça, les champs
+        # montreraient encore ceux de la précédente et « Appliquer
+        # maintenant » les recopierait dans la nouvelle.
+        self.cmb_cond.currentIndexChanged.connect(
+            lambda: self._lire_condition(silencieux=True))
         # L'outil DÉCLARÉ doit correspondre à celui qui est monté : sinon la
         # machine compense un déport que l'outil n'a pas, ou l'inverse.
         self.cmb_outil = QComboBox()
@@ -290,8 +300,21 @@ class Pupitre(QWidget):
         # L'accélération n'a que TROIS crans sur cette machine : demander 4
         # est écrêté à 3 sans un mot. La borne est dans conditions.BORNES.
         self.spn_accel = self._entier(1, 3, 2)
-        self.chk_regler = QCheckBox("régler la machine à l'envoi")
+        self.chk_regler = QCheckBox("appliquer aussi au moment du tracé")
         self.chk_regler.setChecked(True)
+        self.chk_regler.setToolTip(
+            "Coché, les réglages ci-dessus sont posés juste avant chaque\n"
+            "envoi. Décoché, le traceur garde ce qu'il a — ce qui est sans\n"
+            "danger, les conditions étant PERSISTANTES dans la machine.\n"
+            "Pour agir maintenant, utiliser « Appliquer maintenant ».")
+
+        b_lire_c = QPushButton("Lire la condition")
+        b_lire_c.clicked.connect(self._lire_condition)
+        b_appl_c = QPushButton("Appliquer maintenant")
+        b_appl_c.clicked.connect(self._appliquer_condition)
+        self.lbl_condition = QLabel("condition non lue")
+        self.lbl_condition.setObjectName("faible")
+        self.lbl_condition.setWordWrap(True)
         gl.addWidget(QLabel("condition"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
         gl.addWidget(QLabel("outil"), 1, 0); gl.addWidget(self.cmb_outil, 1, 1)
         self.lbl_offset = QLabel("offset")
@@ -304,10 +327,12 @@ class Pupitre(QWidget):
             "repasser sur chaque tracé rend le trait franc au stylo.\n"
             "Le carnet d'établi note 2 pour le feutre comme pour le Bic.\n"
             "Ne coûte aucun déplacement : le retour se fait à l'envers.")
-        gl.addWidget(self.chk_regler, 7, 0, 1, 2)
+        gl.addWidget(b_lire_c, 7, 0); gl.addWidget(b_appl_c, 7, 1)
+        gl.addWidget(self.lbl_condition, 8, 0, 1, 2)
+        gl.addWidget(self.chk_regler, 9, 0, 1, 2)
         rappel = QLabel("accélération basse = trait net,\nhaute = travail plus court")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 8, 0, 1, 2)
+        gl.addWidget(rappel, 10, 0, 1, 2)
         self._offset_utile(self.cmb_outil.currentText())
         g_outil = g
 
@@ -426,6 +451,69 @@ class Pupitre(QWidget):
         gl.addWidget(self.lbl_machine, ligne + 2, 0, 1, 2)
         g.setEnabled(True)
         return g
+
+    def _lire_condition(self, silencieux=False):
+        """Charge la condition choisie depuis la machine.
+
+        Même geste que l'onglet Machine : lire d'abord, agir ensuite. La
+        case « appliquer au tracé » ne montrait rien quand on la décochait
+        — normal, elle ne parle que du futur — et Christophe a cherché,
+        avec raison, ce qui agissait MAINTENANT. Deux logiques dans la même
+        fenêtre, c'était le défaut.
+        """
+        import conditions as M
+        if not os.path.exists(M.PERIPH):
+            if not silencieux:
+                QMessageBox.information(self, "Traceur absent",
+                                        f"{M.PERIPH} n'existe pas.")
+            return
+        try:
+            etat = M.lire_condition(self.cmb_cond.currentIndex() + 1)
+        except OSError as e:
+            if not silencieux:
+                QMessageBox.warning(self, "Traceur", str(e))
+            return
+        if not etat or etat.get("vitesse") is None:
+            self.lbl_condition.setText("pas de réponse — panneau sur READY ?")
+            return
+        code_outil = etat.get("outil")
+        for nom, code in M.OUTILS.items():
+            if code == code_outil:
+                self.cmb_outil.setCurrentText(nom)
+                break
+        if etat.get("offset") is not None:
+            self.spn_offset.setValue(etat["offset"])
+        self.spn_vit.setValue(max(1, int(round(etat["vitesse"] / 10))))
+        if etat.get("force") is not None:
+            self.spn_force.setValue(etat["force"])
+        if etat.get("acceleration") is not None:
+            self.spn_accel.setValue(etat["acceleration"])
+        self.lbl_condition.setText(
+            f"condition {self.cmb_cond.currentIndex() + 1} lue sur la machine")
+
+    def _appliquer_condition(self):
+        """Pose la condition MAINTENANT, et relit chaque valeur."""
+        import conditions as M
+        cond = self.cmb_cond.currentIndex() + 1
+        try:
+            fd = os.open(M.PERIPH, os.O_RDWR | os.O_NONBLOCK)
+        except OSError as e:
+            QMessageBox.warning(self, "Traceur", str(e))
+            return
+        try:
+            M.regler_outil(fd, M.OUTILS[self.cmb_outil.currentText()],
+                           condition=cond, offset=self.spn_offset.value())
+            rendu = M.appliquer(vitesse=self.spn_vit.value(),
+                                force=self.spn_force.value(),
+                                acceleration=self.spn_accel.value(),
+                                condition=cond, fd=fd)
+        finally:
+            os.close(fd)
+        rates = [n for n, _d, _o, ok in rendu if not ok]
+        self.lbl_condition.setText(
+            f"condition {cond} appliquée et relue"
+            + (f" — NON RETENU : {', '.join(rates)}" if rates
+               else ", tout conforme."))
 
     def _lire_machine(self):
         """Charge les valeurs réelles, une seule ouverture du périphérique.

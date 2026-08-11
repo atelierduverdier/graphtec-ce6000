@@ -22,9 +22,12 @@ Paramètres identifiés, chacun vérifié en le lisant sur le panneau :
 et la machine répond `<condition>, <valeur>…`. Toute écriture est donc
 vérifiable, et `appliquer` la vérifie.
 
-Restent inconnus `TC1002,14` et les familles `TC1004`, `TC1006`, `TC1010`.
-La méthode pour les nommer est dans le README : une valeur inhabituelle,
-et on regarde quel champ du panneau bouge.
+Restent inconnus 6, 8, 9, 14, 15 et les familles `TC1004`, `TC1006`,
+`TC1010`. Pour les nommer : `chercher_parametre.py` relève tout, laisse
+changer une seule chose, relève de nouveau, et la différence désigne le
+paramètre. C'est ainsi qu'on a établi qu'**aucun paramètre ne porte le
+déport de lame** : changer la lame ne modifie que le type d'outil, donc la
+machine déduit le déport au lieu de le stocker.
 
 ATTENTION : ces réglages sont PERSISTANTS. Ils modifient la condition
 enregistrée dans la machine, exactement comme le fait le logiciel Graphtec —

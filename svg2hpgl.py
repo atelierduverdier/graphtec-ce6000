@@ -486,6 +486,15 @@ def main():
             sys.exit("--echelle attend un nombre, ex. 0.9 ou 90%")
         if facteur <= 0:
             sys.exit("--echelle attend un facteur positif")
+        # Un nombre nu est un FACTEUR ; le pupitre, lui, affiche des pour
+        # cent. « --echelle 42 » en croyant écrire 42 % donne une emprise de
+        # 37 mètres, et le fichier s'écrit quand même — constaté le
+        # 11/08/2026 en préparant un tracé.
+        if "%" not in args.echelle and facteur >= 10:
+            print(f"ATTENTION : {texte} est un FACTEUR, soit x{facteur:g} "
+                  f"({facteur*100:g} %).\n"
+                  f"            Pour {texte} POUR CENT, écrire "
+                  f"--echelle {texte}%")
 
     elif args.ajuster:
         if not limites:

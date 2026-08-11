@@ -211,6 +211,38 @@ satisfaisait, et elle a annoncé un résultat faux avec aplomb. Un verdict doit
 exiger la **croissance**, et se taire quand les mesures ne sont ni
 constantes ni croissantes.
 
+### « HP-GL ERREUR 1 INSTRUCTION INCONNUE » : réelle, sans effet, sans cause connue
+
+Le panneau l'affiche à chaque envoi, et le journal de la machine
+(`etat_machine.py --journal`) la confirme, horodatée à la seconde.
+
+**Elle ne bloque rien.** Vérifié pas à pas le 11/08/2026 : après chacune,
+la machine reste sur `READY`, répond à `OH;`, aux lectures `TC` et au
+vidage. Les deux panneaux du porte-manteau ont été tracés avec.
+
+**Sa cause n'est PAS établie**, et deux explications avancées ici ont été
+retirées après mesure :
+
+- « elle sort la machine de `READY`, d'où les silences d'`OH;` » — faux, la
+  machine répond après chacune ;
+- « les commandes `TC` commencent par `ESC.` et l'analyseur HP-GL les
+  refuse » — plausible, mais un compteur d'erreurs encadrant chaque envoi
+  ne trouve RIEN : ni `OH;`, ni `IN;/SP/PU`, ni l'état `TC`, ni une lecture
+  `TC2002`, ni une écriture `TC1002`, ni un choix d'outil, ni l'ouverture-
+  fermeture du périphérique.
+
+La première version de ce compteur était d'ailleurs cassée : un journal lu
+VIDE était compté comme zéro erreur, ce qui a donné un verdict de `+13`
+puis `-13`. Un détecteur dont la panne ressemble à une mesure — pour la
+troisième fois de cette enquête. Il exige maintenant une lecture non vide.
+
+Pour savoir si un envoi vient d'en produire une, regarder l'horodatage du
+haut : négatif, il compte en arrière depuis maintenant.
+
+```bash
+python3 etat_machine.py --journal | head -3
+```
+
 ## Les quatre pièges
 
 1. **Hors de l'état `READY`, la machine ne lit pas son tampon d'interface.**

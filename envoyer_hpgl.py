@@ -126,6 +126,29 @@ def main():
     if not os.path.exists(PERIPH):
         sys.exit(f"{PERIPH} absent : traceur allumé et branché ?")
 
+    # La zone utile se lit AVANT tout réglage, et le résultat sert ensuite.
+    # Ordre voulu, pas cosmétique : `OH;` répond sans faute quand c'est la
+    # première chose demandée à la machine, et reste MUET quand une salve
+    # `TC` l'a précédé dans le même processus. Observé trois fois le
+    # 11/08/2026, sans que le mécanisme soit élucidé -- l'état `TC` vaut
+    # 8 (occupé) y compris dans les cas qui marchent, donc ce n'est pas lui.
+    # On ne traverse pas une transition qu'on ne comprend pas : on l'évite.
+    fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
+    try:
+        limites = zone_utile(fd)
+    finally:
+        os.close(fd)
+    if limites is None:
+        brut = zone_utile.derniere_reponse
+        sys.exit(
+            f"OH; n'a pas donné de zone utile exploitable.\n"
+            f"   la machine a répondu : {brut!r}\n"
+            + ("   (rien du tout — média chargé et panneau sur READY ?)"
+               if not brut else
+               "   (réponse reçue mais illisible)"))
+    print(f"zone utile {limites[0]:.1f} × {limites[1]:.1f} mm "
+          f"(média actuellement chargé)")
+
     if args.materiau:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import materiaux
@@ -153,21 +176,9 @@ def main():
 
         fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
         try:
-            limites = zone_utile(fd)
             boite = emprise(programme)
             nom = os.path.basename(chemin)
-
-            if limites is None:
-                brut = zone_utile.derniere_reponse
-                sys.exit(
-                    f"{nom} : OH; n'a pas donné de zone utile exploitable.\n"
-                    f"   la machine a répondu : {brut!r}\n"
-                    + ("   (rien du tout — média chargé et panneau sur "
-                       "READY ?)" if not brut else
-                       "   (réponse reçue mais illisible — relancer la "
-                       "commande suffit souvent)"))
-            print(f"{nom} : {len(programme)} octets, "
-                  f"zone utile {limites[0]:.1f} × {limites[1]:.1f} mm")
+            print(f"{nom} : {len(programme)} octets")
             if boite:
                 print(f"   emprise {boite[2]-boite[0]:.1f} × "
                       f"{boite[3]-boite[1]:.1f} mm, coin à "

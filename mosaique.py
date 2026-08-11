@@ -134,8 +134,14 @@ def reperes(rect, voisins, dessin=None, taille=8.0):
     croix = []
 
     def paire(fixe, a, b, horizontal):
-        """Deux croix le long du raccord, à 15 % et 85 % de sa longueur."""
-        for t in (0.15, 0.85):
+        """Deux croix le long du raccord, à 5 % et 95 % de sa longueur.
+
+        Poussées aux extrémités à la demande de Christophe le 11/08/2026 :
+        l'erreur angulaire résiduelle est inversement proportionnelle à
+        l'écartement, et passer de 15/85 à 5/95 gagne un quart. Sur le
+        porte-manteau, 117 mm au lieu de 91.
+        """
+        for t in (0.05, 0.95):
             u = a + t * (b - a)
             cx, cy = (u, fixe) if horizontal else (fixe, u)
             h = taille / 2.0

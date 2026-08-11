@@ -383,6 +383,23 @@ machine à l'envoi » qu'on peut décocher.
 | vitesse | `TC1002,3,<cond>,<cm/s × 10>` | 1 à 640, soit 64 cm/s |
 | force | `TC1002,4,<cond>,<n>` | 1 à 38 |
 | accélération | `TC1002,5,<cond>,<n>` | **1 à 3 seulement** |
+| type d'outil | `TC1002,2,<cond>,<code>,<indicateur>` | voir la table ci-dessous |
+
+Les codes d'outil ont été relevés en parcourant la liste du logiciel Graphtec
+**deux fois de haut en bas** — la même suite les deux fois, donc une mesure
+reproduite et non une déduction sur un seul passage :
+
+| Outil | Code | | Outil | Code |
+|---|---|---|---|---|
+| CB09U | 1 | | CB15UB | 3 |
+| CB09U-K60 | 10 | | Autre | 6 |
+| CB15U | 2 | | Stylo feutre | 9 |
+
+Le second champ de cette commande **reste inexpliqué**, et c'est le second
+essai qui l'a montré : il ne dépend pas de l'outil. Au premier parcours il
+valait 0 puis a basculé à 1 en cours de route sans plus en bouger — le code 6
+est apparu avec les deux valeurs. C'est un état du logiciel Graphtec, pas une
+propriété du réglage. `conditions.regler_outil` le laisse à 0.
 
 **La machine ÉCRÊTE sans un mot** : une accélération 4 demandée est appliquée
 à 3, ce qui ressemble d'abord à un décalage d'une unité. `conditions.BORNES`

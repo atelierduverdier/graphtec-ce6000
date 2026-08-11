@@ -48,6 +48,20 @@ BORNES = {
     ACCELERATION: (1, 3),
 }
 
+OUTIL = 2                 # forme particulière : deux valeurs, pas une
+
+# Codes relevés en parcourant la liste du logiciel Graphtec DEUX FOIS de
+# haut en bas : la même suite les deux fois, donc une mesure reproduite et
+# non une déduction sur un seul passage.
+OUTILS = {
+    "CB09U": 1,
+    "CB09U-K60": 10,
+    "CB15U": 2,
+    "CB15UB": 3,
+    "Autre": 6,
+    "Stylo feutre": 9,
+}
+
 _ETAT = "\x1b.v:\x1b.C1:"
 
 
@@ -96,6 +110,29 @@ def regler(fd, parametre, valeur, condition=1, patience=30):
             f"paramètre {parametre} : {valeur} hors de [{mini}, {maxi}] — "
             f"la machine écrêterait en silence")
     _ecrire(fd, f"\x1b.v:TC1002,{parametre},{condition},{valeur}\x03")
+    etats = []
+    for _ in range(patience):
+        e = _etat(fd)
+        etats.append(e)
+        if e == "0":
+            break
+        time.sleep(0.1)
+    return etats
+
+
+def regler_outil(fd, code, condition=1, indicateur=0, patience=30):
+    """Choisit le type d'outil : `TC1002,2,<condition>,<code>,<indicateur>`.
+
+    Cette commande porte DEUX valeurs là où les autres n'en ont qu'une, d'où
+    sa fonction propre.
+
+    L'`indicateur` reste à 0 faute de savoir ce qu'il fait. Ce qu'on sait :
+    il ne dépend PAS de l'outil. Sur deux parcours de la liste, il valait 0
+    puis a basculé à 1 en cours de route et n'en a plus bougé — le code 6 est
+    apparu avec les deux valeurs. C'est un état du logiciel Graphtec, pas une
+    propriété du réglage.
+    """
+    _ecrire(fd, f"\x1b.v:TC1002,{OUTIL},{condition},{code},{indicateur}\x03")
     etats = []
     for _ in range(patience):
         e = _etat(fd)

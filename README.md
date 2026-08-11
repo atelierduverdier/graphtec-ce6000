@@ -461,7 +461,17 @@ commande :
 python3 svg2hpgl.py gabarit.svg --mosaique 380x280 --recouvrement 15
 ```
 
-Elle écrit un fichier par panneau. Le découpage est un Liang-Barsky par
+Elle écrit **un fichier par panneau, sans rien envoyer** : entre deux
+panneaux il faut repositionner le média, et l'automatiser ferait tracer le
+second par-dessus le premier. `envoyer_hpgl.py` prend le relais :
+
+```bash
+python3 envoyer_hpgl.py gabarit_p??.hpgl     # s'arrête entre chaque panneau
+```
+
+Il reprend les deux garde-fous du dépôt — contrôle de flux, et refus
+d'envoyer si `OH;` reste muet — plus un troisième : il lit l'emprise du
+fichier HP-GL et refuse s'il déborde de la zone utile réellement mesurée. Le découpage est un Liang-Barsky par
 segment : une polyligne qui traverse la frontière est coupée EXACTEMENT
 dessus, et ce qui dépasse disparaît. Un contour fermé coupé devient ouvert —
 ce n'est plus un contour.

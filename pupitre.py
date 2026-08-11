@@ -480,6 +480,10 @@ class Pupitre(QWidget):
 
         self.cmb_cond = QComboBox()
         self.cmb_cond.addItems([f"condition {i}" for i in range(1, 9)])
+        self.cmb_cond.setToolTip(
+            "Les huit conditions vivent dans la machine. Le point marque "
+            "celle\nqu'elle emploie quand le fichier ne dit rien.")
+        self.resume_conditions = {}
         # Changer de numéro relit la condition : sans ça, les champs
         # montreraient encore ceux de la précédente et « Appliquer
         # maintenant » les recopierait dans la nouvelle.
@@ -531,7 +535,7 @@ class Pupitre(QWidget):
         gl.addWidget(QLabel("matériau"), 0, 0); gl.addWidget(self.cmb_profil, 0, 1)
         gl.addWidget(self.lbl_profil, 1, 0, 1, 2)
         gl.addWidget(QLabel("condition"), 2, 0); gl.addWidget(self.cmb_cond, 2, 1)
-        gl.addWidget(QLabel("outil"), 3, 0); gl.addWidget(self.cmb_outil, 7, 1)
+        gl.addWidget(QLabel("outil"), 3, 0); gl.addWidget(self.cmb_outil, 3, 1)
         self.lbl_offset = QLabel("offset")
         gl.addWidget(self.lbl_offset, 4, 0); gl.addWidget(self.spn_offset, 4, 1)
         gl.addWidget(QLabel("vitesse"), 5, 0); gl.addWidget(self.spn_vit, 5, 1)
@@ -777,14 +781,29 @@ class Pupitre(QWidget):
             if not silencieux:
                 QMessageBox.warning(self, "Traceur", str(e))
             return
+        self.resume_conditions = {}
         for i in range(self.cmb_cond.count()):
             c = sections.get(f"No.{i + 1}")
             if not c:
                 continue
             actif = " ●" if "*active*" in c else ""
-            self.cmb_cond.setItemText(
-                i, f"{i + 1}{actif} — {c.get('TOOL', '?')}, "
-                   f"{c.get('SPEED', '?')} cm/s, force {c.get('FORCE', '?')}")
+            court = (f"{i + 1}{actif} · {c.get('TOOL', '?')} · "
+                     f"{c.get('SPEED', '?')} cm/s · F{c.get('FORCE', '?')}")
+            self.cmb_cond.setItemText(i, court)
+            self.resume_conditions[i] = (
+                f"condition {i + 1}"
+                + ("  (active)" if actif else "")
+                + f" : {c.get('TOOL', '?')}, {c.get('SPEED', '?')} cm/s, "
+                  f"force {c.get('FORCE', '?')}, accél. {c.get('ACCEL.', '?')}"
+                + (f", offset {c.get('OFFSET')}" if c.get("OFFSET") else ""))
+
+        # Le menu déroulant est plus large que sa colonne : sans ça les
+        # résumés sortent tronqués (« 1 ● — PEN, 1…/s, force 12 »), et un
+        # résumé tronqué ne renseigne pas mieux qu'un numéro nu.
+        metrique = self.cmb_cond.fontMetrics()
+        largeur = max((metrique.horizontalAdvance(self.cmb_cond.itemText(i))
+                       for i in range(self.cmb_cond.count())), default=0)
+        self.cmb_cond.view().setMinimumWidth(largeur + 44)
 
     def _lire_condition(self, silencieux=False):
         """Charge la condition choisie depuis la machine.
@@ -823,7 +842,9 @@ class Pupitre(QWidget):
         if etat.get("acceleration") is not None:
             self.spn_accel.setValue(etat["acceleration"])
         self.lbl_condition.setText(
-            f"condition {self.cmb_cond.currentIndex() + 1} lue sur la machine")
+            getattr(self, "resume_conditions", {}).get(
+                self.cmb_cond.currentIndex(),
+                f"condition {self.cmb_cond.currentIndex() + 1} lue"))
         # Ce qu'on vient de lire ne vient plus d'un profil : le dire, sinon
         # la liste afficherait un matériau que les champs ne portent plus.
         self.cmb_profil.blockSignals(True)

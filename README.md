@@ -484,9 +484,12 @@ tracé et de l'usure de courroie. L'exporteur d'Inkscape ne réordonne pas.
 ## Vérifier qu'on n'a rien cassé
 
 ```bash
-python3 tests/test_traceur.py          # 10 propriétés, sans la machine
-python3 tests/verifier_les_tests.py    # les tests savent-ils échouer ?
+python3 tests/lancer.py     # les trois suites
 ```
+
+`test_traceur.py` vérifie dix propriétés sans la machine.
+`verifier_les_tests.py` casse chacune et exige que le test la voie.
+`test_pupitre.py` inspecte l'interface elle-même.
 
 Chaque test rejoue une faute RÉELLE de la mise au point, pas une faute
 imaginable : coordonnées décimales, croix de raccord unique, repassage qui
@@ -504,6 +507,15 @@ avant de servir.
 `verifier_les_tests.py` introduit chaque faute en mémoire et exige que le
 test correspondant échoue. Un test qui passe malgré la faute est signalé
 comme aveugle.
+
+`test_pupitre.py` vient d'une faute que seule une capture d'écran avait
+vue : la liste « outil » avait DISPARU de l'interface, une renumérotation
+des lignes s'étant appliquée en cascade — 1 devient 3, puis 3 devient 5,
+puis 5 devient 7 — jusqu'à ce que le champ occupe la case d'un autre. Rien
+n'avait protesté : le fichier compilait, le champ existait, il répondait
+aux réglages. Il n'était plus visible, voilà tout. Qt empile deux widgets
+rangés dans la même case sans un mot. Le test le dit maintenant, et il a
+été éprouvé en remettant la faute.
 
 ## Par où commencer
 

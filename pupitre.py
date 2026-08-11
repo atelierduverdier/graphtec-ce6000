@@ -210,15 +210,19 @@ class Pupitre(QWidget):
         # HP-GL est ignoré par cette machine. Elle MODIFIE DURABLEMENT la
         # condition enregistrée, comme le fait le logiciel Graphtec.
         self.spn_vit = self._entier(1, 64, 10, suffixe=" cm/s")
+        # L'accélération n'a que TROIS crans sur cette machine : demander 4
+        # est écrêté à 3 sans un mot. La borne est dans conditions.BORNES.
+        self.spn_accel = self._entier(1, 3, 2)
         self.chk_regler = QCheckBox("régler la machine à l'envoi")
         self.chk_regler.setChecked(True)
         gl.addWidget(QLabel("condition"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
         gl.addWidget(QLabel("vitesse"), 1, 0); gl.addWidget(self.spn_vit, 1, 1)
         gl.addWidget(QLabel("force"), 2, 0); gl.addWidget(self.spn_force, 2, 1)
-        gl.addWidget(self.chk_regler, 3, 0, 1, 2)
-        rappel = QLabel("l'accélération reste au panneau,\nCONDITION → ACCEL")
+        gl.addWidget(QLabel("accélération"), 3, 0); gl.addWidget(self.spn_accel, 3, 1)
+        gl.addWidget(self.chk_regler, 4, 0, 1, 2)
+        rappel = QLabel("accélération basse = trait net,\nhaute = travail plus court")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 4, 0, 1, 2)
+        gl.addWidget(rappel, 5, 0, 1, 2)
         v.addWidget(g)
 
         self.b_envoyer = QPushButton("Envoyer au traceur")
@@ -341,10 +345,12 @@ class Pupitre(QWidget):
             if self.chk_regler.isChecked():
                 import conditions
                 rendu = conditions.appliquer(vitesse=self.spn_vit.value(),
+                                             acceleration=self.spn_accel.value(),
                                              condition=condition)
                 douteux = [n for n, _, e in rendu if e != "0"]
                 regle = (f"condition {condition} réglée à "
-                         f"{self.spn_vit.value()} cm/s"
+                         f"{self.spn_vit.value()} cm/s, accél. "
+                         f"{self.spn_accel.value()}"
                          + (f" (états douteux : {douteux})" if douteux else "")
                          + " — ")
             envoye = noyau.envoyer(programme)

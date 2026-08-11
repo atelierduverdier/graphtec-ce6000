@@ -370,11 +370,24 @@ Réglages : origine X/Y, rotation par quarts de tour, miroirs, échelle libre
 ou ajustée au média, **copies matricielles** (rangées × colonnes, écarts),
 condition, **vitesse et force**. L'envoi se refuse tant que le dessin déborde.
 
-La vitesse passe par `conditions.py` et le protocole `TC` — elle **modifie
-durablement** la condition enregistrée dans la machine, exactement comme le
-fait Graphtec Studio, d'où la case « régler la machine à l'envoi » qu'on peut
-décocher. L'accélération n'a pas encore sa commande identifiée : elle reste
-au panneau.
+Vitesse, force et accélération passent par `conditions.py` et le protocole
+`TC` — elles **modifient durablement** la condition enregistrée dans la
+machine, exactement comme le fait Graphtec Studio, d'où la case « régler la
+machine à l'envoi » qu'on peut décocher.
+
+| Paramètre | Commande | Plage |
+|---|---|---|
+| vitesse | `TC1002,3,<cond>,<cm/s × 10>` | 1 à 640, soit 64 cm/s |
+| force | `TC1002,4,<cond>,<n>` | 1 à 38 |
+| accélération | `TC1002,5,<cond>,<n>` | **1 à 3 seulement** |
+
+**La machine ÉCRÊTE sans un mot** : une accélération 4 demandée est appliquée
+à 3, ce qui ressemble d'abord à un décalage d'une unité. `conditions.BORNES`
+refuse la valeur plutôt que de laisser croire qu'on a réglé ce qu'on n'a pas.
+
+Trois crans d'accélération seulement, c'est peu — et c'est pourtant elle qui
+plafonne les temps de tracé (voir plus bas). Attendre plus de ~12 cm/s
+effectifs sur un parcours à virages est illusoire.
 
 Le réordonnancement du trajet ne tourne qu'à l'envoi : il est en n², donc
 trop lourd à rejouer à chaque mouvement d'un réglage, et il ne change rien à

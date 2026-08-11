@@ -13,8 +13,9 @@ RIEN — c'est ce qui a fait croire pendant une soirée qu'elle était sourde.
 
 Paramètres identifiés, chacun vérifié en le lisant sur le panneau :
 
-    3  vitesse, en cm/s × 10   (250 = 25 cm/s)
+    3  vitesse, en cm/s × 10   (250 = 25 cm/s), maximum 640
     4  force, 1 à 38
+    5  accélération, 1 à 3 SEULEMENT
 
 Les autres (`TC1002,2`, `TC1002,5`, `TC1002,14`, et les familles `TC1004`,
 `TC1006`, `TC1010`) apparaissent dans les captures sans qu'on sache encore
@@ -35,6 +36,17 @@ TAILLE_PAQUET = 8
 
 VITESSE = 3               # cm/s × 10
 FORCE = 4                 # 1 à 38
+ACCELERATION = 5          # 1 à 3 seulement
+
+# Bornes relevées sur le panneau. La machine ÉCRÊTE sans rien dire : une
+# accélération 4 demandée est appliquée à 3, ce qui a d'abord ressemblé à un
+# décalage d'une unité. Valider ici évite de croire qu'on a réglé une valeur
+# qu'on n'a pas.
+BORNES = {
+    VITESSE: (1, 640),    # en dixièmes de cm/s : 64 cm/s au maximum
+    FORCE: (1, 38),
+    ACCELERATION: (1, 3),
+}
 
 _ETAT = "\x1b.v:\x1b.C1:"
 
@@ -78,6 +90,11 @@ def regler(fd, parametre, valeur, condition=1, patience=30):
     prouver que la transaction s'est bien déroulée : on doit y voir des
     `8` puis un `0`.
     """
+    mini, maxi = BORNES.get(parametre, (None, None))
+    if mini is not None and not mini <= int(valeur) <= maxi:
+        raise ValueError(
+            f"paramètre {parametre} : {valeur} hors de [{mini}, {maxi}] — "
+            f"la machine écrêterait en silence")
     _ecrire(fd, f"\x1b.v:TC1002,{parametre},{condition},{valeur}\x03")
     etats = []
     for _ in range(patience):
@@ -89,9 +106,10 @@ def regler(fd, parametre, valeur, condition=1, patience=30):
     return etats
 
 
-def appliquer(vitesse=None, force=None, condition=1, periph=PERIPH):
-    """Règle vitesse (cm/s) et force sur une condition. Rend un compte rendu."""
-    if vitesse is None and force is None:
+def appliquer(vitesse=None, force=None, acceleration=None,
+              condition=1, periph=PERIPH):
+    """Règle vitesse (cm/s), force et accélération. Rend un compte rendu."""
+    if vitesse is None and force is None and acceleration is None:
         return []
     rendu = []
     fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
@@ -102,6 +120,10 @@ def appliquer(vitesse=None, force=None, condition=1, periph=PERIPH):
         if force is not None:
             etats = regler(fd, FORCE, int(force), condition)
             rendu.append(("force", force, etats[-1] if etats else "?"))
+        if acceleration is not None:
+            etats = regler(fd, ACCELERATION, int(acceleration), condition)
+            rendu.append(("accélération", acceleration,
+                          etats[-1] if etats else "?"))
     finally:
         os.close(fd)
     return rendu

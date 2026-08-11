@@ -131,6 +131,12 @@ def main():
                          "<condition>,<VALEUR>. Connus : 3 = vitesse (cm/s "
                          "× 10), 4 = force. Les autres sont à identifier — "
                          "la machine affiche le résultat, elle tranche.")
+    ap.add_argument("--balayer", type=int, metavar="PARAM",
+                    help="écrit 1,2,…,8 sur les huit conditions pour ce "
+                         "paramètre. Le panneau affichant les huit d'un coup, "
+                         "une seule lecture donne la correspondance ENTIÈRE "
+                         "entre valeur envoyée et valeur affichée, décalage "
+                         "et bornes compris. ÉCRASE les huit conditions.")
     ap.add_argument("--pas", type=int, default=PAS_PAR_MM,
                     help=f"pas par millimètre (défaut {PAS_PAR_MM}, "
                          f"soit 0,1 mm par pas)")
@@ -141,6 +147,25 @@ def main():
     args = ap.parse_args()
 
     sep = SEPARATEURS[args.separateur]
+
+    if args.balayer:
+        if not args.envoyer:
+            print(f"écrirait TC1002,{args.balayer},<n>,<n> pour n de 1 à 8 "
+                  f"— ajouter --envoyer")
+            return
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import conditions
+        fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
+        try:
+            for n in range(1, 9):
+                etats = conditions.regler(fd, args.balayer, n, condition=n)
+                print(f"  condition {n} <- {n}   état final "
+                      f"{etats[-1] if etats else '?'!r}")
+        finally:
+            os.close(fd)
+        print("\nLis la ligne du panneau : elle doit afficher 1 2 3 4 5 6 7 8.")
+        print("Toute autre suite dit le décalage ou les bornes du paramètre.")
+        return
 
     prefixe = ""
     if args.regler:

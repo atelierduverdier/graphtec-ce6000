@@ -29,6 +29,63 @@ Réglages du panneau : `COMMAND` → `HP-GL`, `MODEL EMULATED` → `7586`
 (le 7550 est un traceur de bureau A3 dont l'espace de coordonnées est petit),
 `HP-GL ORIGIN POINT` → coin.
 
+### La machine dit TOUT d'elle-même, en clair, en une commande
+
+**Trouvé le 11/08/2026, et ça relativise la journée entière qui précède.**
+
+```
+ESC . v : TC2009,5 ␃
+```
+
+rend **quatre kilo-octets de configuration en texte lisible** : les huit
+conditions de découpe, les réglages d'outil, l'ARMS, la surface, le média,
+l'interface, les commandes, l'avancé. Chaque ligne est nommée en clair.
+
+```
+[TOOLS]
+STEP PASS=7
+OFFSET FORCE=30
+OFFSET ANGLE=30
+DATA SORT=OFF
+TOOL UP SPEED=40
+CONDITION PRIORITY=PROGRAM
+INITIAL BLADE=2mm BELOW
+TOOL UP MOVE=DISABLED
+```
+
+`etat_machine.py` la lit, l'analyse, met les huit conditions en tableau,
+enregistre un vidage et **compare deux états** — donc nomme un réglage sans
+qu'on ait à deviner dans quelle famille numérique il se cache.
+
+```bash
+python3 etat_machine.py --conditions
+python3 etat_machine.py --section TOOLS
+python3 etat_machine.py --comparer etat_2026-08-11.txt
+```
+
+Et `TC2010,9` rend le **journal d'erreurs horodaté**, nos propres bêtises
+comprises : `HP-GL ERREUR 1 INSTRUCTION INCONNUE`, `DANGER COMMANDE = AUTO`,
+`ERREUR REPLACER GALETS`. Les horodatages sont négatifs — des heures écoulées
+depuis maintenant.
+
+**Ce que le vidage confirme d'un coup**, après qu'on l'eut établi
+péniblement : `HP-GL MODEL EMULATED=7586`, `HP-GL ORIGIN=LOWER LEFT`,
+`COMMAND=AUTO`, `GP-GL STEP SIZE=0.100 mm`, `CONDITION PRIORITY=PROGRAM` — ce
+dernier ayant coûté une soirée à comprendre. Toutes les mesures étaient
+justes. Toutes tenaient en une ligne que la machine savait dire.
+
+**Comment il a été trouvé, et pourquoi si tard.** Un premier balayage des
+familles `TC2000`–`TC2020` n'avait interrogé que leurs paramètres 1 à 3 et
+conclu que deux familles répondaient — alors qu'on savait déjà que `TC2004` ne
+répond qu'au 6 et `TC2006` au 13. Une sonde trop courte rend des absences qui
+ressemblent à des faits. Le balayage refait sur 1 à 25 a trouvé **60
+paramètres** et six familles, dont celle-ci.
+
+**Ce qu'il ne fait pas** : il ne LIT que. L'écriture reste `TC1002`, et le
+relevé encadrant garde son usage — trouver comment écrire un réglage qu'on
+sait maintenant lire. Il ne dit rien non plus de l'état courant du chariot ni
+du média chargé.
+
 ### La vitesse SE pilote — par le protocole propriétaire `TC`
 
 **Correction du 11/08/2026.** Ce fichier a d'abord affirmé, en gras, que la
@@ -550,20 +607,24 @@ Studio avait **trois** panneaux là où le pupitre n'en a qu'un.
 
 | Réglage de Studio | Valeur vue sur la capture | État |
 |---|---|---|
-| Passe-pas (Step Pass) | 1 | **pas dans les conditions** — voir ci-dessous |
-| Force d'offset | 30 | à nommer |
-| Angle d'offset | 30° | à nommer |
-| Position initiale de la lame | 2 mm en-deçà / dehors | à nommer |
-| **Vitesse outil relevé** | 40 cm/s | à nommer — c'est elle qui fixe la durée des trajets à vide, donc du travail |
-| Déplacer activé/désactivé | — | à nommer |
+| Passe-pas (Step Pass) | 1 | **lu** : `[TOOLS] STEP PASS` |
+| Force d'offset | 30 | **lu** : `OFFSET FORCE` |
+| Angle d'offset | 30° | **lu** : `OFFSET ANGLE` |
+| Position initiale de la lame | 2 mm en-deçà / dehors | **lu** : `INITIAL BLADE` |
+| **Vitesse outil relevé** | 40 cm/s | **lu** : `TOOL UP SPEED`, et probablement `TC2008,2` qui vaut 400 |
+| Déplacer activé/désactivé | — | **lu** : `TOOL UP MOVE` |
+
+Tous lisibles depuis `etat_machine.py`. Reste à trouver comment les **écrire** :
+le relevé encadrant sert encore à ça, et il est maintenant beaucoup plus rapide
+puisqu'on peut vérifier d'un coup d'œil que la manipulation a pris.
 
 #### Panneau « Avancé » et média
 
 | Réglage | État |
 |---|---|
-| Mode média épais (tangentiel) : désactivé / mode 1 / mode 2 | à nommer |
-| Ajustement de la distance X / Y | **désactivé** sur la capture (X 0,59 et Y 0,00 affichés mais inactifs) ; notre carré de 60 mm sort juste sans lui |
-| Pré-alimentation automatique | à nommer |
+| Mode média épais (tangentiel) : désactivé / mode 1 / mode 2 | **lu** par condition : `TANGENTIAL MODE`, à 1 sur la n° 8 |
+| Ajustement de la distance X / Y | **lu** : `D. ADJ.=OFF` avec `X=0.59`, `Y=0.00` sur la condition 1 — désactivé, la capture Studio disait vrai, et notre carré de 60 mm sort juste sans lui |
+| Pré-alimentation automatique | **lu** : `[MEDIA] AUTO PRE FEED=OFF`, `AUTO PRE FEED LENGTH=500.0mm` |
 | Langue, unité, taille du pas, ventilateur, capteurs, bip | réglages de machine, pas de travail — le panneau les porte très bien |
 
 #### Ce qu'on a en plus

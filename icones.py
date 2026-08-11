@@ -28,6 +28,13 @@ LAMES = {
     "CB15UB": (1.5, 60),
 }
 
+# Déport interne associé à chaque lame par le firmware, en unités machine
+# (manuel CE6000, « Référence des lames, type de lame affiché et valeur de
+# l'OFFSET »). Le champ OFFSET de la condition n'est PAS ce nombre : c'est
+# une retouche de ±5 autour, valant 0 par défaut pour les deux lames -- ce
+# qui explique qu'un changement de lame ne le fasse pas bouger.
+DEPORTS = {"CB09U": 19, "CB15U": 29, "Autre": None, "Stylo feutre": 0}
+
 # Plages d'épaisseur, relevées dans les descriptions du logiciel Graphtec.
 # C'est du constructeur, pas une déduction -- et ça ne se devine pas.
 EPAISSEURS = {
@@ -122,6 +129,9 @@ def legende(nom):
         if nom in EPAISSEURS:
             mini, maxi, usage = EPAISSEURS[nom]
             texte += f"\nSupports de {mini:g} à {maxi:g} mm — {usage}."
+        if DEPORTS.get(nom):
+            texte += (f"\nDéport {DEPORTS[nom]}, appliqué par le firmware ; "
+                      f"le champ OFFSET ne fait que le retoucher de ±5.")
         return texte
     if nom == "Stylo feutre":
         return "plume : aucun déport, la machine ne compense pas."

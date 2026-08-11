@@ -528,7 +528,70 @@ serait pas sur l'autre.
 
 ### Ce que le logiciel d'origine faisait, et où on en est
 
-Relevé sur 18 captures de Graphtec Studio v2.70.
+Relevé sur 18 captures de Graphtec Studio v2.70. Christophe, le 11/08/2026 :
+« ça me paraît léger les réglages par rapport au logiciel officiel ». Il avait
+raison, et le compte exact suit.
+
+Studio avait **trois** panneaux là où le pupitre n'en a qu'un.
+
+#### Panneau « Condition » — celui qu'on couvre
+
+| Réglage de Studio | Chez nous |
+|---|---|
+| Type d'outil | **oui**, avec icônes dessinées d'après le diamètre et l'angle |
+| Offset | **oui** depuis le 11/08/2026, −5 à +5, grisé pour un stylo |
+| Vitesse | **oui** |
+| Accélération | **oui** |
+| Force de coupe | **oui** |
+| Motif de ligne de découpe (styles 1-9 + 3 utilisateur) | **autrement** : perforation logicielle en longueurs exactes, `--perforation 8,0.25`. Studio lui-même offrait le choix entre « perforation du cutter » et « du logiciel » |
+| Passages | **non** — présent dans `materiaux.py` (2 pour les plumes) mais pas branché dans la chaîne. C'est la réponse au trait pâle du premier essai |
+
+#### Panneau « Paramètres outil » — celui qu'on ne couvre pas du tout
+
+| Réglage de Studio | Valeur vue sur la capture | État |
+|---|---|---|
+| Passe-pas (Step Pass) | 1 | à nommer — `TC2002,15` vaut 1, hypothèse |
+| Force d'offset | 30 | à nommer |
+| Angle d'offset | 30° | à nommer |
+| Position initiale de la lame | 2 mm en-deçà / dehors | à nommer |
+| **Vitesse outil relevé** | 40 cm/s | à nommer — c'est elle qui fixe la durée des trajets à vide, donc du travail |
+| Déplacer activé/désactivé | — | à nommer |
+
+#### Panneau « Avancé » et média
+
+| Réglage | État |
+|---|---|
+| Mode média épais (tangentiel) : désactivé / mode 1 / mode 2 | à nommer |
+| Ajustement de la distance X / Y | **désactivé** sur la capture (X 0,59 et Y 0,00 affichés mais inactifs) ; notre carré de 60 mm sort juste sans lui |
+| Pré-alimentation automatique | à nommer |
+| Langue, unité, taille du pas, ventilateur, capteurs, bip | réglages de machine, pas de travail — le panneau les porte très bien |
+
+#### Ce qu'on a en plus
+
+Le compte serait malhonnête sans l'autre colonne : mosaïque avec repères
+d'assemblage, perforation aux longueurs voulues plutôt que neuf motifs figés,
+réordonnancement des chemins pour raccourcir les trajets à vide, relecture
+systématique de chaque réglage écrit, et un gabarit TechDraw à la taille utile
+du traceur.
+
+#### Comment combler le reste
+
+Onze paramètres répondent sur la condition 1, **cinq sont nommés**. Les six
+autres sont très probablement dans les tableaux ci-dessus. `chercher_parametre.py`
+les nomme un par un, en trois minutes chacun :
+
+```bash
+python3 chercher_parametre.py --debut
+```
+
+changer UNE chose au panneau, revenir à `READY`, puis :
+
+```bash
+python3 chercher_parametre.py --fin "step pass"
+```
+
+`--reste` liste ce qui manque. Chemin du Step Pass au panneau, pour commencer :
+`[PAUSE/MENU]` → `[1]` (TOOL) → `[2]` (PAS).
 
 **Déjà porté par la machine**, rien à écrire : les 8 conditions, que le
 fichier sélectionne par `SP1`..`SP8` ; la compensation d'offset de lame et

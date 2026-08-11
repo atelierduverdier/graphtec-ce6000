@@ -88,11 +88,13 @@ Le détour par le GP-GL n'aura donc rien donné sur la vitesse. Il aura prouvé
 que la machine l'accepte : rectangle de 60 × 30 mm exact, syntaxe `M`/`D`,
 séparateur retour-ligne, pas de 0,1 mm (`sonde_gpgl.py`).
 
-**Le seul chemin restant**, si le pilotage depuis le PC devenait nécessaire :
-capturer le flux USB de Graphtec Studio sous Windows (Wireshark + USBPcap).
-Il révélerait tout le protocole réel d'un coup — vitesse, mais aussi
-passages, perforation, mode média épais — au lieu de le deviner commande par
-commande, ce qui a échoué trois fois ici.
+**C'est cette impasse qui a mené à la capture USB**, et elle a tout débloqué
+en une heure là où trois suppositions avaient échoué. La leçon vaut au-delà
+du traceur : quand deux ou trois essais à l'aveugle échouent sur une question
+fermée, il est temps d'aller regarder ce que fait celui qui sait déjà.
+
+Les chiffres d'accélération ci-dessus, eux, restent valables : c'est bien
+elle qui plafonne, et sa commande n'est pas encore identifiée.
 
 ### `FS` est écouté, `VS` ne l'est PAS
 
@@ -108,8 +110,8 @@ puis à `VS40` — huit fois l'écart — a duré **30 s dans les deux cas**, so
 85 mm/s. C'est la vitesse de la condition réglée au panneau (10 cm/s, moins
 ce que coûtent les virages). Aucun script du dépôt n'émet donc `VS` : un
 réglage qui ne fait rien est pire qu'absent, il fait croire qu'on a agi.
-**Vitesse et accélération se règlent au panneau**, `CONDITION` → `VITESSE` /
-`ACCEL`.
+La vitesse passe désormais par le protocole `TC` (voir plus haut) ; seule
+l'**accélération** reste sans commande connue, `CONDITION` → `ACCEL`.
 
 `sonde_vitesse.py` garde la trace de la méthode, et surtout **des deux qui
 ont échoué avant** : `OA;` rend la position **logique**, pas celle du

@@ -53,10 +53,70 @@ class Apercu(QWidget):
         self.emprise = None
         self.deborde = False
         self.tuiles = []
+        self.zoom = 1.0
+        self.decalage = QPointF(0, 0)
+        self._saisie = None
+        self.setCursor(Qt.OpenHandCursor)
 
     def habiller(self, palette):
         self.pal = palette
         self.update()
+
+    def reinitialiser_vue(self):
+        """Recadre sur l'ensemble. Appelé à l'ouverture d'un dessin, pas à
+        chaque réglage : garder le zoom en ajustant l'échelle ou l'origine
+        est tout l'intérêt de pouvoir zoomer."""
+        self.zoom = 1.0
+        self.decalage = QPointF(0, 0)
+        self.update()
+
+    def _cadrage(self):
+        """(k, ox, oy) : échelle et origine de l'aperçu, zoom compris."""
+        mx, my = self.media
+        vx, vy = mx, my
+        if self.emprise:
+            vx = max(vx, self.emprise[2])
+            vy = max(vy, self.emprise[3])
+        marge = 14
+        k = min((self.width() - 2 * marge) / max(vx, 1e-6),
+                (self.height() - 2 * marge) / max(vy, 1e-6)) * self.zoom
+        ox = (self.width() - vx * k) / 2 + self.decalage.x()
+        oy = (self.height() + vy * k) / 2 + self.decalage.y()
+        return k, ox, oy
+
+    def wheelEvent(self, e):
+        """Zoom autour du curseur : le point visé ne bouge pas.
+
+        Zoomer autour du CENTRE obligerait à recentrer après chaque cran,
+        ce qui rend l'examen d'un raccord pénible — et c'est précisément
+        pour examiner les raccords qu'on zoome.
+        """
+        k, ox, oy = self._cadrage()
+        px, py = (e.position().x() - ox) / k, (oy - e.position().y()) / k
+        crans = e.angleDelta().y() / 120.0
+        self.zoom = max(0.25, min(60.0, self.zoom * (1.18 ** crans)))
+        k2, ox2, oy2 = self._cadrage()
+        self.decalage += QPointF(e.position().x() - (ox2 + px * k2),
+                                 e.position().y() - (oy2 - py * k2))
+        self.update()
+
+    def mousePressEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self._saisie = e.position()
+            self.setCursor(Qt.ClosedHandCursor)
+
+    def mouseMoveEvent(self, e):
+        if self._saisie is not None:
+            self.decalage += e.position() - self._saisie
+            self._saisie = e.position()
+            self.update()
+
+    def mouseReleaseEvent(self, e):
+        self._saisie = None
+        self.setCursor(Qt.OpenHandCursor)
+
+    def mouseDoubleClickEvent(self, _e):
+        self.reinitialiser_vue()
 
     def poser(self, polylignes, media, deborde, tuiles=()):
         self.media = media
@@ -73,20 +133,12 @@ class Apercu(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         p.fillRect(self.rect(), QColor(pal.ardoise))
 
-        mx, my = self.media
-        # Cadrer sur l'UNION du média et du dessin : en mosaïque le dessin
+        # Cadrage sur l'UNION du média et du dessin : en mosaïque le dessin
         # déborde par construction, et un cadrage sur le seul média le
         # ferait sortir de l'aperçu — là même où l'on a le plus besoin de
         # le voir en entier.
-        vx, vy = mx, my
-        if self.emprise:
-            vx = max(vx, self.emprise[2])
-            vy = max(vy, self.emprise[3])
-        marge = 14
-        k = min((self.width() - 2 * marge) / max(vx, 1e-6),
-                (self.height() - 2 * marge) / max(vy, 1e-6))
-        ox = (self.width() - vx * k) / 2
-        oy = (self.height() + vy * k) / 2          # Y vers le haut
+        mx, my = self.media
+        k, ox, oy = self._cadrage()
 
         def pt(x, y):
             return QPointF(ox + x * k, oy - y * k)
@@ -123,7 +175,11 @@ class Apercu(QWidget):
 
         p.setPen(QColor(pal.texte_faible))
         p.drawText(8, self.height() - 8,
-                   f"média {mx:.1f} × {my:.1f} mm")
+                   f"média {mx:.1f} × {my:.1f} mm"
+                   + (f"   —   zoom ×{self.zoom:.1f}, molette pour zoomer, "
+                      f"glisser pour déplacer, double-clic pour recadrer"
+                      if abs(self.zoom - 1.0) > 0.01 else
+                      "   —   molette pour zoomer"))
 
 
 # ======================================================================
@@ -770,6 +826,8 @@ class Pupitre(QWidget):
                                  ("\n⚠ " + "\n⚠ ".join(avertissements)
                                   if avertissements else ""))
         self.b_envoyer.setEnabled(True)
+        # Un dessin neuf mérite un cadrage neuf ; un simple réglage, non.
+        self.apercu.reinitialiser_vue()
         self._recalculer()
 
     def _interroger_media(self, silencieux):

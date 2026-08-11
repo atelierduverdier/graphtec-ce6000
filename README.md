@@ -488,7 +488,8 @@ tracé et de l'usure de courroie. L'exporteur d'Inkscape ne réordonne pas.
 ```
 
 Ensuite on clique l'icône, et rien d'autre. Le pupitre ouvre un SVG, le
-place sur le média, règle la machine et l'envoie.
+place sur le média, le découpe en panneaux s'il est trop grand, règle la
+machine et l'envoie — feuille par feuille s'il le faut.
 
 Le dépôt s'organise en trois étages, du quotidien vers l'archéologie :
 

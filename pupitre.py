@@ -20,7 +20,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import svg2hpgl as noyau                                    # noqa: E402
+import svg2hpgl as noyau
+import mosaique                                    # noqa: E402
 from theme import SOMBRE, CLAIR, feuille_de_style           # noqa: E402
 import conditions as machine                                # noqa: E402
 import icones                                               # noqa: E402
@@ -51,14 +52,16 @@ class Apercu(QWidget):
         self.polygones = []
         self.emprise = None
         self.deborde = False
+        self.tuiles = []
 
     def habiller(self, palette):
         self.pal = palette
         self.update()
 
-    def poser(self, polylignes, media, deborde):
+    def poser(self, polylignes, media, deborde, tuiles=()):
         self.media = media
         self.deborde = deborde
+        self.tuiles = list(tuiles)
         self.polygones = [QPolygonF([QPointF(x, y) for x, y in pts])
                           for pts, _ in polylignes]
         self.emprise = noyau.cadre(polylignes) if polylignes else None
@@ -71,11 +74,19 @@ class Apercu(QWidget):
         p.fillRect(self.rect(), QColor(pal.ardoise))
 
         mx, my = self.media
+        # Cadrer sur l'UNION du média et du dessin : en mosaïque le dessin
+        # déborde par construction, et un cadrage sur le seul média le
+        # ferait sortir de l'aperçu — là même où l'on a le plus besoin de
+        # le voir en entier.
+        vx, vy = mx, my
+        if self.emprise:
+            vx = max(vx, self.emprise[2])
+            vy = max(vy, self.emprise[3])
         marge = 14
-        k = min((self.width() - 2 * marge) / max(mx, 1e-6),
-                (self.height() - 2 * marge) / max(my, 1e-6))
-        ox = (self.width() - mx * k) / 2
-        oy = (self.height() + my * k) / 2          # Y vers le haut
+        k = min((self.width() - 2 * marge) / max(vx, 1e-6),
+                (self.height() - 2 * marge) / max(vy, 1e-6))
+        ox = (self.width() - vx * k) / 2
+        oy = (self.height() + vy * k) / 2          # Y vers le haut
 
         def pt(x, y):
             return QPointF(ox + x * k, oy - y * k)
@@ -99,6 +110,16 @@ class Apercu(QWidget):
                           1, Qt.DotLine))
             p.setBrush(Qt.NoBrush)
             p.drawRect(QRectF(pt(x0, y1), pt(x1, y0)))
+
+        # les tuiles de la mosaïque, par-dessus tout le reste
+        if self.tuiles:
+            p.setBrush(Qt.NoBrush)
+            for n, (x0, y0, x1, y1) in enumerate(self.tuiles, 1):
+                p.setPen(QPen(QColor(pal.accent), 1.4))
+                p.drawRect(QRectF(pt(x0, y1), pt(x1, y0)))
+                p.setPen(QColor(pal.accent))
+                p.drawText(QRectF(pt(x0, y1), pt(x1, y0)).adjusted(5, 3, 0, 0),
+                           Qt.AlignLeft | Qt.AlignTop, str(n))
 
         p.setPen(QColor(pal.texte_faible))
         p.drawText(8, self.height() - 8,
@@ -291,6 +312,34 @@ class Pupitre(QWidget):
         gl.addWidget(b_ajuster, 5, 0, 1, 2)
         g_placement = g
 
+        # --- mosaïque
+        g = QGroupBox("Mosaïque")
+        gl = QGridLayout(g)
+        self.chk_mosaique = QCheckBox("découper en panneaux")
+        self.chk_mosaique.setToolTip(
+            "Pour un dessin plus grand que le média. Chaque panneau est\n"
+            "tracé sur une feuille, et les DEUX croix de la bande de\n"
+            "recouvrement servent à les raccorder : une seule ne fixerait\n"
+            "que la translation, pas l'angle.")
+        self.chk_mosaique.stateChanged.connect(self._recalculer)
+        self.spn_pan_x = self._reel(50, 700, 330.0)
+        self.spn_pan_y = self._reel(50, 700, 250.0)
+        self.spn_recouv = self._reel(0, 50, 5.0)
+        b_pan_media = QPushButton("Panneau = média")
+        b_pan_media.setToolTip("Reprend les cotes du média, moins 10 mm de "
+                               "garde sur chaque bord.")
+        b_pan_media.clicked.connect(self._panneau_selon_media)
+        self.lbl_mosaique = QLabel("inactive")
+        self.lbl_mosaique.setObjectName("faible")
+        self.lbl_mosaique.setWordWrap(True)
+        gl.addWidget(self.chk_mosaique, 0, 0, 1, 2)
+        gl.addWidget(QLabel("panneau L"), 1, 0); gl.addWidget(self.spn_pan_x, 1, 1)
+        gl.addWidget(QLabel("panneau H"), 2, 0); gl.addWidget(self.spn_pan_y, 2, 1)
+        gl.addWidget(QLabel("recouvrement"), 3, 0); gl.addWidget(self.spn_recouv, 3, 1)
+        gl.addWidget(b_pan_media, 4, 0, 1, 2)
+        gl.addWidget(self.lbl_mosaique, 5, 0, 1, 2)
+        g_mosaique = g
+
         # --- copies
         g = QGroupBox("Copies matricielles")
         gl = QGridLayout(g)
@@ -389,7 +438,7 @@ class Pupitre(QWidget):
 
         self.onglets = QTabWidget()
         self.onglets.addTab(onglet(b_ouvrir, self.lbl_fichier, g_media,
-                                   g_placement), "Dessin")
+                                   g_placement, g_mosaique), "Dessin")
         self.onglets.addTab(onglet(g_outil, g_copies), "Outil")
         self.onglets.addTab(onglet(self._groupe_machine()), "Machine")
         v.addWidget(self.onglets, 1)
@@ -760,6 +809,19 @@ class Pupitre(QWidget):
                             self.spn_ex.value(), self.spn_ey.value())
         return noyau.recadrer(p, self.spn_x.value(), self.spn_y.value())
 
+    def _panneau_selon_media(self):
+        """Panneau = média moins 10 mm de garde sur chaque bord."""
+        self.spn_pan_x.setValue(max(50.0, self.spn_mx.value() - 10))
+        self.spn_pan_y.setValue(max(50.0, self.spn_my.value() - 10))
+
+    def _panneaux(self):
+        """Découpe courante, ou [] si la mosaïque est inactive."""
+        if not (self.chk_mosaique.isChecked() and self.calcule):
+            return []
+        return mosaique.mosaique(self.calcule,
+                                 (self.spn_pan_x.value(), self.spn_pan_y.value()),
+                                 self.spn_recouv.value())
+
     def _recalculer(self):
         self.media = (self.spn_mx.value(), self.spn_my.value())
         if not self.brut:
@@ -768,13 +830,35 @@ class Pupitre(QWidget):
         self.calcule = self._pipeline()
         x0, y0, x1, y1 = noyau.cadre(self.calcule)
         deborde = x1 > self.media[0] or y1 > self.media[1]
-        self.apercu.poser(self.calcule, self.media, deborde)
+
+        panneaux = self._panneaux()
+        if panneaux:
+            trop = [n for n, (_i, _j, r, _m) in enumerate(panneaux, 1)
+                    if r[2] - r[0] > self.media[0] or r[3] - r[1] > self.media[1]]
+            self.lbl_mosaique.setText(
+                f"{len(panneaux)} panneau(x) de "
+                f"{self.spn_pan_x.value():.0f} × {self.spn_pan_y.value():.0f} mm"
+                + (f" — le(s) n° {trop} ne tient pas dans le média"
+                   if trop else ", chacun tient dans le média"))
+            # En mosaïque, déborder est le point de départ, pas une faute :
+            # ce qui compte est que chaque PANNEAU tienne.
+            deborde = bool(trop)
+        else:
+            self.lbl_mosaique.setText(
+                "inactive" if not self.chk_mosaique.isChecked()
+                else "aucun dessin à découper")
+
+        self.apercu.poser(self.calcule, self.media, deborde,
+                          [p[2] for p in panneaux])
 
         n = len(self.calcule)
         texte = (f"{n} tracé(s) — emprise {x1 - x0:.1f} × {y1 - y0:.1f} mm, "
                  f"coin à {x0:.1f}, {y0:.1f}")
+        if panneaux:
+            texte += f"  —  {len(panneaux)} panneaux"
         if deborde:
-            texte += "  —  LE DESSIN DÉBORDE DE LA ZONE UTILE"
+            texte += ("  —  UN PANNEAU DÉBORDE" if panneaux
+                      else "  —  LE DESSIN DÉBORDE DE LA ZONE UTILE")
         self.info.setText(texte)
         # Un message d'alerte doit aussi en avoir la couleur : un texte
         # rouge sous un style neutre ne se lit pas comme un refus.
@@ -786,15 +870,31 @@ class Pupitre(QWidget):
         # Le réordonnancement ne tourne qu'ici : il est en n², donc trop
         # lourd à rejouer à chaque mouvement d'un réglage, et il ne change
         # rien à ce que l'aperçu montre.
-        avant = noyau.trajet_a_vide(self.calcule)
-        candidat = noyau.ordonner(self.calcule)
-        apres = noyau.trajet_a_vide(candidat)
-        chemins = candidat if apres < avant else self.calcule
-
         condition = self.cmb_cond.currentIndex() + 1
-        programme, _ = noyau.en_hpgl(chemins, condition,
-                                     self.spn_force.value(),
-                                     self.spn_passages.value())
+        panneaux = self._panneaux()
+
+        # Un travail est une LISTE d'envois : un seul d'ordinaire, autant que
+        # de panneaux en mosaïque. Le reste du code ne fait pas la
+        # différence, ce qui évite deux chemins parallèles à maintenir.
+        if panneaux:
+            lots = [(f"panneau {n}/{len(panneaux)}", m)
+                    for n, (_i, _j, _r, m) in enumerate(panneaux, 1)]
+        else:
+            lots = [("", self.calcule)]
+
+        programmes, gains = [], []
+        for nom, morceaux in lots:
+            av = noyau.trajet_a_vide(morceaux)
+            cand = noyau.ordonner(morceaux)
+            ap = noyau.trajet_a_vide(cand)
+            prog, _ = noyau.en_hpgl(cand if ap < av else morceaux, condition,
+                                    self.spn_force.value(),
+                                    self.spn_passages.value())
+            programmes.append((nom, prog))
+            gains.append((min(ap, av), (1 - min(ap, av) / av) * 100 if av else 0))
+        avant = sum(g[0] for g in gains)
+        apres = avant
+        programme = programmes[0][1]
 
         # UN SEUL descripteur pour régler PUIS envoyer. Le pupitre en
         # ouvrait trois d'affilée — outil, conditions, envoi — et fermer
@@ -829,16 +929,33 @@ class Pupitre(QWidget):
                 regle = (f"condition {condition} réglée à "
                          f"{self.spn_vit.value()} cm/s, accél. "
                          f"{self.spn_accel.value()} — ")
-            envoye = noyau.envoyer(programme, fd=fd)
+            envoye = 0
+            for rang, (nom, prog) in enumerate(programmes):
+                if rang:
+                    rep = QMessageBox.question(
+                        self, "Feuille suivante",
+                        f"{nom} : charger une feuille neuve, attendre "
+                        f"READY,\npuis confirmer pour l'envoyer.\n\n"
+                        f"Les croix de la bande de recouvrement servent à "
+                        f"raccorder les panneaux.",
+                        QMessageBox.Ok | QMessageBox.Cancel)
+                    if rep != QMessageBox.Ok:
+                        self.info.setText(
+                            f"interrompu après {rang} panneau(x) sur "
+                            f"{len(programmes)}")
+                        return
+                envoye += noyau.envoyer(prog, fd=fd)
         except Exception as e:
             QMessageBox.critical(self, "Envoi impossible", str(e))
             return
         finally:
             if fd is not None:
                 os.close(fd)
-        gain = (1 - min(apres, avant) / avant) * 100 if avant else 0
-        self.info.setText(f"{regle}{envoye} octets envoyés — trajet à vide "
-                          f"{min(apres, avant):.0f} mm ({gain:.0f} % gagné)")
+        gain = sum(g[1] for g in gains) / len(gains) if gains else 0
+        combien = (f"{len(programmes)} panneaux, " if len(programmes) > 1
+                   else "")
+        self.info.setText(f"{regle}{combien}{envoye} octets envoyés — "
+                          f"trajet à vide {avant:.0f} mm ({gain:.0f} % gagné)")
 
 
 ICONE = os.path.join(os.path.dirname(os.path.abspath(__file__)),

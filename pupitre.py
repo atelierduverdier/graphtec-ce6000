@@ -22,6 +22,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import svg2hpgl as noyau
 import mosaique                                    # noqa: E402
+import materiaux                                   # noqa: E402
 from theme import SOMBRE, CLAIR, feuille_de_style           # noqa: E402
 import conditions as machine                                # noqa: E402
 import icones                                               # noqa: E402
@@ -412,6 +413,21 @@ class Pupitre(QWidget):
         # --- outil
         g = QGroupBox("Outil")
         gl = QGridLayout(g)
+        # Le carnet d'établi en tête du groupe : choisir « papier 300 g »
+        # pose D'UN COUP le type d'outil, la vitesse, la force,
+        # l'accélération et les passages. Le type d'outil est le plus
+        # important des cinq — c'est son oubli qui a arrondi les angles
+        # d'une découpe le 11/08/2026, la machine compensant le déport
+        # d'une lame qui n'était pas montée.
+        self.cmb_profil = QComboBox()
+        self.cmb_profil.addItem("(réglage libre)", None)
+        for nom in materiaux.MATERIAUX:
+            self.cmb_profil.addItem(nom, nom)
+        self.cmb_profil.currentIndexChanged.connect(self._appliquer_profil)
+        self.lbl_profil = QLabel("")
+        self.lbl_profil.setObjectName("faible")
+        self.lbl_profil.setWordWrap(True)
+
         self.cmb_cond = QComboBox()
         self.cmb_cond.addItems([f"condition {i}" for i in range(1, 9)])
         # Changer de numéro relit la condition : sans ça, les champs
@@ -461,24 +477,26 @@ class Pupitre(QWidget):
         self.lbl_condition = QLabel("condition non lue")
         self.lbl_condition.setObjectName("faible")
         self.lbl_condition.setWordWrap(True)
-        gl.addWidget(QLabel("condition"), 0, 0); gl.addWidget(self.cmb_cond, 0, 1)
-        gl.addWidget(QLabel("outil"), 1, 0); gl.addWidget(self.cmb_outil, 1, 1)
+        gl.addWidget(QLabel("matériau"), 0, 0); gl.addWidget(self.cmb_profil, 0, 1)
+        gl.addWidget(self.lbl_profil, 1, 0, 1, 2)
+        gl.addWidget(QLabel("condition"), 2, 0); gl.addWidget(self.cmb_cond, 2, 1)
+        gl.addWidget(QLabel("outil"), 3, 0); gl.addWidget(self.cmb_outil, 7, 1)
         self.lbl_offset = QLabel("offset")
-        gl.addWidget(self.lbl_offset, 2, 0); gl.addWidget(self.spn_offset, 2, 1)
-        gl.addWidget(QLabel("vitesse"), 3, 0); gl.addWidget(self.spn_vit, 3, 1)
-        gl.addWidget(QLabel("force"), 4, 0); gl.addWidget(self.spn_force, 4, 1)
-        gl.addWidget(QLabel("accélération"), 5, 0); gl.addWidget(self.spn_accel, 5, 1)
-        gl.addWidget(QLabel("passages"), 6, 0); gl.addWidget(self.spn_passages, 6, 1)
+        gl.addWidget(self.lbl_offset, 4, 0); gl.addWidget(self.spn_offset, 4, 1)
+        gl.addWidget(QLabel("vitesse"), 5, 0); gl.addWidget(self.spn_vit, 5, 1)
+        gl.addWidget(QLabel("force"), 6, 0); gl.addWidget(self.spn_force, 6, 1)
+        gl.addWidget(QLabel("accélération"), 7, 0); gl.addWidget(self.spn_accel, 7, 1)
+        gl.addWidget(QLabel("passages"), 8, 0); gl.addWidget(self.spn_passages, 8, 1)
         self.spn_passages.setToolTip(
             "repasser sur chaque tracé rend le trait franc au stylo.\n"
             "Le carnet d'établi note 2 pour le feutre comme pour le Bic.\n"
             "Ne coûte aucun déplacement : le retour se fait à l'envers.")
-        gl.addWidget(b_lire_c, 7, 0); gl.addWidget(b_appl_c, 7, 1)
-        gl.addWidget(self.lbl_condition, 8, 0, 1, 2)
-        gl.addWidget(self.chk_regler, 9, 0, 1, 2)
+        gl.addWidget(b_lire_c, 9, 0); gl.addWidget(b_appl_c, 9, 1)
+        gl.addWidget(self.lbl_condition, 10, 0, 1, 2)
+        gl.addWidget(self.chk_regler, 11, 0, 1, 2)
         rappel = QLabel("accélération basse = trait net,\nhaute = travail plus court")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 10, 0, 1, 2)
+        gl.addWidget(rappel, 12, 0, 1, 2)
         self._offset_utile(self.cmb_outil.currentText())
         g_outil = g
 
@@ -598,6 +616,49 @@ class Pupitre(QWidget):
         g.setEnabled(True)
         return g
 
+    def _appliquer_profil(self):
+        """Verse un profil du carnet dans les champs — sans rien envoyer.
+
+        Poser les valeurs SANS les écrire dans la machine est délibéré :
+        on peut les relire, les corriger, et c'est « Appliquer maintenant »
+        ou l'envoi qui décide. Un choix dans une liste ne doit pas modifier
+        une machine à l'autre bout d'un câble.
+        """
+        nom = self.cmb_profil.currentData()
+        if not nom:
+            self.lbl_profil.setText("")
+            return
+        m = materiaux.MATERIAUX[nom]
+        outil = m.get("outil") or m.get("lame")
+        if outil:
+            self.cmb_outil.setCurrentText(outil)
+        self.spn_vit.setValue(m["vitesse"])
+        self.spn_force.setValue(m["force"])
+        if m.get("acceleration") is not None:
+            self.spn_accel.setValue(m["acceleration"])
+        self.spn_passages.setValue(m.get("passages", 1))
+
+        rappels = []
+        if not outil:
+            # Sans outil déclaré, le champ garde celui du profil précédent :
+            # un réglage hérité en silence, et c'est précisément ce genre
+            # d'héritage qui a arrondi les angles d'une découpe.
+            rappels.append(f"AUCUN outil dans le carnet pour ce profil — "
+                           f"vérifier que « {self.cmb_outil.currentText()} » "
+                           f"est bien ce qui est monté")
+        if m.get("hauteur_lame"):
+            rappels.append(f"À LA MAIN : sortie de lame {m['hauteur_lame']} mm")
+        if m.get("usage") == "rainer":
+            rappels.append("RAINAGE : la lame marque, elle ne traverse pas")
+        if m.get("seuil_coupe"):
+            rappels.append(f"traverse dès la force {m['seuil_coupe']}, "
+                           f"marge gardée")
+        if m.get("perforation"):
+            c, sa = m["perforation"]
+            rappels.append(f"perforation du carnet : {c:g} coupés, {sa:g} laissés")
+        self.lbl_profil.setText("  •  ".join(rappels) if rappels
+                                else "valeurs posées, rien n'est encore envoyé")
+
     def _lire_condition(self, silencieux=False):
         """Charge la condition choisie depuis la machine.
 
@@ -636,6 +697,12 @@ class Pupitre(QWidget):
             self.spn_accel.setValue(etat["acceleration"])
         self.lbl_condition.setText(
             f"condition {self.cmb_cond.currentIndex() + 1} lue sur la machine")
+        # Ce qu'on vient de lire ne vient plus d'un profil : le dire, sinon
+        # la liste afficherait un matériau que les champs ne portent plus.
+        self.cmb_profil.blockSignals(True)
+        self.cmb_profil.setCurrentIndex(0)
+        self.cmb_profil.blockSignals(False)
+        self.lbl_profil.setText("")
 
     def _appliquer_condition(self):
         """Pose la condition MAINTENANT, et relit chaque valeur."""

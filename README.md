@@ -154,7 +154,7 @@ satisfaisait, et elle a annoncé un résultat faux avec aplomb. Un verdict doit
 exiger la **croissance**, et se taire quand les mesures ne sont ni
 constantes ni croissantes.
 
-## Les trois pièges
+## Les quatre pièges
 
 1. **Hors de l'état `READY`, la machine ne lit pas son tampon d'interface.**
    Elle avale les octets sans répondre ni bouger — le symptôme est identique à
@@ -167,7 +167,14 @@ constantes ni croissantes.
    fichiers en silence. C'est le contrôle de flux du port série sous une autre
    forme — l'USB ne l'a pas supprimé.
 
-3. **Les réponses se terminent par `\r` et s'accumulent.** Sans vider le tampon
+3. **« Charger le vinyle » qui ne part pas : la feuille est trop étroite.**
+   Les capteurs de média sont sur la table, et une feuille qui ne les couvre
+   pas n'est jamais détectée — le levier descend, tout a l'air normal, et la
+   machine réclame indéfiniment. Vérifier aussi que chaque galet presseur est
+   **à la fois** sur le papier et au-dessus d'une bande d'entraînement
+   granuleuse : un galet qui pince dans le vide donne le même symptôme.
+
+4. **Les réponses se terminent par `\r` et s'accumulent.** Sans vider le tampon
    d'entrée avant chaque requête, elles se chevauchent.
 
 ## Ce qui n'est PAS fait ici

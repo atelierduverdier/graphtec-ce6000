@@ -481,6 +481,30 @@ une planche réelle :
 33 mètres de déplacement à vide évités sur une seule planche : du temps de
 tracé et de l'usure de courroie. L'exporteur d'Inkscape ne réordonne pas.
 
+## Vérifier qu'on n'a rien cassé
+
+```bash
+python3 tests/test_traceur.py          # 10 propriétés, sans la machine
+python3 tests/verifier_les_tests.py    # les tests savent-ils échouer ?
+```
+
+Chaque test rejoue une faute RÉELLE de la mise au point, pas une faute
+imaginable : coordonnées décimales, croix de raccord unique, repassage qui
+coûte un trajet de retour, rainage « corrigé » en découpe, réglage hors des
+bornes que la machine écrête en silence.
+
+**Le second programme est le plus important.** Une suite qui passe ne
+prouve rien — elle peut ne rien surveiller. Cette journée a produit **cinq
+détecteurs successifs** qui annonçaient « aucune erreur » sur des séquences
+qui en produisaient : l'un comptait un journal vide comme zéro, l'autre
+comptait les entrées d'un tampon circulaire dont le total ne peut pas
+bouger, un troisième polluait ce qu'il mesurait. Aucun n'avait été éprouvé
+avant de servir.
+
+`verifier_les_tests.py` introduit chaque faute en mémoire et exige que le
+test correspondant échoue. Un test qui passe malgré la faute est signalé
+comme aveugle.
+
 ## Par où commencer
 
 ```bash

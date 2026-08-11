@@ -34,6 +34,10 @@ except ImportError:                                     # pragma: no cover
 NS_FREECAD = "http://www.freecad.org/wiki/index.php?title=Svg_Namespace"
 
 # --- géométrie de la page, en millimètres -------------------------------
+# 375 x 280 est la taille d'UNE feuille A3 dans le traceur. Une page plus
+# grande reste légitime : la pièce à tracer commande, et `svg2hpgl
+# --mosaique` découpe ensuite en tuiles qui, elles, tiennent dans la
+# machine. C'est ce qu'a demandé le porte-manteau, long de 600 mm.
 LARGEUR, HAUTEUR = 375.0, 280.0
 BORD = 5.0             # cadre extérieur, en retrait du bord de page
 BANDE = 10.0           # bande des repères, entre cadre extérieur et cadre utile
@@ -240,13 +244,24 @@ def gabarit():
 
 
 def main():
+    global LARGEUR, HAUTEUR
     ap = argparse.ArgumentParser(
         description="Fabrique un gabarit de planche TechDraw pour le traceur.")
+    ap.add_argument("--largeur", type=float, default=LARGEUR,
+                    help="largeur de page en mm (défaut : une feuille A3 "
+                         "dans le traceur)")
+    ap.add_argument("--hauteur", type=float, default=HAUTEUR,
+                    help="hauteur de page en mm")
     ap.add_argument("-o", "--sortie",
                     default=os.path.expanduser(
                         "~/Projets/graphtec-ce6000/gabarits/A3_Traceur_TD.svg"),
                     help="fichier SVG à écrire")
     args = ap.parse_args()
+
+    LARGEUR, HAUTEUR = args.largeur, args.hauteur
+    if LARGEUR - 2 * (BORD + BANDE) <= 0 or HAUTEUR - 2 * (BORD + BANDE) <= 0:
+        sys.exit("page trop petite : il ne reste rien après les bandes de "
+                 "repères.")
 
     contenu = gabarit()
     os.makedirs(os.path.dirname(args.sortie), exist_ok=True)

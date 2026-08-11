@@ -124,23 +124,21 @@ plafonne les temps de tracé. Sa commande a été identifiée depuis
 (`TC1002,5`), mais elle n'a que **trois crans** — le levier existe et il est
 très court.
 
-### `FS` est écouté, `VS` ne l'est PAS
+### Récapitulatif : quatre voies, et quand prendre chacune
 
-Deux commandes voisines, deux réponses opposées, et il a fallu les mesurer
-séparément.
+| Réglage | Voie | Portée | Condition |
+|---|---|---|---|
+| vitesse | `TC1002,3` | **durable** | aucune |
+| vitesse | HP-GL `VS` | le temps du travail | `CONDITION PRIORITE` = `PROGRAMME`, et jamais au-dessus de la condition |
+| force | `TC1002,4` | **durable** | aucune |
+| force | HP-GL `FS` | le temps du travail | fonctionne même sous `MANUEL` |
 
-**`FS` (force) passe** : le nuancier du 10/08/2026 montre les quatre valeurs
-basses plus pâles que les suivantes. Si la commande était ignorée, les
-19 lignes seraient identiques.
+`TC` est la voie sûre : il s'applique toujours, et se **relit** (`TC2002`).
+`VS`/`FS` sont plus élégants pour un travail ponctuel puisqu'ils ne touchent
+pas aux conditions enregistrées — mais `VS` dépend d'un réglage de panneau
+qui, mal placé, le rend muet sans le moindre signe.
 
-**`VS` (vitesse) est ignoré** : le même parcours de 2 560 mm envoyé à `VS5`
-puis à `VS40` — huit fois l'écart — a duré **30 s dans les deux cas**, soit
-85 mm/s. C'est la vitesse de la condition réglée au panneau (10 cm/s, moins
-ce que coûtent les virages). Aucun script du dépôt n'émet donc `VS` : un
-réglage qui ne fait rien est pire qu'absent, il fait croire qu'on a agi.
-La vitesse passe désormais par le protocole `TC` (voir plus haut), comme la
-force et l'accélération. `FS` reste utilisable pour une force valable le
-temps d'un travail seulement, sans modifier la condition enregistrée.
+Les scripts du dépôt utilisent `TC` par défaut, pour cette raison.
 
 `sonde_vitesse.py` garde la trace de la méthode, et surtout **des deux qui
 ont échoué avant** : `OA;` rend la position **logique**, pas celle du

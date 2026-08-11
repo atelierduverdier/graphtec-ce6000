@@ -57,6 +57,12 @@ MATERIAUX = {
         # CB09U (jusqu'à 0,25). Coupé à la CB09U le 11/08/2026 -- ça marche,
         # mais avec une lame sous-dimensionnée qui s'usera plus vite.
         lame="CB15U"),
+    # Les quatre profils qui suivent n'ont pas été rejoués au nuancier, et
+    # ils n'ont pas à l'être : Christophe, le 11/08/2026, « ce sont mes
+    # paramètres testés ». Ils viennent de l'usage réel de la machine sous
+    # Windows, ce qui est une mesure — et une meilleure que celle qu'on
+    # referait, puisqu'elle porte sur du papier qu'on n'a plus. Les
+    # rejouer ne validerait rien qu'ils ne disent déjà.
     "aquarelle 200 g": dict(
         vitesse=20, force=14, acceleration=None, passages=1,
         epaisseur=(0.30, 0.30), hauteur_lame=0.35, perforation=(8.0, 0.25)),

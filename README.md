@@ -523,6 +523,28 @@ force 2. L'accélération se règle au panneau (`CONDITION` → `ACCEL`) et
 n'apparaît dans aucune commande HP-GL — une plume qui accélère fort dérape au
 départ de chaque segment.
 
+### La compensation d'offset, vérifiée sur des pointes
+
+`sonde_offset.py` découpe quatre triangles dont le sommet se ferme — 90°,
+60°, 45°, 30° — plus un carré témoin. Vérifié le 11/08/2026 sur du 300 g
+avec une CB09U : **toutes les pointes sortent franches, jusqu'à 30°**. La
+compensation du firmware fait son travail, et le type d'outil `TC1002,2`
+est bien ce qui la commande.
+
+**Le carré témoin ne prouve rien**, et c'est pour ça qu'il est là : un
+angle droit pardonne tout, et sur 12 mm le défaut se devine à peine. Le
+même réglage jugé sur un carré donnait « difficile à dire ».
+
+**Ce qui avait causé les coins arrondis** : nos propres essais du protocole
+`TC` avaient laissé le type d'outil sur « Stylo feutre ». Un feutre n'a pas
+de déport, donc la machine n'appliquait **aucune** compensation — sans
+erreur ni alerte, elle faisait exactement ce qu'on lui avait demandé
+plusieurs heures plus tôt.
+
+**Le petit crochet isolé** près du départ n'est pas une bavure : la machine
+oriente sa lame par un court mouvement préalable avant d'attaquer
+(`PARAM OUTIL` → `LAME INITIALE`, « 2 mm en-deçà » ou « dehors »).
+
 ## Les réglages de l'établi
 
 `materiaux.py` porte le carnet de Christophe — huit matériaux réglés à

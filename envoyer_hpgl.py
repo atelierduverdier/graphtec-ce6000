@@ -35,7 +35,7 @@ def _ecrire(fd, texte, delai=20.0):
     return envoye
 
 
-def zone_utile(fd, delai=2.0, essais=2):
+def zone_utile(fd, delai=2.0, essais=4, repos=1.0):
     """`OH;` -> (largeur, hauteur) en mm, ou None.
 
     Rend AUSSI la réponse brute, via `zone_utile.derniere_reponse` : le
@@ -45,10 +45,14 @@ def zone_utile(fd, delai=2.0, essais=2):
     mauvais endroit le 11/08/2026 -- `OH;` interrogé seul répondait très
     bien dans la minute qui suivait.
 
-    Deux tentatives, parce que l'échec observé ce jour-là suivait
-    immédiatement une salve de commandes `TC`, ne s'est pas reproduit, et
-    n'a donc pas de cause établie. Réessayer coûte une demi-seconde ; se
-    tromper de diagnostic coûte une feuille.
+    Plusieurs tentatives espacées, parce que le silence est reproductible :
+    une GROSSE lecture `TC` — le journal `TC2010,9` ou le vidage `TC2009,5`
+    — laisse la machine muette à l'`OH;` qui suit, y compris depuis un autre
+    processus. Constaté en beauté le 11/08/2026 quand la commande de
+    diagnostic lancée juste avant un envoi a fait échouer cet envoi : le
+    pollueur était l'instrument.
+
+    Le mécanisme n'est pas élucidé. L'entêtement, lui, suffit.
     """
     while True:                                   # repartir propre
         prets, _, _ = select.select([fd], [], [], 0.05)
@@ -81,7 +85,7 @@ def zone_utile(fd, delai=2.0, essais=2):
             return (x1 - x0) / UNITES_PAR_MM, (y1 - y0) / UNITES_PAR_MM
         except ValueError:
             if tentative + 1 < essais:
-                time.sleep(0.5)
+                time.sleep(repos)
     return None
 
 
@@ -133,12 +137,19 @@ def main():
     # 11/08/2026, sans que le mécanisme soit élucidé -- l'état `TC` vaut
     # 8 (occupé) y compris dans les cas qui marchent, donc ce n'est pas lui.
     # On ne traverse pas une transition qu'on ne comprend pas : on l'évite.
+    # UN SEUL descripteur pour toute l'exécution. Fermer et rouvrir
+    # /dev/usb/lp0 entre deux étapes rend la machine muette : mesuré le
+    # 11/08/2026, une lecture du journal suivie d'un OH; répond du premier
+    # coup sur le même descripteur, et se tait plus de 44 secondes si on
+    # referme entre les deux. Ce programme en ouvrait quatre par exécution.
     fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
     try:
         limites = zone_utile(fd)
-    finally:
+    except BaseException:
         os.close(fd)
+        raise
     if limites is None:
+        os.close(fd)
         brut = zone_utile.derniere_reponse
         sys.exit(
             f"OH; n'a pas donné de zone utile exploitable.\n"
@@ -155,11 +166,7 @@ def main():
         if args.materiau not in materiaux.MATERIAUX:
             sys.exit("profil inconnu ; au choix :\n   "
                      + "\n   ".join(materiaux.MATERIAUX))
-        rendu, lame = materiaux.appliquer(args.materiau, args.condition)
-        # Laisser la machine finir de digérer la salve TC avant de lui
-        # parler HP-GL. Le 11/08/2026, un OH; envoyé juste après est resté
-        # sans réponse exploitable, alors qu'il répondait seul.
-        time.sleep(0.5)
+        rendu, lame = materiaux.appliquer(args.materiau, args.condition, fd=fd)
         print(f"condition {args.condition} — {materiaux.resume(args.materiau)}")
         for nom, demande, obtenu, ok in rendu:
             print(f"   {nom:<14} demandé {str(demande):<8} obtenu "
@@ -174,7 +181,6 @@ def main():
         with open(chemin, encoding="ascii", errors="replace") as f:
             programme = f.read()
 
-        fd = os.open(PERIPH, os.O_RDWR | os.O_NONBLOCK)
         try:
             boite = emprise(programme)
             nom = os.path.basename(chemin)
@@ -190,11 +196,13 @@ def main():
 
             envoye = _ecrire(fd, programme)
             print(f"   envoyé {envoye} octets")
-        finally:
+        except BaseException:
             os.close(fd)
+            raise
 
         if chemin is not args.fichier[-1]:
             input("   repositionner le média, puis Entrée pour le suivant… ")
+    os.close(fd)
 
 
 if __name__ == "__main__":

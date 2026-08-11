@@ -143,7 +143,7 @@ def encadrer(nom):
     return None
 
 
-def appliquer(nom, condition=1):
+def appliquer(nom, condition=1, fd=None):
     """Pousse un profil dans la machine et RELIT chaque valeur.
 
     Règle AUSSI le type d'outil quand le profil le nomme. L'oublier
@@ -158,21 +158,26 @@ def appliquer(nom, condition=1):
     import conditions
     m = MATERIAUX[nom]
     rendu = []
-    outil = m.get("outil") or m.get("lame")
-    if outil in conditions.OUTILS:
+    # UN seul descripteur pour tout : le rouvrir entre deux étapes rend la
+    # machine muette (voir conditions.appliquer).
+    propre = fd is None
+    if propre:
         fd = os.open(conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
-        try:
+    try:
+        outil = m.get("outil") or m.get("lame")
+        if outil in conditions.OUTILS:
             conditions.regler_outil(fd, conditions.OUTILS[outil],
                                     condition=condition)
             relu = conditions.lire(fd, conditions.OUTIL, condition)
             obtenu = relu[0] if relu else None
             attendu = conditions.OUTILS[outil]
             rendu.append(("outil", attendu, obtenu, obtenu == attendu))
-        finally:
+        rendu += conditions.appliquer(vitesse=m["vitesse"], force=m["force"],
+                                      acceleration=m["acceleration"],
+                                      condition=condition, fd=fd)
+    finally:
+        if propre:
             os.close(fd)
-    rendu += conditions.appliquer(vitesse=m["vitesse"], force=m["force"],
-                                  acceleration=m["acceleration"],
-                                  condition=condition)
     return rendu, m.get("hauteur_lame")
 
 

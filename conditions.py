@@ -383,7 +383,7 @@ def regler_offset(fd, offset, condition=1):
 
 
 def appliquer(vitesse=None, force=None, acceleration=None, offset=None,
-              condition=1, periph=PERIPH):
+              condition=1, periph=PERIPH, fd=None):
     """Règle vitesse (cm/s), force et accélération, et RELIT chaque valeur.
 
     Rend une liste de `(nom, demandé, obtenu, conforme)`. Le dernier champ
@@ -400,7 +400,16 @@ def appliquer(vitesse=None, force=None, acceleration=None, offset=None,
         demandes.append(("accélération", ACCELERATION, int(acceleration)))
 
     rendu = []
-    fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
+    # Réutiliser un descripteur déjà ouvert plutôt que d'en ouvrir un.
+    # Fermer et rouvrir /dev/usb/lp0 entre deux étapes rend la machine
+    # MUETTE aux interrogations suivantes -- mesuré le 11/08/2026 : sur un
+    # seul descripteur, une lecture du journal suivie d'un OH; répond du
+    # premier coup ; en refermant entre les deux, OH; se tait plus de 44
+    # secondes. Toute la chasse aux « silences intermittents » de cette
+    # journée revient à ça.
+    propre = fd is None
+    if propre:
+        fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
     try:
         if offset is not None:
             regler_offset(fd, offset, condition)
@@ -417,7 +426,8 @@ def appliquer(vitesse=None, force=None, acceleration=None, offset=None,
             obtenu = relu[0] if relu else None
             rendu.append((nom, valeur, obtenu, obtenu == valeur))
     finally:
-        os.close(fd)
+        if propre:
+            os.close(fd)
     return rendu
 
 

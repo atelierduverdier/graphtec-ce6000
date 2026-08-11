@@ -7,6 +7,20 @@ l'ARMS, la surface, le média, l'interface, les commandes. Chaque ligne est
 nommée en clair — `STEP PASS=7`, `TOOL UP SPEED=40`, `HP-GL MODEL
 EMULATED=7586`.
 
+**ATTENTION : ne pas lancer ce programme juste avant un envoi.** Après
+une grosse lecture `TC` suivie de la fermeture du périphérique, la machine
+reste MUETTE aux interrogations pendant plus de 44 secondes — un
+`envoyer_hpgl.py` lancé dans la foulée échoue sur `OH;`. Le même
+enchaînement SANS refermer, sur un seul descripteur, répond du premier
+coup ; et trois envois consécutifs sans lecture de journal passent tous.
+La cause n'est pas élucidée : ni un vidage plus complet avant de fermer,
+ni l'attente, ni le contenu des commandes n'y changent rien.
+
+Toutes les « pannes intermittentes » d'`OH;` du 11/08/2026 se réduisent à
+cet enchaînement — y compris celles que j'ai attribuées tour à tour à la
+transition `TC`/HP-GL, puis à une erreur qui sortirait la machine de
+`READY`. Les deux étaient fausses.
+
 **Cette commande rend inutile presque toute l'enquête qui a précédé.** On a
 passé une journée à nommer des paramètres numériques un par un, en changeant
 un réglage au panneau et en comparant deux relevés. La machine savait tout
@@ -75,6 +89,21 @@ def _lire_long(fd, commande, delai=6.0):
             pass
         if b"\x03" in reponse:
             break
+
+    # Vider ce qui reste avant de rendre la main : une grosse réponse arrive
+    # en plusieurs paquets, et s'arrêter au premier ETX en laisse derrière.
+    # Bonne hygiène, mais ce N'EST PAS la cause du silence décrit ci-dessous
+    # -- ajouté pour ça le 11/08/2026, et la mesure l'a démenti aussitôt.
+    fin_repos = time.monotonic() + 0.4
+    while time.monotonic() < fin_repos:
+        prets, _, _ = select.select([fd], [], [], 0.1)
+        if not prets:
+            continue
+        try:
+            if os.read(fd, 4096):
+                fin_repos = time.monotonic() + 0.4
+        except BlockingIOError:
+            pass
     return reponse.decode("ascii", "replace").strip("\x03")
 
 

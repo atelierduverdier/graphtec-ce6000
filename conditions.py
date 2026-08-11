@@ -241,3 +241,34 @@ def appliquer(vitesse=None, force=None, acceleration=None,
     finally:
         os.close(fd)
     return rendu
+
+
+def instantane(condition=1, plage=range(1, 21), periph=PERIPH):
+    """Relève TOUS les paramètres lisibles d'une condition.
+
+    L'idée est de Christophe, et elle vaut mieux que la précédente : la
+    RELECTURE sert d'afficheur à la place du panneau. On photographie l'état,
+    on change une chose, on rephotographie, et la différence nomme le
+    paramètre — y compris pour les réglages que la machine n'affiche NULLE
+    PART, comme le déport de lame.
+    """
+    fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
+    try:
+        etat = {}
+        for p in plage:
+            valeurs = lire(fd, p, condition, delai=0.7)
+            if valeurs:
+                etat[p] = valeurs
+        return etat
+    finally:
+        os.close(fd)
+
+
+def difference(avant, apres):
+    """Ce qui a changé entre deux instantanés : {paramètre: (avant, après)}."""
+    change = {}
+    for p in sorted(set(avant) | set(apres)):
+        a, b = avant.get(p), apres.get(p)
+        if a != b:
+            change[p] = (a, b)
+    return change

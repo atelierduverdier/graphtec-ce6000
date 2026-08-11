@@ -230,6 +230,10 @@ class Pupitre(QWidget):
                                        machine.DEPORT_MAXI, 0)
         self.cmb_outil.currentTextChanged.connect(self._offset_utile)
         self.spn_force = self._entier(1, 38, 12)
+        # Repasser sur le tracé : 2 pour les plumes d'après le carnet, et
+        # c'était la réponse au trait pâle du premier essai. Gratuit en
+        # déplacement, le repassage se faisant à l'envers depuis la fin.
+        self.spn_passages = self._entier(1, 5, 1)
         # La vitesse passe par le protocole propriétaire TC : le `VS` du
         # HP-GL est ignoré par cette machine. Elle MODIFIE DURABLEMENT la
         # condition enregistrée, comme le fait le logiciel Graphtec.
@@ -246,10 +250,15 @@ class Pupitre(QWidget):
         gl.addWidget(QLabel("vitesse"), 3, 0); gl.addWidget(self.spn_vit, 3, 1)
         gl.addWidget(QLabel("force"), 4, 0); gl.addWidget(self.spn_force, 4, 1)
         gl.addWidget(QLabel("accélération"), 5, 0); gl.addWidget(self.spn_accel, 5, 1)
-        gl.addWidget(self.chk_regler, 6, 0, 1, 2)
+        gl.addWidget(QLabel("passages"), 6, 0); gl.addWidget(self.spn_passages, 6, 1)
+        self.spn_passages.setToolTip(
+            "repasser sur chaque tracé rend le trait franc au stylo.\n"
+            "Le carnet d'établi note 2 pour le feutre comme pour le Bic.\n"
+            "Ne coûte aucun déplacement : le retour se fait à l'envers.")
+        gl.addWidget(self.chk_regler, 7, 0, 1, 2)
         rappel = QLabel("accélération basse = trait net,\nhaute = travail plus court")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 7, 0, 1, 2)
+        gl.addWidget(rappel, 8, 0, 1, 2)
         self._offset_utile(self.cmb_outil.currentText())
         v.addWidget(g)
 
@@ -383,7 +392,9 @@ class Pupitre(QWidget):
         chemins = candidat if apres < avant else self.calcule
 
         condition = self.cmb_cond.currentIndex() + 1
-        programme, _ = noyau.en_hpgl(chemins, condition, self.spn_force.value())
+        programme, _ = noyau.en_hpgl(chemins, condition,
+                                     self.spn_force.value(),
+                                     self.spn_passages.value())
 
         regle = ""
         try:

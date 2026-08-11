@@ -281,8 +281,20 @@ def _grouper(prefixe, couples):
     return lignes
 
 
-def en_hpgl(polylignes, outil=1, force=None):
+def en_hpgl(polylignes, outil=1, force=None, passages=1):
     """Rend le programme HP-GL complet.
+
+    `passages` repasse sur chaque tracé. C'est ce que Christophe faisait
+    au stylo sous Windows — son carnet en note 2 pour le feutre comme pour
+    le Bic — et c'était la réponse au trait pâle du tout premier essai,
+    déjà écrite dans ce carnet pendant qu'on cherchait ailleurs.
+
+    Le repassage est **gratuit en déplacement** : au bout du premier
+    passage la plume est à la fin du chemin, donc le second le refait à
+    l'envers depuis là, sans lever ni revenir. Repasser à l'endroit
+    coûterait un trajet de retour par tracé — sur une planche TechDraw de
+    plusieurs centaines de segments, c'est la durée du travail qui double
+    au lieu de la seule écriture.
 
     `FS` est bien écouté par cette machine : vérifié au nuancier du
     10/08/2026, où seules les forces basses donnaient un trait plus pâle.
@@ -309,6 +321,12 @@ def en_hpgl(polylignes, outil=1, force=None):
             continue
         lignes += _grouper("PU", couples[:1])
         lignes += _grouper("PD", couples[1:])
+        # Passages suivants : on repart d'où la plume est, en sens inverse.
+        # Le premier point de la suite est déjà sous la pointe, d'où le [1:].
+        sens = list(reversed(couples))
+        for _ in range(max(1, passages) - 1):
+            lignes += _grouper("PD", sens[1:])
+            sens = list(reversed(sens))
 
     lignes += ["PU0,0;", "SP0;"]
     return "\n".join(lignes) + "\n", ignorees
@@ -411,6 +429,11 @@ def main():
                     help="bande partagée entre panneaux voisins (défaut 15). "
                          "Des repères y sont tracés, au milieu, donc aux "
                          "mêmes points sur les deux voisins.")
+    ap.add_argument("--passages", type=int, default=1, metavar="N",
+                    help="repasse N fois sur chaque tracé. Le carnet d'établi "
+                         "note 2 pour le feutre et pour le Bic — c'est ce qui "
+                         "rend le trait franc. Gratuit en déplacement : le "
+                         "repassage se fait à l'envers depuis où la plume est.")
     ap.add_argument("--perforation", metavar="COUPE,SAUT",
                     help="découpe en pointillé : COUPE mm coupés, SAUT laissés. "
                          "Carnet d'établi : 8,0.25 sur la plupart des papiers, "
@@ -501,7 +524,8 @@ def main():
 
     if args.force is not None and not 1 <= args.force <= 38:
         sys.exit("--force attend une valeur de 1 à 38 (plage du CE6000-60)")
-    programme, ignorees = en_hpgl(polylignes, args.outil, args.force)
+    programme, ignorees = en_hpgl(polylignes, args.outil, args.force,
+                                  args.passages)
 
     xmin, ymin, xmax, ymax = cadre(polylignes)
     largeur, hauteur = xmax - xmin, ymax - ymin
@@ -559,7 +583,8 @@ def main():
                 candidat = ordonner(morceaux)
                 if trajet_a_vide(candidat) < trajet_a_vide(morceaux):
                     morceaux = candidat
-            prog, _ = en_hpgl(morceaux, args.outil, args.force)
+            prog, _ = en_hpgl(morceaux, args.outil, args.force,
+                              args.passages)
             nom = f"{racine}_p{i}{j}.hpgl"
             with open(nom, "w", encoding="ascii") as f:
                 f.write(prog)

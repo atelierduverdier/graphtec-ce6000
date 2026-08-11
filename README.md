@@ -57,9 +57,35 @@ un champ, et la commande se désigne elle-même par sa valeur. `TC1002,1,…`,
 `TC1002,6,…`, `TC2002`, `TC2006`, `TC2008`, `TC2009` sont déjà visibles dans
 les captures, sans qu'on sache encore ce qu'ils portent.
 
+### `VS` fonctionne AUSSI — mais un réglage de panneau le gouverne
+
+**Seconde correction du 11/08/2026.** `PARAM OUTIL` → `CONDITION PRIORITE`
+décide qui l'emporte entre le panneau et le fichier. Il était sur `MANUEL`,
+et dans cet état **`VS` est silencieusement ignoré**. Basculé sur
+`PROGRAMME`, le même essai donne enfin deux durées distinctes :
+
+| | Demandé | Mesuré | |
+|---|---|---|---|
+| `VS5` | 50 mm/s | **46,5 mm/s** | 93 % de la consigne |
+| `VS40` | 400 mm/s | 85,3 mm/s | = la vitesse de la condition |
+
+D'où le modèle : **`VS` ralentit sous la vitesse de la condition, il ne la
+dépasse jamais.** Et il ne vaut que le temps d'un travail, là où `TC` modifie
+durablement la condition enregistrée — les deux sont donc complémentaires.
+
+Curiosité constatée sans explication : `FS` (force) fonctionnait déjà sous
+`MANUEL`, quand `VS` ne fonctionnait pas. Le réglage ne filtre pas les deux
+de la même façon.
+
+**Ce que ça coûte de croire une mesure sans connaître ses conditions** : les
+durées identiques mesurées la veille étaient exactes, et la conclusion
+qu'on en tirait était fausse. La machine n'était pas sourde, elle avait
+reçu l'ordre de ne pas écouter.
+
 ### Ce qui a échoué avant, et pourquoi c'est instructif
 
-Trois commandes essayées à l'aveugle, deux langages, aucune n'agit. Le même
+Trois commandes essayées à l'aveugle, deux langages, aucune n'agit — **avec
+`CONDITION PRIORITE` sur `MANUEL`, ce que nous ignorions alors**. Le même
 parcours de 2 560 mm, chronométré à la montre :
 
 | Commande envoyée | Durée |

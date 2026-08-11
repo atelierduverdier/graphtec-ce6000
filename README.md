@@ -18,7 +18,8 @@ coulisse — pas recopié d'une documentation.
 | USB | `0b4d:1122`, classe imprimante, **bidirectionnel** |
 | Périphérique | `/dev/usb/lp0` (`root:lp`) — ni udev, ni libusb, ni pyusb |
 | Endpoints | EP1 OUT **8 octets**, EP2 IN 64 octets |
-| Langage | HP-GL, émulation **7586** (`OI;` → `7586`) |
+| Langage | `INTERFACE` → `COMMANDE` est sur **AUTO** : la machine reconnaît HP-GL et GP-GL à la volée, rien à basculer |
+| Émulation | **7586** (`OI;` → `7586`), et non 7550 |
 | Résolution | **40 unités/mm** sur les deux axes (`OF;` → `40,40`) |
 | Repère | origine coin bas-gauche, aucun miroir |
 | Axes | **X = avance du média, Y = course du chariot** |

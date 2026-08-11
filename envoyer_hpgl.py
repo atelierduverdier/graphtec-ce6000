@@ -87,6 +87,15 @@ def main():
     ap.add_argument("fichier", nargs="+", help="fichier(s) .hpgl")
     ap.add_argument("--forcer", action="store_true",
                     help="envoie même si le dessin déborde de la zone utile")
+    ap.add_argument("--materiau", metavar="NOM",
+                    help="applique d'abord un profil du carnet d'établi "
+                         "(type d'outil, vitesse, force, accélération) et "
+                         "RELIT chaque valeur. Sans lui, l'envoi part avec "
+                         "les réglages laissés par le travail précédent — "
+                         "c'est ainsi qu'un « Stylo feutre » oublié a "
+                         "arrondi les angles d'une découpe.")
+    ap.add_argument("--condition", type=int, default=1,
+                    help="numéro de condition à régler (1 à 8, défaut 1)")
     args = ap.parse_args()
 
     for chemin in args.fichier:
@@ -95,6 +104,23 @@ def main():
 
     if not os.path.exists(PERIPH):
         sys.exit(f"{PERIPH} absent : traceur allumé et branché ?")
+
+    if args.materiau:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import materiaux
+        if args.materiau not in materiaux.MATERIAUX:
+            sys.exit("profil inconnu ; au choix :\n   "
+                     + "\n   ".join(materiaux.MATERIAUX))
+        rendu, lame = materiaux.appliquer(args.materiau, args.condition)
+        print(f"condition {args.condition} — {materiaux.resume(args.materiau)}")
+        for nom, demande, obtenu, ok in rendu:
+            print(f"   {nom:<14} demandé {str(demande):<8} obtenu "
+                  f"{str(obtenu):<8} {'ok' if ok else 'NON CONFORME'}")
+        if any(not ok for *_, ok in rendu):
+            sys.exit("   un réglage n'a pas été retenu — envoi annulé.")
+        if lame:
+            print(f"   À LA MAIN : sortie de lame {lame} mm")
+        print()
 
     for chemin in args.fichier:
         with open(chemin, encoding="ascii", errors="replace") as f:

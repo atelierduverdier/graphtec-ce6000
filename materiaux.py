@@ -81,11 +81,17 @@ MATERIAUX = {
     "vinyle 0,20 mm": dict(
         vitesse=20, force=12, acceleration=2, passages=1,
         epaisseur=(0.10, 0.10), hauteur_lame=0.13, perforation=None),
+    # `outil` compte autant que la force : déclarer une lame alors qu'une
+    # plume est montée fait compenser à la machine un déport qui n'existe
+    # pas, et les angles s'arrondissent. C'est la faute symétrique du
+    # « Stylo feutre » oublié qui a arrondi une découpe le 11/08/2026.
     "feutre Staedtler": dict(
         vitesse=27, force=15, acceleration=None, passages=2,
+        outil="Stylo feutre",
         epaisseur=None, hauteur_lame=None, perforation=None),
     "stylo Bic": dict(
         vitesse=30, force=10, acceleration=2, passages=2,
+        outil="Stylo feutre",
         epaisseur=None, hauteur_lame=None, perforation=None),
 }
 
@@ -140,14 +146,33 @@ def encadrer(nom):
 def appliquer(nom, condition=1):
     """Pousse un profil dans la machine et RELIT chaque valeur.
 
+    Règle AUSSI le type d'outil quand le profil le nomme. L'oublier
+    laisserait la machine compenser le déport d'une lame qui n'est pas
+    montée — et cette fonction ne réglait que vitesse, force et
+    accélération jusqu'au 11/08/2026.
+
     Ne touche pas à ce qui ne se pilote pas : la hauteur de lame reste à
     faire à la main, et la fonction le rappelle dans son compte rendu.
     """
+    import os
     import conditions
     m = MATERIAUX[nom]
-    rendu = conditions.appliquer(vitesse=m["vitesse"], force=m["force"],
-                                 acceleration=m["acceleration"],
-                                 condition=condition)
+    rendu = []
+    outil = m.get("outil") or m.get("lame")
+    if outil in conditions.OUTILS:
+        fd = os.open(conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
+        try:
+            conditions.regler_outil(fd, conditions.OUTILS[outil],
+                                    condition=condition)
+            relu = conditions.lire(fd, conditions.OUTIL, condition)
+            obtenu = relu[0] if relu else None
+            attendu = conditions.OUTILS[outil]
+            rendu.append(("outil", attendu, obtenu, obtenu == attendu))
+        finally:
+            os.close(fd)
+    rendu += conditions.appliquer(vitesse=m["vitesse"], force=m["force"],
+                                  acceleration=m["acceleration"],
+                                  condition=condition)
     return rendu, m.get("hauteur_lame")
 
 

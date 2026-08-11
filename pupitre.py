@@ -30,7 +30,7 @@ from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF  # noqa: E402
 from PySide6.QtWidgets import (                              # noqa: E402
     QApplication, QWidget, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
     QComboBox, QCheckBox, QGridLayout, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QFileDialog, QMessageBox, QSizePolicy)
+    QFileDialog, QMessageBox, QSizePolicy, QTabWidget, QFrame)
 
 
 # ======================================================================
@@ -123,15 +123,55 @@ class Pupitre(QWidget):
         self.info.setObjectName("faible")
         self.info.setWordWrap(True)
 
-        principal = QHBoxLayout(self)
-        principal.addWidget(self._colonne_reglages(), 0)
+        racine = QVBoxLayout(self)
+        racine.setContentsMargins(14, 12, 14, 12)
+        racine.setSpacing(10)
+        racine.addLayout(self._entete())
+
+        trait = QFrame(); trait.setObjectName("separateur")
+        trait.setFrameShape(QFrame.HLine)
+        racine.addWidget(trait)
+
+        corps = QHBoxLayout()
+        corps.setSpacing(14)
+        corps.addWidget(self._colonne_reglages(), 0)
         droite = QVBoxLayout()
+        droite.setSpacing(8)
         droite.addWidget(self.apercu, 1)
         droite.addWidget(self.info, 0)
-        principal.addLayout(droite, 1)
+        corps.addLayout(droite, 1)
+        racine.addLayout(corps, 1)
+        self.resize(1120, 720)
 
         self._habiller()
         self._interroger_media(silencieux=True)
+
+    def _entete(self):
+        """Titre et état de liaison.
+
+        Un logiciel qu'on ouvre doit dire tout de suite à quoi il est relié.
+        Ici la pastille répond à la question qui revenait sans cesse pendant
+        la mise au point : « la machine écoute-t-elle ? »
+        """
+        h = QHBoxLayout()
+        titre = QLabel("Pupitre de tracé")
+        titre.setObjectName("titre")
+        h.addWidget(titre)
+        sous = QLabel("Graphtec CE6000-60")
+        sous.setObjectName("faible")
+        h.addWidget(sous)
+        h.addStretch(1)
+        self.lbl_liaison = QLabel("liaison inconnue")
+        self.lbl_liaison.setObjectName("pastille")
+        h.addWidget(self.lbl_liaison)
+        return h
+
+    def _etat_liaison(self, reliee, detail=""):
+        self.lbl_liaison.setText(detail or
+                                 ("traceur relié" if reliee else "traceur muet"))
+        self.lbl_liaison.setProperty("etat", "reliee" if reliee else "absente")
+        self.lbl_liaison.style().unpolish(self.lbl_liaison)
+        self.lbl_liaison.style().polish(self.lbl_liaison)
 
     def _habiller(self):
         self.setStyleSheet(feuille_de_style(self.pal))
@@ -152,16 +192,25 @@ class Pupitre(QWidget):
 
     # ---------------------------------------------------------------- UI
     def _colonne_reglages(self):
+        """Trois onglets, une barre d'action, rien qui déborde.
+
+        La version d'avant empilait six cadres dans une seule colonne :
+        1 500 px de haut, plus que n'importe quel écran, les derniers
+        champs écrasés et le bouton « Envoyer » hors de vue. Répartir en
+        onglets ramène la colonne à une hauteur tenable et rend à l'aperçu
+        la place que six cadres lui volaient.
+        """
         boite = QWidget()
-        boite.setFixedWidth(320)
+        boite.setFixedWidth(360)
         v = QVBoxLayout(boite)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(10)
 
         b_ouvrir = QPushButton("Ouvrir un SVG…")
         b_ouvrir.clicked.connect(self._ouvrir)
-        v.addWidget(b_ouvrir)
-        self.lbl_fichier = QLabel("—")
+        self.lbl_fichier = QLabel("aucun dessin")
+        self.lbl_fichier.setObjectName("faible")
         self.lbl_fichier.setWordWrap(True)
-        v.addWidget(self.lbl_fichier)
 
         # --- média
         g = QGroupBox("Média")
@@ -173,7 +222,7 @@ class Pupitre(QWidget):
         gl.addWidget(QLabel("largeur"), 0, 0); gl.addWidget(self.spn_mx, 0, 1)
         gl.addWidget(QLabel("hauteur"), 1, 0); gl.addWidget(self.spn_my, 1, 1)
         gl.addWidget(b_sonde, 2, 0, 1, 2)
-        v.addWidget(g)
+        g_media = g
 
         # --- placement
         g = QGroupBox("Placement")
@@ -194,7 +243,7 @@ class Pupitre(QWidget):
         gl.addWidget(self.chk_mx, 3, 0); gl.addWidget(self.chk_my, 3, 1)
         gl.addWidget(QLabel("échelle"), 4, 0); gl.addWidget(self.spn_ech, 4, 1)
         gl.addWidget(b_ajuster, 5, 0, 1, 2)
-        v.addWidget(g)
+        g_placement = g
 
         # --- copies
         g = QGroupBox("Copies matricielles")
@@ -207,7 +256,7 @@ class Pupitre(QWidget):
         gl.addWidget(QLabel("colonnes"), 1, 0); gl.addWidget(self.spn_col, 1, 1)
         gl.addWidget(QLabel("écart H"), 2, 0); gl.addWidget(self.spn_ex, 2, 1)
         gl.addWidget(QLabel("écart V"), 3, 0); gl.addWidget(self.spn_ey, 3, 1)
-        v.addWidget(g)
+        g_copies = g
 
         # --- outil
         g = QGroupBox("Outil")
@@ -260,20 +309,37 @@ class Pupitre(QWidget):
         rappel.setObjectName("faible")
         gl.addWidget(rappel, 8, 0, 1, 2)
         self._offset_utile(self.cmb_outil.currentText())
-        v.addWidget(g)
+        g_outil = g
 
-        v.addWidget(self._groupe_machine())
+        def onglet(*cadres):
+            w = QWidget()
+            lay = QVBoxLayout(w)
+            lay.setContentsMargins(10, 12, 10, 10)
+            lay.setSpacing(10)
+            for c in cadres:
+                lay.addWidget(c)
+            lay.addStretch(1)
+            return w
 
+        self.onglets = QTabWidget()
+        self.onglets.addTab(onglet(b_ouvrir, self.lbl_fichier, g_media,
+                                   g_placement), "Dessin")
+        self.onglets.addTab(onglet(g_outil, g_copies), "Outil")
+        self.onglets.addTab(onglet(self._groupe_machine()), "Machine")
+        v.addWidget(self.onglets, 1)
+
+        # Barre d'action, hors des onglets : ce qu'on vient faire ici doit
+        # rester sous la main quel que soit l'onglet ouvert.
         self.b_envoyer = QPushButton("Envoyer au traceur")
         self.b_envoyer.setObjectName("principal")
         self.b_envoyer.setEnabled(False)
         self.b_envoyer.clicked.connect(self._envoyer)
+        self.b_envoyer.setMinimumHeight(34)
         v.addWidget(self.b_envoyer)
 
         self.b_theme = QPushButton("Thème clair")
         self.b_theme.clicked.connect(self._basculer_theme)
         v.addWidget(self.b_theme)
-        v.addStretch(1)
         return boite
 
     # (paramètre, libellé, plage ou choix, échelle, suffixe, infobulle)
@@ -316,7 +382,7 @@ class Pupitre(QWidget):
              "1 vaut « désactivé » : vérifié sur la machine, pas déduit."),
         ]
 
-        g = QGroupBox("Machine")
+        g = QGroupBox()
         gl = QGridLayout(g)
         self.widgets_machine = {}
         ligne = 0
@@ -346,7 +412,15 @@ class Pupitre(QWidget):
         gl.addWidget(b_lire, ligne, 0, 1, 2)
         gl.addWidget(b_ecrire, ligne + 1, 0, 1, 2)
 
-        self.lbl_machine = QLabel("état non lu")
+        # Verrouillés tant qu'on n'a pas lu. Sans ça, les champs affichent
+        # 0 et « Appliquer » écrirait ces zéros dans la machine — la même
+        # faute que l'écrêtage silencieux corrigé le 11/08/2026 : une valeur
+        # qui n'a pas été lue n'est pas une valeur.
+        for w in self.widgets_machine.values():
+            w.setEnabled(False)
+
+        self.lbl_machine = QLabel("appuyer sur « Lire la machine » pour "
+                                  "afficher l'état réel du traceur")
         self.lbl_machine.setObjectName("faible")
         self.lbl_machine.setWordWrap(True)
         gl.addWidget(self.lbl_machine, ligne + 2, 0, 1, 2)
@@ -409,6 +483,8 @@ class Pupitre(QWidget):
                     elargis.append(p)
                 w.setValue(affiche)
         self.machine_lue = dict(lus)
+        for p, w in self.widgets_machine.items():
+            w.setEnabled(p in lus)
         self.b_machine_ecrire.setEnabled(True)
         texte = f"{len(lus)} réglage(s) lus sur la machine"
         if muets:
@@ -523,7 +599,11 @@ class Pupitre(QWidget):
         if limites:
             self.spn_mx.setValue(limites[0])
             self.spn_my.setValue(limites[1])
-        elif not silencieux:
+            self._etat_liaison(True, f"média {limites[0]:.0f} × "
+                                     f"{limites[1]:.0f} mm")
+        else:
+            self._etat_liaison(False)
+        if not limites and not silencieux:
             QMessageBox.information(
                 self, "Machine muette",
                 "Pas de réponse à OH;.\n\nLe traceur est-il allumé, un média "

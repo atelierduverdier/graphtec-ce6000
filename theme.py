@@ -124,6 +124,67 @@ def feuille_de_style(p):
     }}
     QLabel#faible {{ color: {p.texte_faible}; }}
     QLabel#alerte {{ color: {p.alerte}; font-weight: 600; }}
+    /* --- onglets : la colonne de réglages faisait 1500 px de haut et
+       débordait de tout écran. Les répartir en trois la ramène à une
+       hauteur tenable, et donne à l'aperçu la place qui lui revient. */
+    QTabWidget::pane {{
+        background: {p.ardoise_claire};
+        border: 1px solid rgba(127,127,127,0.22);
+        border-radius: 8px;
+        top: -1px;
+    }}
+    QTabBar::tab {{
+        background: transparent;
+        color: {p.texte_faible};
+        padding: 8px 16px;
+        margin-right: 2px;
+        border: 1px solid transparent;
+        border-top-left-radius: 7px;
+        border-top-right-radius: 7px;
+    }}
+    QTabBar::tab:hover {{
+        color: {p.texte};
+    }}
+    QTabBar::tab:selected {{
+        background: {p.ardoise_claire};
+        color: {p.texte};
+        border-color: rgba(127,127,127,0.22);
+        border-bottom-color: {p.ardoise_claire};
+    }}
+
+    /* En-tête : un logiciel qu'on ouvre doit dire tout de suite à quoi il
+       est relié et dans quel état. */
+    QLabel#titre {{
+        font-size: 15px;
+        font-weight: 600;
+        color: {p.texte};
+    }}
+    QLabel#pastille {{
+        background: {p.ardoise_claire};
+        border: 1px solid rgba(127,127,127,0.30);
+        border-radius: 10px;
+        padding: 3px 12px;
+        color: {p.texte_faible};
+    }}
+    QLabel#pastille[etat="reliee"] {{
+        color: {p.accent};
+        border-color: {p.accent};
+    }}
+    QLabel#pastille[etat="absente"] {{
+        color: {p.alerte};
+        border-color: {p.alerte};
+    }}
+    QFrame#separateur {{
+        background: rgba(127,127,127,0.22);
+        max-height: 1px;
+        border: none;
+    }}
+
+    /* Champs plus hauts : on les vise à la souris et on lit leur valeur. */
+    QComboBox, QSpinBox, QDoubleSpinBox {{
+        min-height: 22px;
+    }}
+
     QScrollBar:vertical {{ background: transparent; width: 11px; margin: 0; }}
     QScrollBar::handle:vertical {{
         background: rgba(127,127,127,0.38); border-radius: 5px; min-height: 28px;

@@ -2,3 +2,7 @@
 __pycache__/
 .releve_en_cours.json
 etat_avant_sondage.txt
+
+# Le manuel Graphtec : sous copyright, on ne le redistribue pas.
+f90bbf.pdf
+*.pdf

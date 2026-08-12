@@ -587,7 +587,7 @@ python3 gabarit_traceur.py            # -> gabarits/A3_Traceur_TD.svg
 Dans FreeCAD, pointer le modèle de la planche dessus :
 
 ```python
-page.Template.Template = "/home/christophe/Projets/graphtec-ce6000/gabarits/A3_Traceur_TD.svg"
+page.Template.Template = "<dossier du dépôt>/gabarits/A3_Traceur_TD.svg"
 page.KeepUpdated = True
 ```
 
@@ -1071,3 +1071,18 @@ sa configuration entière en clair.
   sur du vinyle, à la lame, que le nuancier prend son sens.
 - **L'ARMS** (détection des marques de repérage, print & cut) : commandes mal
   documentées hors SDK Graphtec.
+
+## Licence
+
+**GPL-3.0-or-later** — voir `LICENSE`. Le même terrain que LinuxCNC et
+FreeCAD, dans lequel ce travail s'inscrit : qui reprend ce code publie ses
+modifications sous la même licence.
+
+Ne sont PAS couverts, et ne sont pas redistribués ici :
+
+- le **manuel du CE6000**, sous copyright Graphtec, à télécharger chez le
+  constructeur ;
+- les **polices monotrait** employées par `gabarit_traceur.py`, qui vivent
+  dans LaserAtelier avec leurs propres licences ;
+- les dessins d'essai issus de banques commerciales, qui n'ont jamais été
+  versés au dépôt.

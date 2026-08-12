@@ -27,6 +27,7 @@ logiciel.
 - [Quand utiliser quoi](#quand-utiliser-quoi)
 - [L'état des lieux au 11/08/2026](#létat-des-lieux-au-11082026)
 - [Ce qui n'est PAS fait ici](#ce-qui-nest-pas-fait-ici)
+- [Licence](#licence)
 
 ## Par où commencer
 
@@ -677,9 +678,38 @@ dangereux :
 
 Ce que le logiciel natif faisait et qu'Inkscape ne fait pas : les marques de
 repérage ARMS (print & cut), les lignes de dégagement, le pavage des grands
-dessins et la duplication en série. C'est le territoire d'**Inkcut**, absent
-des dépôts (AUR seulement, et ses dépendances enaml/atom suivent mal les
-Python récents).
+dessins et la duplication en série. Le pavage et la duplication sont couverts
+ici (mosaïque, copies matricielles) ; l'ARMS ne l'est pas.
+
+### Inkcut : essayé, mesuré, désinstallé
+
+C'est l'alternative qu'on trouve en premier, et la question mérite une
+réponse chiffrée plutôt qu'un avis. Installé le 10/08/2026, retiré le
+lendemain — **402 Mo** de dépendances pour ce qu'il apportait.
+
+Il a piloté la machine, et **uniquement en HP-GL**. Vérifié dans sa propre
+configuration avant de la supprimer : **zéro** occurrence du protocole
+propriétaire (`ESC.v` / `TC1002`), huit de HP-GL, un « Inkcut Generic
+Driver » sur `/dev/usb/lp0`. Ce n'est pas un pilote Graphtec, c'est un
+pilote générique.
+
+Ce que ça implique, et qu'on ne pouvait pas savoir avant d'avoir mesuré :
+
+- son champ **force** partait en `FS`, et **agissait** ;
+- son champ **vitesse** partait en `VS`, et **ne faisait RIEN** — le panneau
+  était sur `CONDITION PRIORITE = MANUEL`, réglage d'usine, où la machine
+  ignore `VS` en silence (voir plus bas). Un réglage qui tourne à vide sans
+  le dire ;
+- il ne déclare **jamais le type d'outil**. La machine appliquait donc la
+  compensation de la condition active — et si celle-ci annonce une lame
+  quand un stylo est monté, le firmware compense un déport qui n'existe pas.
+  C'est le mécanisme des coins arrondis documenté plus loin, et
+  l'explication la plus probable du décalage constaté à l'usage.
+
+**Le HP-GL sait envoyer ; il ne sait rien DEMANDER.** Pas de relecture, pas
+de vérification qu'un réglage a pris, pas d'accès aux huit conditions ni à
+la configuration de la machine. C'est ce qui sépare ce dépôt d'un pilote
+générique — pas la qualité du tracé, qui était correcte.
 
 ## Le protocole propriétaire `TC`, et l'enquête qui l'a percé
 

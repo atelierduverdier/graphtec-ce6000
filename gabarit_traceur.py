@@ -254,7 +254,7 @@ def main():
                     help="hauteur de page en mm")
     ap.add_argument("-o", "--sortie",
                     default=os.path.expanduser(
-                        "~/Projets/graphtec-ce6000/gabarits/A3_Traceur_TD.svg"),
+                        "~/Projets/logiciels/graphtec-ce6000/gabarits/A3_Traceur_TD.svg"),
                     help="fichier SVG à écrire")
     args = ap.parse_args()
 

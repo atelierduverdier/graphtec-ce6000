@@ -30,7 +30,15 @@ TAILLE_PAQUET = 8
 
 LONGUEUR_BASE = 20.0      # mm ; longueur = LONGUEUR_BASE + force
 ECART_LIGNES = 4.0        # mm entre deux lignes
-MARGE = 5.0               # mm depuis le coin
+MARGE = 5.0               # mm depuis le coin, par défaut
+
+# La marge n'est pas cosmétique : la BANDE TÉFLON s'use là où l'on
+# travaille d'habitude, et un carré coupé au-dessus d'un sillon ne se
+# comporte pas comme un carré coupé sur du téflon intact -- la lame
+# s'enfonce dans le creux, le papier n'est plus soutenu, et on lit « ça ne
+# coupe pas » là où c'est la bande qui manque. Déplacer le nuancier sur une
+# zone saine est donc une condition de la mesure, pas un confort.
+# Constaté le 13/08/2026 : bande usée sur les dix premiers centimètres.
 
 
 def u(mm):
@@ -38,7 +46,7 @@ def u(mm):
 
 
 def carres(force_min, force_max, pas, outil, cote=12.0, ecart=6.0,
-           par_rangee=8):
+           par_rangee=8, marge=(MARGE, MARGE)):
     """Une grille de carrés, un par force, À LEVER pour juger.
 
     Le nuancier en LIGNES se juge à l'oeil : bon pour une plume, inutile
@@ -55,8 +63,8 @@ def carres(force_min, force_max, pas, outil, cote=12.0, ecart=6.0,
     legende = []
     for rang, force in enumerate(forces):
         col, rangee = rang % par_rangee, rang // par_rangee
-        x = MARGE + col * (cote + ecart)
-        y = MARGE + rangee * (cote + ecart)
+        x = marge[0] + col * (cote + ecart)
+        y = marge[1] + rangee * (cote + ecart)
         lignes.append(f"FS{force};")
         lignes.append(f"PU{u(x)},{u(y)};")
         for dx, dy in ((cote, 0), (cote, cote), (0, cote), (0, 0)):
@@ -66,7 +74,7 @@ def carres(force_min, force_max, pas, outil, cote=12.0, ecart=6.0,
     return "\n".join(lignes) + "\n", legende
 
 
-def nuancier(force_min, force_max, pas, outil):
+def nuancier(force_min, force_max, pas, outil, marge=(MARGE, MARGE)):
     """Rend (programme HP-GL, [(force, longueur_mm, y_mm), ...])."""
     forces = list(range(force_min, force_max + 1, pas))
     lignes = ["IN;"]
@@ -75,10 +83,10 @@ def nuancier(force_min, force_max, pas, outil):
     legende = []
     for rang, force in enumerate(forces):
         longueur = LONGUEUR_BASE + force
-        y = MARGE + rang * ECART_LIGNES
+        y = marge[1] + rang * ECART_LIGNES
         lignes.append(f"FS{force};")
-        lignes.append(f"PU{u(MARGE)},{u(y)};")
-        lignes.append(f"PD{u(MARGE + longueur)},{u(y)};")
+        lignes.append(f"PU{u(marge[0])},{u(y)};")
+        lignes.append(f"PD{u(marge[0] + longueur)},{u(y)};")
         legende.append((force, longueur, y))
 
     lignes += ["PU0,0;", "SP0;"]
@@ -111,6 +119,10 @@ def main():
                          "valable pour une lame, une coupe ne se voyant pas")
     ap.add_argument("--cote", type=float, default=12.0,
                     help="côté des carrés en mm (défaut 12)")
+    ap.add_argument("--marge", metavar="X,Y", default=f"{MARGE:g},{MARGE:g}",
+                    help="coin de départ en mm. Sert à poser le nuancier sur "
+                         "une zone SAINE de la bande téflon : un carré coupé "
+                         "au-dessus d'un sillon usé donne une lecture fausse.")
     ap.add_argument("--envoyer", action="store_true",
                     help="envoie à la machine (mouvement réel de l'outil)")
     args = ap.parse_args()
@@ -118,19 +130,28 @@ def main():
     if args.min < 1 or args.max < args.min or args.pas < 1:
         sys.exit("plage de force incohérente")
 
+    try:
+        marge = tuple(float(v) for v in args.marge.split(","))
+        if len(marge) != 2:
+            raise ValueError
+    except ValueError:
+        sys.exit("--marge attend deux nombres séparés par une virgule, "
+                 "ex. 5,100")
+
     if args.carres:
         programme, legende = carres(args.min, args.max, args.pas,
-                                    args.outil, args.cote)
+                                    args.outil, args.cote, marge=marge)
     else:
         programme, legende = nuancier(args.min, args.max, args.pas,
-                                      args.outil)
+                                      args.outil, marge=marge)
 
     if args.carres:
         xs = [x for _, x, _ in legende]; ys = [y for _, _, y in legende]
         print(f"{len(legende)} carrés de {args.cote:.0f} mm, force {args.min} "
               f"à {args.max} par pas de {args.pas}")
-        print(f"emprise {max(xs) + args.cote + MARGE:.0f} x "
-              f"{max(ys) + args.cote + MARGE:.0f} mm\n")
+        print(f"emprise {max(xs) + args.cote:.0f} x "
+              f"{max(ys) + args.cote:.0f} mm, coin à "
+              f"{marge[0]:.0f}, {marge[1]:.0f}\n")
         print("  force        position (x, y)")
         for force, x, y in legende:
             print(f"  {force:>5}   {x:>10.1f}, {y:.1f}")

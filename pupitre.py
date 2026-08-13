@@ -575,6 +575,26 @@ class Pupitre(QWidget):
             "utile. Type 1 : repères autour, feuille plus grande.")
         gl.addWidget(QLabel("type de repère"), 10, 0)
         gl.addWidget(self.cmb_type_arms, 10, 1)
+        self.spn_corr_av = self._reel(-20.0, 20.0, 0.0)
+        self.spn_corr_ch = self._reel(-20.0, 20.0, 0.0)
+        for w in (self.spn_corr_av, self.spn_corr_ch):
+            w.setDecimals(1)
+            w.setToolTip(
+                "Écart MESURÉ entre la découpe et l'impression, à "
+                "retrancher.\n\n"
+                "Le manuel (p. 5-5) dit de le relever plutôt que de le "
+                "calculer :\n« Mesurez la distance entre le point "
+                "d'origine des données\nde découpe et le point d'origine "
+                "des repères. »\n\n"
+                "Positif = la découpe se déplace dans le sens où le média\n"
+                "avance, ou dans celui où le chariot va. Un essai au stylo\n"
+                "dit tout de suite si le signe est le bon.\n\n"
+                "N'agit que sur la DÉCOUPE, jamais sur la feuille à "
+                "imprimer.")
+        gl.addWidget(QLabel("correction avance"), 11, 0)
+        gl.addWidget(self.spn_corr_av, 11, 1)
+        gl.addWidget(QLabel("correction chariot"), 12, 0)
+        gl.addWidget(self.spn_corr_ch, 12, 1)
         g_arms = g
 
         # --- rôles des couleurs
@@ -1821,6 +1841,17 @@ class Pupitre(QWidget):
             if suite != QMessageBox.Ok:
                 return
 
+        # La correction mesurée : elle ne touche QUE ce qui part au
+        # traceur. L'appliquer au pipeline déplacerait aussi la feuille à
+        # imprimer, donc corrigerait un écart en le recréant.
+        cav, cch = self.spn_corr_av.value(), self.spn_corr_ch.value()
+
+        def corriger(polylignes):
+            if not (cav or cch) or not self.chk_arms.isChecked():
+                return polylignes
+            return [([(x + cav, y + cch) for x, y in pts], f)
+                    for pts, f in polylignes]
+
         # Le réordonnancement ne tourne qu'ici : il est en n², donc trop
         # lourd à rejouer à chaque mouvement d'un réglage, et il ne change
         # rien à ce que l'aperçu montre.
@@ -1831,12 +1862,13 @@ class Pupitre(QWidget):
         # de panneaux en mosaïque. Le reste du code ne fait pas la
         # différence, ce qui évite deux chemins parallèles à maintenir.
         if panneaux:
-            lots = [(f"panneau {n}/{len(panneaux)}", m)
+            lots = [(f"panneau {n}/{len(panneaux)}", corriger(m))
                     for n, (_i, _j, _r, m) in enumerate(panneaux, 1)]
         else:
             # Ce qui part au traceur : le contour SEUL quand il est demandé.
             # Découper aussi le motif trancherait l'autocollant en deux.
-            lots = [("", self.contour if self.contour else self.calcule)]
+            lots = [("", corriger(self.contour if self.contour
+                                  else self.calcule))]
 
         programmes, gains = [], []
         for nom, morceaux in lots:

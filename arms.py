@@ -158,8 +158,11 @@ def _coin(x, y, sx, sy, branche, epaisseur):
             (x + sx*e, y + sy*b), (x, y + sy*b)]
 
 
+A4 = (210.0, 297.0)       # mm, portrait — le sens où la feuille est chargée
+
+
 def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
-             bord=10.0, type_repere=2):
+             bord=10.0, type_repere=2, page=A4):
     """Le dessin et ses quatre repères sur une même feuille, en SVG.
 
     C'est la pièce qui manquait : un motif imprimé AVEC ses repères, pour
@@ -182,6 +185,16 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
     dans `MARK TYPE`, et un désaccord la fait balayer après une forme
     absente du papier. Le type 1 déborde en outre de `branche` millimètres
     au-delà des angles, ce dont la page tient compte.
+
+    `page` est le FORMAT DU PAPIER, A4 portrait par défaut, et le bloc y
+    est centré. Une page taillée sur mesure autour du dessin paraissait
+    plus économe, mais elle ne l'était qu'en apparence : l'imprimante
+    centre ce qu'elle reçoit, donc deux dessins de tailles différentes
+    posaient leurs repères à deux endroits différents du papier, décidés
+    par le pilote et connus de personne. Or c'est précisément l'endroit
+    des repères sur la feuille qui décide si la tête les trouve. Une page
+    fixe rend la chose reproductible. `page=None` retrouve l'ancien
+    comportement, pour un format non standard.
 
     Rend `(svg, infos)`. `infos` porte ce qu'il faudra pour la découpe :
     l'écart à annoncer à la machine, et la position du dessin par rapport
@@ -214,13 +227,28 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
             "dessin très petit devant les repères : la machine peut "
             "confondre deux repères voisins.")
 
-    # La page. En type 2 les branches rentrent, donc les angles SONT les
-    # points extrêmes. En type 1 elles sortent, et il faut leur faire place
-    # des deux côtés — sans quoi les repères seraient rognés à l'impression.
+    # L'encombrement du bloc. En type 2 les branches rentrent, donc les
+    # angles SONT les points extrêmes. En type 1 elles sortent, et il faut
+    # leur faire place — sans quoi les repères seraient rognés.
     debord = branche if sortant else 0.0
-    page_l = ecart_x + 2*(bord + debord)
-    page_h = ecart_y + 2*(bord + debord)
-    dx, dy = bord + debord - ax0, bord + debord - ay0
+    bloc_l = ecart_x + 2*debord
+    bloc_h = ecart_y + 2*debord
+
+    if page:
+        page_l, page_h = page
+        if bloc_l + 2*bord > page_l or bloc_h + 2*bord > page_h:
+            avertissements.append(
+                f"le bloc fait {bloc_l:.0f} × {bloc_h:.0f} mm et ne tient "
+                f"pas sur {page_l:.0f} × {page_h:.0f} mm avec {bord:g} mm "
+                f"de bordure : réduire le dessin, la marge, ou changer de "
+                f"format.")
+        # CENTRÉ sur la page : c'est ce que fait de toute façon le pilote
+        # d'impression, autant le décider nous-mêmes et le savoir.
+        dx = (page_l - bloc_l) / 2 + debord - ax0
+        dy = (page_h - bloc_h) / 2 + debord - ay0
+    else:
+        page_l, page_h = bloc_l + 2*bord, bloc_h + 2*bord
+        dx, dy = bord + debord - ax0, bord + debord - ay0
 
     def _svg_y(v):
         return page_h - v                    # le SVG compte Y vers le bas
@@ -255,6 +283,10 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
         "origine_dessin": (marge, marge),     # depuis l'angle du repère 1
         "emprise": (x1 - x0, y1 - y0),
         "type_repere": type_repere,
+        # Où l'angle du premier repère tombe sur la FEUILLE. C'est ce qui
+        # décide si la tête le trouve : trop près du bord, elle rencontre
+        # le bord avant lui.
+        "marges": (ax0 + dx, ay0 + dy),
         "avertissements": avertissements,
     }
 

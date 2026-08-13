@@ -407,7 +407,10 @@ def test_reperes_composes_sont_de_type_2():
     """
     dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
     bord = 10.0
-    _svg, infos = arms.composer(dessin, marge=25.0, bord=bord)
+    # `page=None` : la page taillée sur mesure, celle où l'encombrement du
+    # bloc se lit directement. Sur une page fixe la propriété existe
+    # toujours mais se noie dans les marges de centrage.
+    _svg, infos = arms.composer(dessin, marge=25.0, bord=bord, page=None)
     ax, ay = infos["ecart"]
     pl, ph = infos["page"]
     assert abs(pl - (ax + 2 * bord)) < 1e-9, (
@@ -426,9 +429,9 @@ def test_type_1_laisse_la_place_a_ses_branches():
     dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
     bord, branche = 10.0, 20.0
 
-    _s2, i2 = arms.composer(dessin, marge=25.0, bord=bord,
+    _s2, i2 = arms.composer(dessin, marge=25.0, bord=bord, page=None,
                             branche=branche, type_repere=2)
-    _s1, i1 = arms.composer(dessin, marge=25.0, bord=bord,
+    _s1, i1 = arms.composer(dessin, marge=25.0, bord=bord, page=None,
                             branche=branche, type_repere=1)
 
     assert i1["ecart"] == i2["ecart"], (
@@ -510,6 +513,36 @@ def test_la_couleur_decide_du_role():
 
     # Et une couleur inconnue ne doit pas être découpée par surprise.
     assert roles.role_par_defaut((0.0, 0.65, 0.0)) != "decouper"
+
+
+def test_la_feuille_a_imprimer_a_toujours_le_meme_format():
+    """Deux dessins différents doivent donner la MÊME page.
+
+    Une page taillée sur mesure autour du dessin paraissait économe.
+    Elle ne l'était qu'en apparence : l'imprimante centre ce qu'elle
+    reçoit, donc deux dessins de tailles différentes posaient leurs
+    repères à deux endroits différents du papier — décidés par le pilote
+    et connus de personne.
+
+    Or c'est l'endroit des repères sur la feuille qui décide si la tête
+    les trouve. Toute la journée du 13/08/2026 a tourné autour de ça.
+    """
+    petit = [([(0.0, 0.0), (40.0, 0.0), (40.0, 25.0), (0.0, 0.0)], True)]
+    grand = [([(0.0, 0.0), (110.0, 0.0), (110.0, 90.0), (0.0, 0.0)], True)]
+
+    _s1, i1 = arms.composer(petit, marge=25.0)
+    _s2, i2 = arms.composer(grand, marge=25.0)
+
+    assert i1["page"] == i2["page"] == arms.A4, (
+        f"pages différentes : {i1['page']} et {i2['page']} — l'impression "
+        f"les centrera chacune à sa façon")
+
+    # Et le bloc doit rester DANS la page, sinon les repères sont rognés.
+    for infos in (i1, i2):
+        mx, my = infos["marges"]
+        assert mx > 0 and my > 0, (
+            f"le premier repère tombe à {mx:.1f} ; {my:.1f} du bord — "
+            f"hors de la feuille")
 
 
 def test_unites_accordees():
@@ -719,7 +752,10 @@ def test_reperes_composes_sont_de_type_2():
     """
     dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
     bord = 10.0
-    _svg, infos = arms.composer(dessin, marge=25.0, bord=bord)
+    # `page=None` : la page taillée sur mesure, celle où l'encombrement du
+    # bloc se lit directement. Sur une page fixe la propriété existe
+    # toujours mais se noie dans les marges de centrage.
+    _svg, infos = arms.composer(dessin, marge=25.0, bord=bord, page=None)
     ax, ay = infos["ecart"]
     pl, ph = infos["page"]
     assert abs(pl - (ax + 2 * bord)) < 1e-9, (
@@ -738,9 +774,9 @@ def test_type_1_laisse_la_place_a_ses_branches():
     dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
     bord, branche = 10.0, 20.0
 
-    _s2, i2 = arms.composer(dessin, marge=25.0, bord=bord,
+    _s2, i2 = arms.composer(dessin, marge=25.0, bord=bord, page=None,
                             branche=branche, type_repere=2)
-    _s1, i1 = arms.composer(dessin, marge=25.0, bord=bord,
+    _s1, i1 = arms.composer(dessin, marge=25.0, bord=bord, page=None,
                             branche=branche, type_repere=1)
 
     assert i1["ecart"] == i2["ecart"], (
@@ -822,6 +858,36 @@ def test_la_couleur_decide_du_role():
 
     # Et une couleur inconnue ne doit pas être découpée par surprise.
     assert roles.role_par_defaut((0.0, 0.65, 0.0)) != "decouper"
+
+
+def test_la_feuille_a_imprimer_a_toujours_le_meme_format():
+    """Deux dessins différents doivent donner la MÊME page.
+
+    Une page taillée sur mesure autour du dessin paraissait économe.
+    Elle ne l'était qu'en apparence : l'imprimante centre ce qu'elle
+    reçoit, donc deux dessins de tailles différentes posaient leurs
+    repères à deux endroits différents du papier — décidés par le pilote
+    et connus de personne.
+
+    Or c'est l'endroit des repères sur la feuille qui décide si la tête
+    les trouve. Toute la journée du 13/08/2026 a tourné autour de ça.
+    """
+    petit = [([(0.0, 0.0), (40.0, 0.0), (40.0, 25.0), (0.0, 0.0)], True)]
+    grand = [([(0.0, 0.0), (110.0, 0.0), (110.0, 90.0), (0.0, 0.0)], True)]
+
+    _s1, i1 = arms.composer(petit, marge=25.0)
+    _s2, i2 = arms.composer(grand, marge=25.0)
+
+    assert i1["page"] == i2["page"] == arms.A4, (
+        f"pages différentes : {i1['page']} et {i2['page']} — l'impression "
+        f"les centrera chacune à sa façon")
+
+    # Et le bloc doit rester DANS la page, sinon les repères sont rognés.
+    for infos in (i1, i2):
+        mx, my = infos["marges"]
+        assert mx > 0 and my > 0, (
+            f"le premier repère tombe à {mx:.1f} ; {my:.1f} du bord — "
+            f"hors de la feuille")
 
 
 def test_unites_accordees():

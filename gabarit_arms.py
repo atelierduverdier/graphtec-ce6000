@@ -63,7 +63,12 @@ def planche(largeur, hauteur, marge, hachures=False, ecart=None,
         # loin — assez pour qu'elle scanne le bord de la feuille et ne
         # trouve rien.
         if ancrage == "origine":
-            x0 = y0 = 0.0
+            # Le SVG compte Y vers le BAS, la machine vers le HAUT : le
+            # repère qui tombera sur l'origine machine est celui du BAS du
+            # dessin. L'ancrer en haut du SVG le poserait à l'autre bout,
+            # ce qui s'est vu -- « 0,0 » demandé, 0 ; 57,7 obtenu.
+            x0 = 0.0
+            y0 = hauteur - ecart[1]
         else:
             x0 = (largeur - ecart[0]) / 2.0
             y0 = (hauteur - ecart[1]) / 2.0
@@ -82,26 +87,37 @@ def planche(largeur, hauteur, marge, hachures=False, ecart=None,
     return formes
 
 
-def _hachures(contours, pas=0.35):
-    """Remplissage par balayage, pour ceux qui n'ont pas de marqueur.
+def _hachures(contours, pas=0.15):
+    """Remplit chaque branche de traits parallèles, dans sa LONGUEUR.
 
-    Grossier à dessein : chaque rectangle est balayé dans sa largeur. Le
-    noir d'un stylo reste gris, le capteur risque de ne pas mordre — c'est
-    un pis-aller, pas une solution.
+    Idée de Christophe, et meilleure que le marqueur pour une raison qui
+    n'est pas le confort : **un feutre déborde**. La branche fait 1,0 mm,
+    et `TB53,40` dit à la machine d'attendre exactement ça. Un remplissage
+    à la main en fait 1,5 ou 2, et le repère cesse de correspondre à ce
+    qui a été déclaré. La machine, elle, reste dans la géométrie au
+    dixième.
+
+    Traits dans le sens de la LONGUEUR : sur une branche de 1 mm de large,
+    il en faut sept au pas de 0,15 mm, contre cent trente en travers. Sept
+    traits de 20 mm valent mieux que cent trente de 1 mm — moins de levés
+    de plume, moins de temps, et un noir plus régulier.
+
+    À combiner avec `--passages 2` à l'envoi : repasser ne coûte aucun
+    déplacement et double la charge d'encre.
     """
     traits = []
     for c in contours:
         xs = [p[0] for p in c]; ys = [p[1] for p in c]
         x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
-        vertical = (x1 - x0) < (y1 - y0)
-        n = int(((x1 - x0) if vertical else (y1 - y0)) / pas)
-        for i in range(1, max(1, n)):
-            if vertical:
-                x = x0 + i * pas
-                traits.append([(x, y0), (x, y1)])
-            else:
-                y = y0 + i * pas
-                traits.append([(x0, y), (x1, y)])
+        etroit_en_x = (x1 - x0) < (y1 - y0)
+        largeur = (x1 - x0) if etroit_en_x else (y1 - y0)
+        n = max(1, int(round(largeur / pas)) - 1)
+        for i in range(1, n + 1):
+            d = x0 + i * largeur / (n + 1) if etroit_en_x \
+                else y0 + i * largeur / (n + 1)
+            # le trait court dans la LONGUEUR de la branche
+            traits.append([(d, y0), (d, y1)] if etroit_en_x
+                          else [(x0, d), (x1, d)])
     return traits
 
 
@@ -183,9 +199,17 @@ def main():
     print(f"  média {L:g} × {H:g} mm, repères à {args.marge:g} mm des bords")
     print(f"  branches {BRANCHE:g} mm, épaisseur {EPAISSEUR:g} mm")
     print(f"  écart entre les angles : {utile[0]:.1f} × {utile[1]:.1f} mm")
-    print("\n  Tracer au stylo, PUIS REMPLIR AU MARQUEUR NOIR.")
-    print("  Le capteur exige du noir franc sur du blanc, et le manuel")
-    print("  limite la détection aux matières de 0,3 mm au plus.")
+    if args.hachures:
+        print("\n  Rempli par la MACHINE : rien à faire à la main.")
+        print("  Envoyer avec --passages 2 : repasser ne coûte aucun")
+        print("  déplacement et double la charge d'encre.")
+        print("  Un feutre déborderait — la branche fait 1,0 mm et c'est")
+        print("  exactement ce que la machine attend (TB53,40).")
+    else:
+        print("\n  Tracer au stylo, PUIS REMPLIR AU MARQUEUR NOIR.")
+        print("  Attention : un feutre DÉBORDE d'une branche de 1,0 mm,")
+        print("  et la machine attend exactement 1,0. Préférer --hachures.")
+    print("  Le manuel limite la détection aux matières de 0,3 mm au plus.")
 
 
 if __name__ == "__main__":

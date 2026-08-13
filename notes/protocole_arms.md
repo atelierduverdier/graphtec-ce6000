@@ -81,6 +81,34 @@ pas. Notre `sondes/sonde_ce6000.py` se contente d'`OI;`, qui rend `7586` —
 le modèle ÉMULÉ, pas la machine. `ESC.C31;9:` donne son vrai nom et sa
 version de micrologiciel.
 
+## Le piège « Par rapport à : Tâche »
+
+Le panneau de Studio place les repères **relativement au DESSIN** par
+défaut (« Par rapport à : Tâche »), et non au média. Déplacer ou changer
+le motif déplace donc les repères avec lui, et `TB124` change sans qu'on
+ait touché aux marges.
+
+Constaté le 13/08/2026 sur quatre captures : `227,0 × 140,0 mm` trois fois
+de suite, puis **`115,6 × 105,2`** — c'est-à-dire l'emprise de l'ellipse
+qui servait de motif, après que Christophe l'eut changée et déplacée.
+
+Pour un gabarit fixe, mettre **« Par rapport à : Support »**. Sans quoi
+chaque retouche du dessin invalide les repères déjà tracés.
+
+`TB124` accepte d'ailleurs des **décimales** — `TB124,4622.80,4209.60` —
+ce que les valeurs entières des premières captures ne laissaient pas voir.
+
+## Les états pendant un scan
+
+Suivis pas à pas dans la capture, du déclenchement à l'échec :
+
+    ESC.C1:   -> 8 sans interruption            « occupée », rien de plus
+    ESC.C11:  -> 0, puis 1 pendant tout le
+                 balayage, puis 6               1 = elle CHERCHE, 6 = fini/échoué
+
+`ESC.C11` est donc l'état utile : c'est lui qui distingue la recherche du
+reste, là où `ESC.C1` se contente de dire « occupée ».
+
 ## Ce que ça ouvre
 
 `TB124` **dit exactement où Studio attend les repères**. Le gabarit peut

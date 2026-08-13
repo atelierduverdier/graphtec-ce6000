@@ -36,7 +36,8 @@ from PySide6.QtSvg import QSvgRenderer                        # noqa: E402
 from PySide6.QtWidgets import (                              # noqa: E402
     QApplication, QWidget, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
     QComboBox, QCheckBox, QGridLayout, QVBoxLayout, QHBoxLayout, QGroupBox,
-    QFileDialog, QMessageBox, QSizePolicy, QTabWidget, QFrame)
+    QFileDialog, QMessageBox, QSizePolicy, QTabWidget, QFrame,
+    QScrollArea)
 
 
 # ======================================================================
@@ -223,7 +224,15 @@ class Pupitre(QWidget):
         droite.addWidget(self.info, 0)
         corps.addLayout(droite, 1)
         racine.addLayout(corps, 1)
-        self.resize(1120, 720)
+        # Naître plus petit que l'écran, marges du gestionnaire de
+        # fenêtres comprises. Une fenêtre plus haute que le bureau se
+        # retrouve avec sa barre de titre hors d'atteinte.
+        ecran = self.screen().availableGeometry() if self.screen() else None
+        if ecran:
+            self.resize(min(1120, ecran.width() - 80),
+                        min(720, ecran.height() - 80))
+        else:
+            self.resize(1120, 720)
 
         self._habiller()
         self._interroger_media(silencieux=True)
@@ -624,6 +633,14 @@ class Pupitre(QWidget):
         g_outil = g
 
         def onglet(*cadres):
+            """Un onglet DÉFILANT.
+
+            Sans lui, chaque cadre ajouté allonge la colonne et finit par
+            pousser la fenêtre hors de l'écran — c'est arrivé le
+            13/08/2026 avec le cadre Print & cut. Un panneau qui grandit
+            est normal ; une fenêtre qu'on ne peut plus refermer parce que
+            sa barre de titre est sortie du bureau ne l'est pas.
+            """
             w = QWidget()
             lay = QVBoxLayout(w)
             lay.setContentsMargins(10, 12, 10, 10)
@@ -631,7 +648,14 @@ class Pupitre(QWidget):
             for c in cadres:
                 lay.addWidget(c)
             lay.addStretch(1)
-            return w
+            zone = QScrollArea()
+            zone.setWidget(w)
+            zone.setWidgetResizable(True)
+            zone.setFrameShape(QFrame.NoFrame)
+            # Défilement vertical seulement : la colonne a une largeur
+            # voulue, et une barre horizontale rognerait les libellés.
+            zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            return zone
 
         self.onglets = QTabWidget()
         self.onglets.addTab(onglet(b_ouvrir, self.lbl_fichier, g_media,

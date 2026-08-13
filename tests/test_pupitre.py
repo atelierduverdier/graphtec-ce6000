@@ -100,6 +100,27 @@ def test_aucun_titre_ne_perd_son_esperluette(fenetre):
                 f"et soulignera la lettre suivante")
 
 
+def test_les_onglets_defilent(fenetre):
+    """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
+
+    Le 13/08/2026, l'ajout du cadre Print & cut a allongé la colonne de
+    l'onglet Dessin au point de pousser la fenêtre hors du bureau de
+    Christophe — barre de titre comprise, donc impossible à déplacer.
+
+    Un panneau qui grandit est normal. Une fenêtre qu'on ne peut plus
+    attraper ne l'est pas, et ça ne se voit sur aucun écran assez grand.
+    """
+    from PySide6.QtWidgets import QScrollArea
+    for i in range(fenetre.onglets.count()):
+        page = fenetre.onglets.widget(i)
+        nom = fenetre.onglets.tabText(i)
+        assert isinstance(page, QScrollArea), (
+            f"l'onglet « {nom} » ne défile pas : tout ajout futur "
+            f"repoussera la fenêtre hors de l'écran")
+        assert page.widgetResizable(), (
+            f"l'onglet « {nom} » défile mais ne s'ajuste pas en largeur")
+
+
 def test_les_onglets_sont_nommes(fenetre):
     attendus = ["Dessin", "Outil", "Machine"]
     obtenus = [fenetre.onglets.tabText(i)

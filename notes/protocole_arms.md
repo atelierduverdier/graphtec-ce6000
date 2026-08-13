@@ -296,11 +296,25 @@ sont espacés de 150 et 160 mm ; leur centre est donc à 75 et **80**. La
 machine, elle, veut 75 et 75. Il y a **5 mm entre l'angle du repère et
 l'origine que pose la détection**, dans le sens de l'avance uniquement.
 
-C'est mesuré, ce n'est pas expliqué. Les candidats non éliminés :
-`MARK DIST.ADJ.UNIT=5mm` du vidage de configuration, qui vaut exactement
-5 mm ; ou une convention d'origine propre au type 2. Ne pas trancher sans
-un second gabarit d'écarts différents — c'est lui qui dira si les 5 mm
-sont une constante ou une proportion.
+**Et le manuel officiel dit que ça se MESURE.** Trouvé le 13/08/2026 au
+soir dans `Manuel utilisateur CE6000 V01.pdf`, p. 5-5 :
+
+> Le point d'origine du plotter sera celui défini par les repères […] et
+> il est différent du point d'origine des données de découpe. La
+> différence entre ces deux points s'appelle un offset.
+>
+> **Mesurez la distance** entre le point d'origine des données de découpe
+> et le point d'origine des repères.
+
+Ce n'est donc pas une anomalie à élucider : c'est une cote d'installation
+que Graphtec lui-même prescrit de relever, et qui dépend du logiciel qui
+a créé les repères — « un offset peut être généré à la création des
+repères en fonction du logiciel utilisé ». Les trois croix étaient la
+méthode prévue, pas un pis-aller.
+
+Le rattrapage se règle dans `PARAM ARMS 2/4` -> `[4]` OFFSET ORIGINE AXE,
+ou se soustrait côté PC. Reste utile de vérifier sur un second gabarit
+d'écarts différents que la valeur ne dépend pas de l'écart.
 
 L'hypothèse « les axes ont été intervertis » (`5 = (160-150)/2`) était
 séduisante et **fausse** : elle prédisait 75 ; 80, qui a raté.

@@ -238,8 +238,8 @@ def lire(fd, parametre, condition=1, delai=1.5, famille=2002):
 
 def lire_condition(condition=1, periph=PERIPH):
     """Rend {nom: valeur} pour tous les paramètres connus d'une condition."""
-    noms = {"outil": OUTIL, "vitesse": VITESSE,
-            "force": FORCE, "acceleration": ACCELERATION}
+    noms = {"outil": OUTIL, "vitesse": VITESSE, "force": FORCE,
+            "acceleration": ACCELERATION, "debordement": DEBORDEMENT}
     fd = os.open(periph, os.O_RDWR | os.O_NONBLOCK)
     try:
         rendu = {}

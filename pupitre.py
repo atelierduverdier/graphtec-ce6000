@@ -504,6 +504,20 @@ class Pupitre(QWidget):
         self.spn_offset = self._entier(machine.DEPORT_MINI,
                                        machine.DEPORT_MAXI, 0)
         self.cmb_outil.currentTextChanged.connect(self._offset_utile)
+        # Débordement : la pointe de la lame TRAÎNE derrière l'axe du
+        # porte-outil. Sans lui, un contour qui se referme s'arrête juste
+        # avant son point de départ et laisse une languette non coupée, qui
+        # se déchire quand on pousse la pièce — toujours au même coin, et
+        # dès les forces les plus faibles. Mesuré le 13/08/2026 : à zéro,
+        # tous les carrés d'un nuancier se déchiraient ; à 0,2 mm ils se
+        # détachent proprement. Stocké à 200 unités par millimètre.
+        self.spn_debord = self._reel(0, 2.0, 0.2)
+        self.spn_debord.setDecimals(2)
+        self.spn_debord.setToolTip(
+            "Prolonge la coupe au-delà du point de fermeture, pour\n"
+            "rattraper la traîne de la pointe. À ZÉRO, chaque contour\n"
+            "laisse une languette qui se déchire au coin de départ.\n"
+            "0,2 mm est la valeur que Graphtec emploie lui-même.")
         self.spn_force = self._entier(1, 38, 12)
         # Repasser sur le tracé : 2 pour les plumes d'après le carnet, et
         # c'était la réponse au trait pâle du premier essai. Gratuit en
@@ -538,20 +552,22 @@ class Pupitre(QWidget):
         gl.addWidget(QLabel("outil"), 3, 0); gl.addWidget(self.cmb_outil, 3, 1)
         self.lbl_offset = QLabel("offset")
         gl.addWidget(self.lbl_offset, 4, 0); gl.addWidget(self.spn_offset, 4, 1)
-        gl.addWidget(QLabel("vitesse"), 5, 0); gl.addWidget(self.spn_vit, 5, 1)
-        gl.addWidget(QLabel("force"), 6, 0); gl.addWidget(self.spn_force, 6, 1)
-        gl.addWidget(QLabel("accélération"), 7, 0); gl.addWidget(self.spn_accel, 7, 1)
-        gl.addWidget(QLabel("passages"), 8, 0); gl.addWidget(self.spn_passages, 8, 1)
+        gl.addWidget(QLabel("débordement"), 5, 0)
+        gl.addWidget(self.spn_debord, 5, 1)
+        gl.addWidget(QLabel("vitesse"), 6, 0); gl.addWidget(self.spn_vit, 6, 1)
+        gl.addWidget(QLabel("force"), 7, 0); gl.addWidget(self.spn_force, 7, 1)
+        gl.addWidget(QLabel("accélération"), 8, 0); gl.addWidget(self.spn_accel, 8, 1)
+        gl.addWidget(QLabel("passages"), 9, 0); gl.addWidget(self.spn_passages, 9, 1)
         self.spn_passages.setToolTip(
             "repasser sur chaque tracé rend le trait franc au stylo.\n"
             "Le carnet d'établi note 2 pour le feutre comme pour le Bic.\n"
             "Ne coûte aucun déplacement : le retour se fait à l'envers.")
-        gl.addWidget(b_lire_c, 9, 0); gl.addWidget(b_appl_c, 9, 1)
-        gl.addWidget(self.lbl_condition, 10, 0, 1, 2)
-        gl.addWidget(self.chk_regler, 11, 0, 1, 2)
+        gl.addWidget(b_lire_c, 10, 0); gl.addWidget(b_appl_c, 10, 1)
+        gl.addWidget(self.lbl_condition, 11, 0, 1, 2)
+        gl.addWidget(self.chk_regler, 12, 0, 1, 2)
         rappel = QLabel("accélération basse = trait net,\nhaute = travail plus court")
         rappel.setObjectName("faible")
-        gl.addWidget(rappel, 12, 0, 1, 2)
+        gl.addWidget(rappel, 13, 0, 1, 2)
         self._offset_utile(self.cmb_outil.currentText())
         g_outil = g
 
@@ -607,8 +623,12 @@ class Pupitre(QWidget):
              "lissage des courbes. Le manuel recommande 1 : une valeur\n"
              "élevée déforme les découpes."),
             (M.FORCE_DEPORT, "force d'offset", (0, 60), 1, "",
-             "le manuel annonce 0 à 20 ; la machine de l'atelier était\n"
-             "à 30. C'est la machine qui a raison."),
+             "Force de la découpe LÉGÈRE qui oriente la lame avant chaque\n"
+             "départ — pas la force de coupe. Défaut du manuel : 4, et il\n"
+             "demande « la plus faible possible ».\n\n"
+             "À 30 — la valeur qu'y écrivait Graphtec Studio — elle\n"
+             "DÉCHIRE le papier 80 g au départ. Mesuré le 13/08/2026 sur\n"
+             "deux carrés jumeaux."),
             (M.ANGLE_DEPORT, "angle d'offset", (0, 60), 100, " °",
              "stocké × 100 dans la machine."),
             (M.VITESSE_RELEVE, "vitesse outil relevé", (5, 60), 10, " cm/s",
@@ -740,6 +760,8 @@ class Pupitre(QWidget):
         self.spn_passages.setValue(m.get("passages", 1))
 
         rappels = []
+        if m.get("mesure"):
+            rappels.append(f"mesuré {m['mesure']}")
         if not outil:
             # Sans outil déclaré, le champ garde celui du profil précédent :
             # un réglage hérité en silence, et c'est précisément ce genre
@@ -748,7 +770,10 @@ class Pupitre(QWidget):
                            f"vérifier que « {self.cmb_outil.currentText()} » "
                            f"est bien ce qui est monté")
         if m.get("hauteur_lame"):
-            rappels.append(f"À LA MAIN : sortie de lame {m['hauteur_lame']} mm")
+            rappels.append(
+                f"À LA MAIN : sortie de lame {m['hauteur_lame']} mm — la "
+                f"machine sait la MESURER : [COND/TEST] → CONDITION (3/3) "
+                f"→ [3] AJUSTEMENT LAME")
         if m.get("usage") == "rainer":
             rappels.append("RAINAGE : la lame marque, elle ne traverse pas")
         if m.get("seuil_coupe"):
@@ -841,6 +866,8 @@ class Pupitre(QWidget):
             self.spn_force.setValue(etat["force"])
         if etat.get("acceleration") is not None:
             self.spn_accel.setValue(etat["acceleration"])
+        if etat.get("debordement") is not None:
+            self.spn_debord.setValue(etat["debordement"] / 200.0)
         self.lbl_condition.setText(
             getattr(self, "resume_conditions", {}).get(
                 self.cmb_cond.currentIndex(),
@@ -864,6 +891,8 @@ class Pupitre(QWidget):
         try:
             M.regler_outil(fd, M.OUTILS[self.cmb_outil.currentText()],
                            condition=cond, offset=self.spn_offset.value())
+            d = int(round(self.spn_debord.value() * 200))
+            M.regler(fd, M.DEBORDEMENT, f"{d},{d}", condition=cond)
             rendu = M.appliquer(vitesse=self.spn_vit.value(),
                                 force=self.spn_force.value(),
                                 acceleration=self.spn_accel.value(),
@@ -936,7 +965,12 @@ class Pupitre(QWidget):
         for p, w in self.widgets_machine.items():
             w.setEnabled(p in lus)
         self.b_machine_ecrire.setEnabled(True)
-        texte = f"{len(lus)} réglage(s) lus sur la machine"
+        fo = lus.get(M.FORCE_DEPORT)
+        alerte = ("   ⚠ force d'offset à %d : elle déchire le papier au "
+                  "départ dès qu'elle approche la force de coupe. "
+                  "Le défaut est 4." % fo) if fo and fo > 10 else ""
+
+        texte = f"{len(lus)} réglage(s) lus sur la machine" + alerte
         if muets:
             texte += f" — {len(muets)} muet(s)"
         if elargis:
@@ -1206,6 +1240,9 @@ class Pupitre(QWidget):
                     fd, conditions.OUTILS[self.cmb_outil.currentText()],
                     condition=condition,
                     offset=self.spn_offset.value())
+                d = int(round(self.spn_debord.value() * 200))
+                conditions.regler(fd, conditions.DEBORDEMENT, f"{d},{d}",
+                                  condition=condition)
                 rendu = conditions.appliquer(vitesse=self.spn_vit.value(),
                                              acceleration=self.spn_accel.value(),
                                              condition=condition, fd=fd)

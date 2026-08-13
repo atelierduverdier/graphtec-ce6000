@@ -345,3 +345,47 @@ la même chose pour chaque repère.
 
 Le manuel avertit qu'une découpe est lancée juste après la détection :
 **mettre le stylo, pas la lame.**
+
+## Pourquoi le balayage automatique trouve le BORD de la feuille
+
+Symptôme rapporté par Christophe le 13/08/2026 : « il scanne le bord de
+la feuille puis me dit HORS SURFACE », aussi bien depuis Graphtec Studio
+que depuis le panneau.
+
+Le capteur ne reconnaît pas une forme, il voit une **transition
+clair/sombre**. Le bord de la feuille en est une, plus franche que
+n'importe quel repère : papier blanc, puis la bande de découpe sombre en
+dessous. La tête le prend pour un repère, bâtit son repère dessus, en
+déduit un second point hors de la feuille — d'où `HORS SURFACE`. L'erreur
+est vraie, sa cause est ailleurs.
+
+### La cause : MARK DISTANCE à zéro
+
+`Manuel utilisateur CE6000 V01.pdf`, p. 5-14, menu `[PAUSE/MENU]` >
+`[2]` ARMS > `[4]` POSITION REPERES :
+
+> Paramétrer la distance entre les repères permet de **ne pas scanner
+> inutilement la surface entre les repères**. […] Le saut de la distance
+> vers le repère suivant **ne se fera pas si la valeur est réglée à
+> 0 mm**.
+
+Le vidage de la machine donne `MARK DISTANCE x,y = 0.0mm, 0.0mm`. Aucun
+saut, donc : elle balaie tout l'espace entre deux repères, bord compris.
+
+**À régler à la vraie distance** — X dans le sens de l'avance, Y sous le
+chariot. Pour le gabarit officiel chargé par le petit côté : 160 et 150.
+
+Avertissement du manuel : la valeur X doit rester inférieure à la
+longueur du média, sinon **le média est éjecté**.
+
+### L'autre voie : la détection manuelle
+
+`[2]` LECTURE MANUELLE REPERES (p. 5-39). On amène la **pointe de
+l'outil** dans le quart de surface enfermé par l'angle du premier L —
+pas sur le trait — puis ENTER, et la machine redemande la même chose
+pour chaque repère. En lui montrant où chercher, elle ne peut plus
+tomber sur le bord.
+
+C'est aussi ce qui manque à NOTRE scan piloté depuis Linux : il envoie
+la séquence `TB` et laisse la machine chercher depuis là où elle dort.
+Même cause, même échec en cinq secondes.

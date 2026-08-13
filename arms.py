@@ -146,6 +146,99 @@ def desaccords(reglages_lus, type_gabarit=2, branche=BRANCHE):
 
 
 # ======================================================================
+# LA FEUILLE À IMPRIMER : le dessin ENTOURÉ de ses repères
+# ======================================================================
+
+
+def _coin(x, y, sx, sy, branche, epaisseur):
+    """Un L plein de TYPE 2 : l'angle est en (x, y), les branches rentrent.
+
+    Type 2 = angles vers l'EXTÉRIEUR, repères dans la zone de découpe.
+    C'est la forme des gabarits officiels de Graphtec, et celle que la
+    machine de l'atelier attend (`MARK TYPE=2`).
+    """
+    e, b = epaisseur, branche
+    return [(x, y), (x + sx*b, y), (x + sx*b, y + sy*e), (x + sx*e, y + sy*e),
+            (x + sx*e, y + sy*b), (x, y + sy*b)]
+
+
+def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
+             bord=10.0):
+    """Le dessin et ses quatre repères sur une même feuille, en SVG.
+
+    C'est la pièce qui manquait : un motif imprimé AVEC ses repères, pour
+    que le traceur retrouve ensuite où il s'est réellement posé. Le banc
+    d'essai du 13/08/2026 n'imprimait que les repères, seuls, parce qu'on
+    ne savait pas encore si le capteur voyait quoi que ce soit.
+
+    `polylignes` sont en convention machine : millimètres, Y vers le
+    haut. `marge` est la distance entre le dessin et l'ANGLE des repères.
+
+    Rend `(svg, infos)`. `infos` porte ce qu'il faudra pour la découpe :
+    l'écart à annoncer à la machine, et la position du dessin par rapport
+    au premier repère — c'est-à-dire l'offset que le manuel (p. 5-5) dit
+    de mesurer, mais qu'on connaît ici par construction puisque c'est nous
+    qui posons les deux.
+    """
+    if not polylignes:
+        raise ValueError("aucun dessin à entourer")
+
+    xs = [x for pts, _ in polylignes for x, _ in pts]
+    ys = [y for pts, _ in polylignes for _, y in pts]
+    x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+
+    # Angles des quatre repères, autour de l'emprise du dessin.
+    ax0, ay0, ax1, ay1 = x0 - marge, y0 - marge, x1 + marge, y1 + marge
+    ecart_x, ecart_y = ax1 - ax0, ay1 - ay0
+
+    avertissements = []
+    if marge < branche:
+        avertissements.append(
+            f"marge de {marge:g} mm plus courte que les branches "
+            f"({branche:g} mm) : les repères vont mordre sur le dessin.")
+    if ecart_x < 3 * branche or ecart_y < 3 * branche:
+        avertissements.append(
+            "dessin très petit devant les repères : la machine peut "
+            "confondre deux repères voisins.")
+
+    # La page : tout ce qui précède, plus une bordure blanche. Les branches
+    # rentrent vers le centre, donc les angles SONT les points extrêmes.
+    page_l, page_h = ecart_x + 2*bord, ecart_y + 2*bord
+    dx, dy = bord - ax0, bord - ay0          # translation vers la page
+
+    def _svg_y(v):
+        return page_h - v                    # le SVG compte Y vers le bas
+
+    chemins = []
+    for pts in (_coin(ax0, ay0, +1, +1, branche, epaisseur),
+                _coin(ax1, ay0, -1, +1, branche, epaisseur),
+                _coin(ax0, ay1, +1, -1, branche, epaisseur),
+                _coin(ax1, ay1, -1, -1, branche, epaisseur)):
+        d = "M " + " L ".join(f"{x+dx:.3f} {_svg_y(y+dy):.3f}" for x, y in pts)
+        chemins.append(f'  <path d="{d} Z" fill="#000000" stroke="none"/>')
+
+    for pts, ferme in polylignes:
+        d = "M " + " L ".join(f"{x+dx:.3f} {_svg_y(y+dy):.3f}" for x, y in pts)
+        if ferme:
+            d += " Z"
+        chemins.append(f'  <path d="{d}" fill="none" stroke="#000000" '
+                       f'stroke-width="0.2"/>')
+
+    svg = ([f'<svg xmlns="http://www.w3.org/2000/svg" width="{page_l:.2f}mm" '
+            f'height="{page_h:.2f}mm" viewBox="0 0 {page_l:.3f} {page_h:.3f}">',
+            f'  <rect width="{page_l:.3f}" height="{page_h:.3f}" fill="#fff"/>']
+           + chemins + ['</svg>'])
+
+    return "\n".join(svg) + "\n", {
+        "ecart": (ecart_x, ecart_y),          # avance, chariot — ordre de TB124
+        "page": (page_l, page_h),
+        "origine_dessin": (marge, marge),     # depuis l'angle du repère 1
+        "emprise": (x1 - x0, y1 - y0),
+        "avertissements": avertissements,
+    }
+
+
+# ======================================================================
 # LE SCAN, PILOTÉ DEPUIS LE PC — À ÉPROUVER
 # ======================================================================
 #

@@ -81,8 +81,25 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "MATERIAUX": dict(materiaux.MATERIAUX),
           "desaccords": arms.desaccords,
           "PAGE": arms.PAGE,
+          "composer": arms.composer,
           "decouper": arms.Ecoute.decouper,
           "UNITES_PAR_MM": arms.UNITES_PAR_MM}
+
+
+def feuille_dont_la_marge_ne_vaut_que_d_un_cote():
+    """La faute : poser les repères sans compter la marge des deux côtés.
+
+    L'impression paraîtrait juste — les repères entourent bien le dessin.
+    C'est à la DÉCOUPE que tout glisserait, d'une marge entière.
+    """
+    vrai = _VRAIS["composer"]
+
+    def composer_bancal(polylignes, marge=25.0, **reste):
+        svg, infos = vrai(polylignes, marge=marge, **reste)
+        ax, ay = infos["ecart"]
+        infos["ecart"] = (ax - marge, ay - marge)
+        return svg, infos
+    arms.composer = composer_bancal
 
 
 def purge_muette_qui_jette_les_annonces():
@@ -179,6 +196,11 @@ CAS = [
      "test_gabarit_officiel_garde_ses_cotes_relevees",
      gabarit_officiel_arrondi_a_l_a4,
      lambda: setattr(arms, "PAGE", _VRAIS["PAGE"])),
+
+    ("marge comptée d'un seul côté de la feuille",
+     "test_feuille_imprimee_et_decoupe_se_recouvrent",
+     feuille_dont_la_marge_ne_vaut_que_d_un_cote,
+     lambda: setattr(arms, "composer", _VRAIS["composer"])),
 
     ("purge muette qui jette l'annonce du scan",
      "test_annonce_poussee_nest_jamais_avalee",

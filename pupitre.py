@@ -506,6 +506,20 @@ class Pupitre(QWidget):
             "travailler.")
         b_scan.clicked.connect(self._scanner_arms)
         gl.addWidget(b_scan, 6, 0, 1, 2)
+        self.spn_marge_arms = self._reel(5, 200, 25.0)
+        self.spn_marge_arms.setToolTip(
+            "distance entre le dessin et l'ANGLE des repères.\n"
+            "En dessous de la longueur des branches (20 mm), les repères\n"
+            "mordent sur le dessin.")
+        gl.addWidget(QLabel("marge repères"), 7, 0)
+        gl.addWidget(self.spn_marge_arms, 7, 1)
+        b_feuille = QPushButton("Exporter la feuille à imprimer…")
+        b_feuille.setToolTip(
+            "Écrit le dessin ENTOURÉ de ses quatre repères, à imprimer\n"
+            "tel quel à l'échelle 1. Règle ensuite le placement pour que\n"
+            "la découpe retombe sur l'impression.")
+        b_feuille.clicked.connect(self._exporter_feuille)
+        gl.addWidget(b_feuille, 8, 0, 1, 2)
         g_arms = g
 
         # --- copies
@@ -940,6 +954,72 @@ class Pupitre(QWidget):
         texte += "\n".join(f"  {i}. {e}" for i, e
                           in enumerate(arms.marche_a_suivre(2), 1))
         QMessageBox.information(self, "Print & cut (ARMS)", texte)
+
+    def _exporter_feuille(self):
+        """Écrit le dessin entouré de ses repères, et cale la découpe.
+
+        L'offset entre l'origine des repères et celle du dessin est ce que
+        le manuel (p. 5-5) dit de MESURER. Ici on n'a pas à le mesurer :
+        c'est nous qui posons les deux, donc on le connaît — c'est la
+        marge. Reste à régler le placement pour que la découpe parte du
+        même point, et c'est ce que fait ce bouton.
+        """
+        import arms
+        if not self.calcule:
+            QMessageBox.information(self, "Feuille à imprimer",
+                                    "Ouvre d'abord un dessin.")
+            return
+        marge = self.spn_marge_arms.value()
+        try:
+            svg, infos = arms.composer(self.calcule, marge=marge)
+        except ValueError as e:
+            QMessageBox.warning(self, "Feuille à imprimer", str(e))
+            return
+
+        depart = os.path.splitext(self.chemin or "feuille")[0] + "_a_imprimer.svg"
+        chemin, _ = QFileDialog.getSaveFileName(
+            self, "Écrire la feuille à imprimer", depart, "SVG (*.svg)")
+        if not chemin:
+            return
+        with open(chemin, "w", encoding="utf-8") as f:
+            f.write(svg)
+
+        # Un PDF à côté quand rsvg-convert est là : c'est lui qu'on
+        # imprime, et il ne se laisse pas remettre à l'échelle aussi
+        # facilement qu'un SVG ouvert dans un navigateur.
+        pdf = os.path.splitext(chemin)[0] + ".pdf"
+        try:
+            import subprocess
+            subprocess.run(["rsvg-convert", "-f", "pdf", "-o", pdf, chemin],
+                           check=True, capture_output=True)
+        except Exception:
+            pdf = None
+
+        # Caler la découpe : le dessin doit repartir à `marge` de l'origine
+        # que la détection posera sur le premier repère.
+        self.spn_x.setValue(marge)
+        self.spn_y.setValue(marge)
+        self.chk_arms.setChecked(True)
+        ax, ay = infos["ecart"]
+        self.spn_ecart_av.setValue(ax)
+        self.spn_ecart_ch.setValue(ay)
+
+        pl, ph = infos["page"]
+        texte = (f"Feuille écrite : {os.path.basename(chemin)}\n"
+                 + (f"PDF : {os.path.basename(pdf)}\n" if pdf else "")
+                 + f"\npage {pl:.1f} × {ph:.1f} mm\n"
+                 f"écart entre repères {ax:.1f} × {ay:.1f} mm\n"
+                 f"dessin à {marge:g} ; {marge:g} mm du premier repère\n\n"
+                 "Placement et mode repérage réglés en conséquence.\n\n"
+                 "1. imprimer À L'ÉCHELLE 1 — jamais « ajuster à la page »\n"
+                 "2. vérifier au pied à coulisse qu'une branche fait 20 mm\n"
+                 "3. charger la feuille, attendre READY\n"
+                 "4. détecter au panneau : [PAUSE/MENU] > [2] ARMS >\n"
+                 "   [1] LECT. AUTO REPERES\n"
+                 "5. revenir ici et envoyer au traceur")
+        for a in infos["avertissements"]:
+            texte += f"\n\nATTENTION : {a}"
+        QMessageBox.information(self, "Feuille à imprimer", texte)
 
     def _scanner_arms(self):
         """Déclenche une détection depuis le PC. Chemin NON ÉPROUVÉ.

@@ -280,6 +280,68 @@ def test_arms_voit_une_taille_de_repere_qui_ne_correspond_pas():
         "10 mm annoncés contre 20 mm tracés : non signalé")
 
 
+def test_feuille_imprimee_et_decoupe_se_recouvrent():
+    """Ce qu'on imprime et ce qu'on découpe doivent tomber au même endroit.
+
+    C'est toute la valeur du print & cut, et c'est une propriété
+    GÉOMÉTRIQUE qu'on peut éprouver sans machine : la feuille pose les
+    repères autour du dessin, la découpe repart de l'origine que la
+    détection place sur le premier repère. Les deux ne se recouvrent que
+    si le dessin est envoyé exactement à la distance annoncée.
+
+    Le manuel (p. 5-5) dit de MESURER cet offset. Ici on n'a pas à le
+    mesurer : c'est nous qui posons les repères ET le dessin, donc on le
+    connaît. Encore faut-il que les deux calculs s'accordent.
+    """
+    dessin = [([(12.0, 7.0), (72.0, 7.0), (72.0, 47.0), (12.0, 47.0),
+                (12.0, 7.0)], True)]
+    marge = 25.0
+    _svg, infos = arms.composer(dessin, marge=marge)
+
+    ox, oy = infos["origine_dessin"]
+    assert (ox, oy) == (marge, marge), (
+        "le dessin doit se trouver à `marge` de l'angle du premier repère")
+
+    # La découpe part recadrée à cette origine — c'est ce que fait le
+    # pupitre après l'export.
+    decoupe = noyau.recadrer(dessin, ox, oy)
+    x0, y0, x1, y1 = noyau.cadre(decoupe)
+    assert abs(x0 - ox) < 1e-9 and abs(y0 - oy) < 1e-9, (
+        "la découpe ne part pas de l'origine annoncée")
+
+    # Et l'écart annoncé à la machine doit encadrer ce dessin, marge
+    # comprise des deux côtés. Sinon on cherche des repères là où il n'y
+    # en a pas.
+    ax, ay = infos["ecart"]
+    assert abs(ax - ((x1 - x0) + 2 * marge)) < 1e-9, (
+        f"écart d'avance {ax} incompatible avec un dessin de "
+        f"{x1 - x0} mm et une marge de {marge}")
+    assert abs(ay - ((y1 - y0) + 2 * marge)) < 1e-9, (
+        "écart de chariot incompatible avec l'emprise du dessin")
+
+
+def test_reperes_composes_sont_de_type_2():
+    """Les repères posés autour du dessin ont leurs angles vers l'EXTÉRIEUR.
+
+    Type 2 : les branches rentrent vers le centre, donc l'angle est le
+    point le plus extérieur de la feuille. En type 1 elles sortiraient, et
+    la page serait plus grande que l'écart entre repères.
+
+    La machine de l'atelier est réglée sur `MARK TYPE=2` — un gabarit de
+    l'autre type la ferait balayer en cherchant une forme absente du
+    papier, puis s'arrêter sur le bord de la feuille.
+    """
+    dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
+    bord = 10.0
+    _svg, infos = arms.composer(dessin, marge=25.0, bord=bord)
+    ax, ay = infos["ecart"]
+    pl, ph = infos["page"]
+    assert abs(pl - (ax + 2 * bord)) < 1e-9, (
+        f"page de {pl} mm pour un écart de {ax} : les branches débordent, "
+        f"ce ne sont pas des repères de type 2")
+    assert abs(ph - (ay + 2 * bord)) < 1e-9
+
+
 def test_unites_accordees():
     """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
 

@@ -287,18 +287,29 @@ TB55_DOUTEUX = ("TB55 vaut 1 chez Studio alors que son gabarit est de "
 class Ecoute:
     """Un tampon unique, découpé en trames, qui ne jette RIEN.
 
-    DEUX SORTES DE TRAMES, et c'est toute la découverte du 13/08/2026 :
+    DEUX SORTES DE TRAMES, et c'est la découverte du 13/08/2026 :
 
         ...\x03   une RÉPONSE à une question qu'on a posée
         ...\r     une ANNONCE que la machine pousse d'elle-même
 
     Le résultat d'un scan est une annonce. Aucune commande ne le rend :
     `TB50`, `TB100`, `TB124`, `TB125`, `TB126` répondent toujours vide.
-    La première version de ce code vidait le tampon avant chaque question
-    et jetait donc l'annonce à tous les coups — elle n'a été vue que parce
-    qu'une capture USB tournait en parallèle.
+    Une première version purgeait le tampon avant chaque question et
+    jetait donc l'annonce à tous les coups.
 
-    Une purge muette détruit exactement ce qu'on cherche.
+    LE PIÈGE INVERSE, payé le même jour. Le vidage `TC2009,5` est un bloc
+    de deux cents lignes **séparées par des CR** et terminé par un seul
+    ETX. Une version qui coupait sur les CR sans regarder plus loin a
+    donc rapporté deux cents annonces là où il n'y en avait aucune —
+    l'instrument mentait dans l'autre sens.
+
+    D'où la règle : **un bloc qui contient un ETX est UNE réponse**,
+    quels que soient les CR qu'il porte. Ne sont des annonces que les
+    trames terminées par CR sans ETX derrière.
+
+    Cette classe ne sert qu'aux questions à réponse COURTE — les états,
+    les lectures `TB`. Le vidage passe par `etat_machine`, qui sait le
+    lire d'une pièce.
     """
 
     def __init__(self, fd, journal=None):
@@ -320,32 +331,51 @@ class Ecoute:
         self.reste += morceau
         return True
 
-    def decouper(self, depart=0.0):
-        """Sort les trames complètes : range les annonces, rend les réponses."""
-        reponses = []
+    def _noter(self, texte, depart):
+        texte = texte.strip()
+        if texte:
+            self.annonces.append((time.monotonic() - depart, texte))
+            self.journal.append(f"annonce : « {texte} »")
+
+    def recolter(self, depart=0.0):
+        """Vide le tampon en l'absence de question. Rien n'est jeté en
+        silence : ce qui porte un ETX est une réponse en retard, le reste
+        est du non-sollicité."""
         while True:
-            i_etx, i_cr = self.reste.find(b"\x03"), self.reste.find(b"\r")
-            if i_etx < 0 and i_cr < 0:
-                return reponses
-            if i_cr < 0 or (0 <= i_etx < i_cr):
-                trame, self.reste = self.reste[:i_etx], self.reste[i_etx + 1:]
-                reponses.append(trame.decode("ascii", "replace").strip())
-            else:
-                trame, self.reste = self.reste[:i_cr], self.reste[i_cr + 1:]
-                texte = trame.decode("ascii", "replace").strip()
-                if texte:
-                    self.annonces.append((time.monotonic() - depart, texte))
-                    self.journal.append(f"annonce : « {texte} »")
+            i_etx = self.reste.find(b"\x03")
+            if i_etx >= 0:
+                bloc, self.reste = self.reste[:i_etx], self.reste[i_etx + 1:]
+                lignes = bloc.decode("ascii", "replace").strip()
+                self.journal.append(
+                    f"réponse en retard, ignorée ({len(lignes)} caractères)")
+                continue
+            i_cr = self.reste.find(b"\r")
+            if i_cr < 0:
+                return
+            trame, self.reste = self.reste[:i_cr], self.reste[i_cr + 1:]
+            self._noter(trame.decode("ascii", "replace"), depart)
 
     def demander(self, question, depart=0.0, delai=1.0):
-        self.decouper(depart)
+        """Pose une question COURTE et rend sa réponse.
+
+        Ce qui traînait avant la question est récolté ; ce qui arrive
+        ensuite, terminé par CR et avant l'ETX, est une annonce poussée
+        pendant l'attente — c'est ainsi que « 1,254 » est apparu.
+        """
+        self._avaler(0.0)
+        self.recolter(depart)
         conditions._ecrire(self.fd, question)
         limite = time.monotonic() + delai
         while time.monotonic() < limite:
             self._avaler()
-            reponses = self.decouper(depart)
-            if reponses:
-                return reponses[-1]
+            i_etx = self.reste.find(b"\x03")
+            if i_etx < 0:
+                continue
+            bloc, self.reste = self.reste[:i_etx], self.reste[i_etx + 1:]
+            *avant, reponse = bloc.split(b"\r")
+            for trame in avant:
+                self._noter(trame.decode("ascii", "replace"), depart)
+            return reponse.decode("ascii", "replace").strip()
         return ""
 
     def guetter(self, depart=0.0, duree=0.3):
@@ -353,7 +383,7 @@ class Ecoute:
         limite = time.monotonic() + duree
         while time.monotonic() < limite:
             self._avaler()
-            self.decouper(depart)
+            self.recolter(depart)
 
 
 def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
@@ -396,7 +426,7 @@ def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
         # Ce qui dort dans le tampon vient du coup précédent : un scan
         # lancé au panneau y laisse parfois son annonce, qui attend un
         # lecteur. On la ramasse au lieu de la jeter.
-        ecoute.guetter(depart, 0.3)
+        ecoute.guetter(depart, 0.5)
 
         libre = ecoute.demander(ETAT_SIMPLE, depart)
         if libre not in ("0", ""):

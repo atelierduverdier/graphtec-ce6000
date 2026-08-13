@@ -85,7 +85,7 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "composer": arms.composer,
           "contour": contour.contour,
           "TOLERANCE": contour.TOLERANCE,
-          "decouper": arms.Ecoute.decouper,
+          "recolter": arms.Ecoute.recolter,
           "UNITES_PAR_MM": arms.UNITES_PAR_MM}
 
 
@@ -126,23 +126,27 @@ def feuille_dont_la_marge_ne_vaut_que_d_un_cote():
 
 
 def purge_muette_qui_jette_les_annonces():
-    """La faute d'origine : jeter le tampon au lieu de le découper.
+    """La faute d'origine : jeter le tampon au lieu de le regarder.
 
     C'est le code d'avant le 13/08/2026. Il ne se voit sur AUCUNE
     réponse — seulement sur l'annonce du scan, qui disparaît sans laisser
     de trace. Treize captures pour s'en apercevoir.
     """
-    def decouper_sans_garder(self, depart=0.0):
-        reponses = []
-        while b"\x03" in self.reste or b"\r" in self.reste:
-            i = min(x for x in (self.reste.find(b"\x03"),
-                                self.reste.find(b"\r")) if x >= 0)
+    def recolter_en_jetant(self, depart=0.0):
+        self.reste = b""
+    arms.Ecoute.recolter = recolter_en_jetant
+
+
+def annonces_decoupees_sur_les_CR_sans_voir_l_ETX():
+    """La faute INVERSE, payée le même jour : deux cents fausses annonces
+    tirées des lignes d'un unique vidage de configuration."""
+    def recolter_naif(self, depart=0.0):
+        while b"\r" in self.reste:
+            i = self.reste.find(b"\r")
             trame, self.reste = self.reste[:i], self.reste[i + 1:]
-            texte = trame.decode("ascii", "replace").strip()
-            if texte:
-                reponses.append(texte)
-        return reponses
-    arms.Ecoute.decouper = decouper_sans_garder
+            self._noter(trame.decode("ascii", "replace"), depart)
+        self.reste = b""
+    arms.Ecoute.recolter = recolter_naif
 
 
 def unites_desaccordees():
@@ -238,7 +242,12 @@ CAS = [
     ("purge muette qui jette l'annonce du scan",
      "test_annonce_poussee_nest_jamais_avalee",
      purge_muette_qui_jette_les_annonces,
-     lambda: setattr(arms.Ecoute, "decouper", _VRAIS["decouper"])),
+     lambda: setattr(arms.Ecoute, "recolter", _VRAIS["recolter"])),
+
+    ("lignes d'un vidage prises pour des annonces",
+     "test_vidage_de_configuration_nest_pas_pris_pour_des_annonces",
+     annonces_decoupees_sur_les_CR_sans_voir_l_ETX,
+     lambda: setattr(arms.Ecoute, "recolter", _VRAIS["recolter"])),
 
     ("unités par mm recopiées et laissées vieillir",
      "test_unites_accordees",

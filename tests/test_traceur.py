@@ -482,29 +482,243 @@ def test_sequence_de_scan_est_calculee():
 def test_annonce_poussee_nest_jamais_avalee():
     """Une trame terminée par CR est une ANNONCE, et doit être gardée.
 
-    C'est la découverte du 13/08/2026, et elle a failli être manquée : la
-    boucle purgeait le tampon avant chaque question, donc jetait le
-    résultat du scan à tous les coups. Il n'a été vu que parce qu'une
-    capture USB tournait à côté.
-
-    Le découpage doit rendre les réponses (`\x03`) ET conserver les
-    annonces (`\r`), même quand les deux arrivent dans le même paquet.
+    C'est la découverte du 13/08/2026 : le résultat d'un scan n'est pas
+    une réponse à lire, c'est une annonce que la machine pousse. La
+    première version de l'écouteur purgeait le tampon avant chaque
+    question et la jetait à tous les coups.
     """
-    class _Faux:
-        pass
-
     ecoute = arms.Ecoute.__new__(arms.Ecoute)
-    ecoute.fd = None
-    ecoute.reste = b"1,254\r10\x03"
-    ecoute.annonces = []
-    ecoute.journal = []
+    ecoute.fd, ecoute.reste = None, b"1,254\r"
+    ecoute.annonces, ecoute.journal = [], []
 
-    reponses = ecoute.decouper()
+    ecoute.recolter()
 
-    assert reponses == ["10"], f"réponse perdue : {reponses}"
-    assert [t for _, t in ecoute.annonces] == ["1,254"], (
+    assert [texte for _, texte in ecoute.annonces] == ["1,254"], (
         "l'annonce du scan a été avalée — c'est la faute qui a coûté "
         "treize captures")
+
+
+def test_vidage_de_configuration_nest_pas_pris_pour_des_annonces():
+    """Le piège INVERSE, payé le même jour.
+
+    Le vidage `TC2009,5` est un bloc de deux cents lignes séparées par des
+    CR et terminé par un SEUL ETX. Une version qui coupait sur les CR sans
+    regarder plus loin a rapporté deux cents annonces là où il n'y en
+    avait aucune. Un instrument qui ment dans l'autre sens ment quand
+    même.
+
+    La règle : un bloc qui contient un ETX est UNE réponse, quels que
+    soient les CR qu'il porte.
+    """
+    ecoute = arms.Ecoute.__new__(arms.Ecoute)
+    ecoute.fd = None
+    ecoute.reste = b"[ARMS]\r\nMARK TYPE=2\r\nMARK SIZE=20.0\r\n\x03"
+    ecoute.annonces, ecoute.journal = [], []
+
+    ecoute.recolter()
+
+    assert ecoute.annonces == [], (
+        f"{len(ecoute.annonces)} annonce(s) tirées d'un vidage de "
+        f"configuration — ce sont les lignes d'UNE réponse")
+    assert ecoute.reste == b"", "le vidage n'a pas été consommé"
+
+
+def test_contour_entoure_le_dessin_sans_le_toucher():
+    """Le tour d'un autocollant passe AUTOUR du motif, à la bonne distance.
+
+    Une boîte englobante serait plus simple et mentirait : une étoile
+    perdrait ses creux, et l'autocollant ne serait plus une étoile. Ce
+    test emploie donc une forme à creux, celle qui distingue un vrai
+    décalage d'une approximation.
+    """
+    import math
+    etoile = []
+    for k in range(11):
+        a = math.pi / 2 + k * math.pi / 5
+        r = 30.0 if k % 2 == 0 else 13.0
+        etoile.append((60 + r * math.cos(a), 45 + r * math.sin(a)))
+    dessin = [(etoile, True)]
+    retrait = 4.0
+
+    tour = contour.contour(dessin, retrait=retrait)
+    assert len(tour) == 1, f"{len(tour)} contours pour une seule forme"
+
+    # L'emprise doit grandir d'exactement deux retraits sur chaque axe.
+    dx0, dy0, dx1, dy1 = noyau.cadre(dessin)
+    cx0, cy0, cx1, cy1 = noyau.cadre(tour)
+    assert abs((cx1 - cx0) - (dx1 - dx0) - 2 * retrait) < 0.05, (
+        "le contour ne s'écarte pas du retrait demandé en largeur")
+    assert abs((cy1 - cy0) - (dy1 - dy0) - 2 * retrait) < 0.05
+
+    # Et il doit ENTOURER le dessin : aucun point du motif au-delà.
+    for x, y in etoile:
+        assert cx0 <= x <= cx1 and cy0 <= y <= cy1, (
+            "le dessin déborde de son propre contour")
+
+    # LA propriété d'un décalage, et non une approximation de longueur :
+    # chaque sommet du motif est à `retrait` de son contour. Un creux
+    # d'étoile est le cas qui tranche — une boîte englobante l'en
+    # éloignerait de plusieurs centimètres.
+    points_contour = tour[0][0]
+
+    def _distance_au_contour(px, py):
+        proche = float("inf")
+        for (x0, y0), (x1, y1) in zip(points_contour, points_contour[1:]):
+            dx, dy = x1 - x0, y1 - y0
+            long2 = dx * dx + dy * dy
+            u = 0.0 if long2 == 0 else max(0.0, min(
+                1.0, ((px - x0) * dx + (py - y0) * dy) / long2))
+            proche = min(proche, math.hypot(px - x0 - u * dx,
+                                            py - y0 - u * dy))
+        return proche
+
+    # Les sommets SAILLANTS (les pointes) reçoivent un raccord arrondi de
+    # rayon `retrait` : ils sont à exactement cette distance.
+    for x, y in etoile[0:10:2]:
+        d = _distance_au_contour(x, y)
+        assert abs(d - retrait) < 0.1, (
+            f"pointe ({x:.1f}, {y:.1f}) à {d:.2f} mm au lieu de {retrait}")
+
+    # Les sommets RENTRANTS — les creux — sont forcément plus loin : le
+    # décalage y forme un coin, à l'intersection des deux bords décalés.
+    # C'est correct. Ce qui ne le serait pas, c'est qu'ils soient loin au
+    # point de trahir une boîte englobante : ici 4,75 mm mesurés, contre
+    # une vingtaine si le contour ne suivait pas les creux.
+    for x, y in etoile[1:10:2]:
+        d = _distance_au_contour(x, y)
+        assert d >= retrait - 0.05, (
+            f"creux ({x:.1f}, {y:.1f}) à {d:.2f} mm : le contour mord "
+            f"dans le motif")
+        assert d < 2 * retrait, (
+            f"creux ({x:.1f}, {y:.1f}) à {d:.2f} mm du contour — il ne "
+            f"suit pas les creux, c'est une enveloppe déguisée et "
+            f"l'autocollant n'aura plus sa forme")
+
+
+def test_feuille_imprimee_et_decoupe_se_recouvrent():
+    """Ce qu'on imprime et ce qu'on découpe doivent tomber au même endroit.
+
+    C'est toute la valeur du print & cut, et c'est une propriété
+    GÉOMÉTRIQUE qu'on peut éprouver sans machine : la feuille pose les
+    repères autour du dessin, la découpe repart de l'origine que la
+    détection place sur le premier repère. Les deux ne se recouvrent que
+    si le dessin est envoyé exactement à la distance annoncée.
+
+    Le manuel (p. 5-5) dit de MESURER cet offset. Ici on n'a pas à le
+    mesurer : c'est nous qui posons les repères ET le dessin, donc on le
+    connaît. Encore faut-il que les deux calculs s'accordent.
+    """
+    dessin = [([(12.0, 7.0), (72.0, 7.0), (72.0, 47.0), (12.0, 47.0),
+                (12.0, 7.0)], True)]
+    marge = 25.0
+    _svg, infos = arms.composer(dessin, marge=marge)
+
+    ox, oy = infos["origine_dessin"]
+    assert (ox, oy) == (marge, marge), (
+        "le dessin doit se trouver à `marge` de l'angle du premier repère")
+
+    # La découpe part recadrée à cette origine — c'est ce que fait le
+    # pupitre après l'export.
+    decoupe = noyau.recadrer(dessin, ox, oy)
+    x0, y0, x1, y1 = noyau.cadre(decoupe)
+    assert abs(x0 - ox) < 1e-9 and abs(y0 - oy) < 1e-9, (
+        "la découpe ne part pas de l'origine annoncée")
+
+    # Et l'écart annoncé à la machine doit encadrer ce dessin, marge
+    # comprise des deux côtés. Sinon on cherche des repères là où il n'y
+    # en a pas.
+    ax, ay = infos["ecart"]
+    assert abs(ax - ((x1 - x0) + 2 * marge)) < 1e-9, (
+        f"écart d'avance {ax} incompatible avec un dessin de "
+        f"{x1 - x0} mm et une marge de {marge}")
+    assert abs(ay - ((y1 - y0) + 2 * marge)) < 1e-9, (
+        "écart de chariot incompatible avec l'emprise du dessin")
+
+
+def test_reperes_composes_sont_de_type_2():
+    """Les repères posés autour du dessin ont leurs angles vers l'EXTÉRIEUR.
+
+    Type 2 : les branches rentrent vers le centre, donc l'angle est le
+    point le plus extérieur de la feuille. En type 1 elles sortiraient, et
+    la page serait plus grande que l'écart entre repères.
+
+    La machine de l'atelier est réglée sur `MARK TYPE=2` — un gabarit de
+    l'autre type la ferait balayer en cherchant une forme absente du
+    papier, puis s'arrêter sur le bord de la feuille.
+    """
+    dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
+    bord = 10.0
+    _svg, infos = arms.composer(dessin, marge=25.0, bord=bord)
+    ax, ay = infos["ecart"]
+    pl, ph = infos["page"]
+    assert abs(pl - (ax + 2 * bord)) < 1e-9, (
+        f"page de {pl} mm pour un écart de {ax} : les branches débordent, "
+        f"ce ne sont pas des repères de type 2")
+    assert abs(ph - (ay + 2 * bord)) < 1e-9
+
+
+def test_type_1_laisse_la_place_a_ses_branches():
+    """En type 1 les branches SORTENT : la page doit s'agrandir d'autant.
+
+    Sans quoi les repères seraient rognés à l'impression — et un repère
+    tronqué n'est plus détectable. Le type 2, dont les branches rentrent,
+    n'a pas ce besoin : ses angles sont déjà les points extrêmes.
+    """
+    dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
+    bord, branche = 10.0, 20.0
+
+    _s2, i2 = arms.composer(dessin, marge=25.0, bord=bord,
+                            branche=branche, type_repere=2)
+    _s1, i1 = arms.composer(dessin, marge=25.0, bord=bord,
+                            branche=branche, type_repere=1)
+
+    assert i1["ecart"] == i2["ecart"], (
+        "le type ne change que le SENS des angles, pas leur position")
+
+    l2, h2 = i2["page"]
+    l1, h1 = i1["page"]
+    assert abs((l1 - l2) - 2 * branche) < 1e-9, (
+        f"page type 1 large de {l1} contre {l2} en type 2 : il manque la "
+        f"place des branches sortantes")
+    assert abs((h1 - h2) - 2 * branche) < 1e-9
+
+
+def test_unites_accordees():
+    """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
+
+    Quarante unités par millimètre, mesuré par `OF;`. La constante est
+    dupliquée pour ne pas entraîner tout LaserAtelier dans un module qui
+    n'en a pas besoin — donc elle est surveillée, comme la ligne VERSION
+    restée quarante-quatre versions en retard.
+    """
+    assert arms.UNITES_PAR_MM == noyau.UNITES_PAR_MM, (
+        f"arms dit {arms.UNITES_PAR_MM} unités/mm, svg2hpgl dit "
+        f"{noyau.UNITES_PAR_MM} — l'une des deux a vieilli")
+
+    # La tolérance du contour vaut la MOITIÉ du pas machine : plus fin ne
+    # se voit pas, plus grossier se voit dans les virages.
+    attendu = 1.0 / noyau.UNITES_PAR_MM / 2
+    assert abs(contour.TOLERANCE - attendu) < 1e-12, (
+        f"tolérance de contour {contour.TOLERANCE} pour un pas machine de "
+        f"{1.0 / noyau.UNITES_PAR_MM} mm — elle devrait valoir {attendu}")
+
+
+def test_sequence_de_scan_est_calculee():
+    """Les commandes `TB` se déduisent des millimètres, pas de la capture.
+
+    `TB51,800` vaut 800 parce que 20 mm font 800 unités. Recopier les
+    valeurs de la capture du 13/08/2026 aurait figé un gabarit particulier
+    dans le code.
+    """
+    seq = arms.sequence_scan(190.0, 140.0, branche=20.0, epaisseur=1.0)
+    assert "TB51,800" in seq, "la longueur de branche n'est pas calculée"
+    assert "TB53,40" in seq, "l'épaisseur de trait n'est pas calculée"
+    assert "TB124,7600,5600" in seq, (
+        "TB124 doit porter l'AVANCE puis le chariot, en unités machine")
+
+    # Changer une cote doit changer la commande, sinon elle est en dur.
+    autre = arms.sequence_scan(190.0, 140.0, branche=10.0)
+    assert "TB51,400" in autre, "TB51 ne suit pas la longueur de branche"
 
 
 def test_gabarit_officiel_garde_ses_cotes_relevees():

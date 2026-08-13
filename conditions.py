@@ -22,7 +22,13 @@ Paramètres identifiés, chacun vérifié en le lisant sur le panneau :
 et la machine répond `<condition>, <valeur>…`. Toute écriture est donc
 vérifiable, et `appliquer` la vérifie.
 
-Restent inconnus 8, 9, 14, 15, le reste de `TC1002,6` et les familles
+    8  mode tangentiel (0 = OFF, 1 = mode 1)
+    9  DÉBORDEMENT, deux champs début/fin, à l'échelle **200 par mm**
+       (40 = 0,2 mm). Nommés le 13/08/2026 en comparant la condition 1
+       (0,0) à la 8 (0.2mm,0.2mm) : deux champs à zéro d'un côté, deux à
+       40 de l'autre, et le vidage en clair pour trancher.
+
+Restent inconnus 14, 15, le reste de `TC1002,6` et les familles
 `TC2004,6`, `TC2006,13`. Pour les nommer : `chercher_parametre.py` relève
 tout, laisse changer une seule chose, relève de nouveau, et la différence
 désigne le paramètre.
@@ -72,6 +78,19 @@ BORNES = {
 }
 
 OUTIL = 2                 # forme particulière : type de lame ET offset
+TANGENTIEL = 8            # 0 = OFF, 1 = mode 1
+DEBORDEMENT = 9           # début et fin, 200 unités par mm : 40 = 0,2 mm
+
+# Le débordement compense la TRAÎNE de la pointe : elle suit l'axe du
+# porte-outil au lieu de le précéder, si bien qu'un contour qui se referme
+# s'arrête juste avant son point de départ. Il reste une languette non
+# coupée, qui se DÉCHIRE quand on pousse la pièce -- toujours au même coin,
+# et dès les forces les plus faibles, puisque c'est géométrique et non une
+# affaire d'appui.
+#
+# Mesuré le 13/08/2026 : à zéro, tous les carrés d'un nuancier de 80 g se
+# déchiraient au coin de départ. À 0,2 mm -- la valeur que Graphtec emploie
+# lui-même sur sa condition 8 -- ils se détachent proprement.
 
 # Le second champ de TC1002,2 est la RETOUCHE d'offset, et non le déport.
 # Le déport réel (19 pour la CB09U, 29 pour la CB15U) est appliqué par le

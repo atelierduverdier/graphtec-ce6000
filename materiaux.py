@@ -37,22 +37,29 @@ avec ce carnet : voir le commentaire qui l'introduit.
 """
 
 MATERIAUX = {
-    # Nuancier en carrés du 11/08/2026, sur chutes de 80 g : la force 8
-    # traverse déjà, la 10 est celle qui se détache le mieux. On garde 10,
-    # et le seuil est noté — un réglage posé SUR son seuil finit par
-    # lâcher : le papier varie, la lame s'émousse. Les deux crans de marge
-    # du carnet ne sont pas du gaspillage.
+    # REMESURÉ le 13/08/2026, et la valeur a BAISSÉ de 10 à 8. Nuancier de
+    # 4 à 16 par pas de 1 : 4-5-6 ne traversent pas, 7 et 8 se détachent
+    # facilement, au-delà la lame appuie trop et entame la bande de coupe.
+    # Seuil 7, fenêtre utile 7-8. On retient 8 : un cran au-dessus du seuil,
+    # ce qui garde la marge que le carnet défendait — un réglage posé SUR
+    # son seuil lâche quand le papier varie ou que la lame s'émousse — sans
+    # entrer dans la zone qui use la bande.
     #
-    # Mon critère annoncé était « la force la plus faible qui détache »,
-    # ce qui aurait retenu 8. Le carnet avait raison contre le critère.
+    # **Le chiffre d'hier n'était pas faux, il décrivait une autre
+    # machine.** Le 10 avait été mesuré avec FORCE OFFSET à 30 (elle
+    # DÉCHIRAIT le papier au départ), un débordement NUL (les carrés se
+    # déchiraient au lieu de se détacher, ce qui fausse le jugement) et une
+    # sortie de lame que personne n'avait vérifiée. Les trois ont été
+    # corrigés le 13/08/2026 avant ce relevé.
     #
-    # La valeur venait de Graphtec Studio sous Windows ; la retrouver par
-    # notre chaîne prouve que `FS` produit le même effet physique que le
-    # réglage du logiciel d'origine.
+    # D'où la règle que ce profil inaugure : NOTER LES CONDITIONS MACHINE
+    # à côté de la force. Un nombre seul ne se compare pas.
     "papier 80-90 g": dict(
-        vitesse=20, force=10, acceleration=None, passages=1, seuil_coupe=8,
+        vitesse=20, force=8, acceleration=None, passages=1, seuil_coupe=7,
         epaisseur=(0.10, 0.15), hauteur_lame=0.25, perforation=(8.0, 0.25),
-        lame="CB09U"),
+        lame="CB09U",
+        mesure="13/08/2026 — force d'offset 4, débordement 0,2 mm, "
+               "lame mesurée à 0,25 par la machine"),
     # Nuancier du 11/08/2026 sur chute de 300 g, lame à 0,55 : la force 16
     # laisse le carré tenir par un coin, 18 traverse. On garde le 25 du
     # carnet -- sept crans de marge, comme le 80 g en garde deux. La marge
@@ -64,12 +71,20 @@ MATERIAUX = {
         # CB09U (jusqu'à 0,25). Coupé à la CB09U le 11/08/2026 -- ça marche,
         # mais avec une lame sous-dimensionnée qui s'usera plus vite.
         lame="CB15U"),
-    # Les quatre profils qui suivent n'ont pas été rejoués au nuancier, et
-    # ils n'ont pas à l'être : Christophe, le 11/08/2026, « ce sont mes
-    # paramètres testés ». Ils viennent de l'usage réel de la machine sous
-    # Windows, ce qui est une mesure — et une meilleure que celle qu'on
-    # referait, puisqu'elle porte sur du papier qu'on n'a plus. Les
-    # rejouer ne validerait rien qu'ils ne disent déjà.
+    # Les profils qui suivent viennent de l'usage réel sous Windows, ce qui
+    # est une mesure — Christophe, le 11/08/2026 : « ce sont mes paramètres
+    # testés ».
+    #
+    # MAIS ils ont été établis dans les MÊMES conditions machine que
+    # l'ancien 10 du 80 g : force d'offset 30, débordement nul, sortie de
+    # lame invérifiée. Or ce trio a fait baisser le 80 g de 10 à 8 une fois
+    # corrigé. Leurs forces sont donc probablement trop hautes elles aussi
+    # — sans que ce soit dangereux : au-dessus du nécessaire on n'abîme que
+    # la bande de coupe et la lame, pas la pièce.
+    #
+    # On ne les corrige PAS par le calcul : ce serait retomber dans le
+    # travers que ce dépôt documente partout. Un nuancier sur une chute du
+    # vrai papier, et rien d'autre.
     "aquarelle 200 g": dict(
         vitesse=20, force=14, acceleration=None, passages=1,
         epaisseur=(0.30, 0.30), hauteur_lame=0.35, perforation=(8.0, 0.25)),

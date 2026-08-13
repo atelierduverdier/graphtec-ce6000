@@ -21,6 +21,7 @@ logiciel.
 - [Les réglages de l'établi](#les-réglages-de-létabli)
 - [La force d'offset déchirait le papier](#la-force-doffset-déchirait-le-papier)
 - [La machine mesure sa propre lame](#la-machine-mesure-sa-propre-lame)
+- [Le débordement à zéro déchirait chaque coin de départ](#le-débordement-à-zéro-déchirait-chaque-coin-de-départ)
 - [Les pièges](#les-pièges)
 - [Ce qui a été mesuré sur la machine](#ce-qui-a-été-mesuré-sur-la-machine)
 - [Tracer une planche TechDraw au stylo](#tracer-une-planche-techdraw-au-stylo)
@@ -273,6 +274,43 @@ Ce que ça change pour le carnet d'établi : les cotes de sortie de lame
 (0,17 pour du 0,10 mm, 0,55 pour du 0,42) cessent d'être des intentions
 pour devenir des réglages **vérifiables**. Jusque-là, rien n'attestait
 qu'une lame était bien où on croyait l'avoir mise.
+
+## Le débordement à zéro déchirait chaque coin de départ
+
+**Mesuré le 13/08/2026, et c'est le défaut le plus ancien du lot.**
+
+Symptôme : sur un nuancier de treize carrés, **tous** portaient une
+languette arrachée **au même coin**, et **dès les forces les plus
+faibles**. Un défaut qui revient à la même place et ne dépend pas de
+l'appui n'est pas une affaire de force : il est géométrique.
+
+Cause : la pointe de la lame **traîne derrière** l'axe du porte-outil —
+c'est le principe même du déport. Quand le contour se referme et que
+l'outil se lève, la pointe n'a pas encore atteint le coin. Il reste une
+languette non coupée, qui se déchire quand on pousse la pièce.
+
+Le remède est un réglage que la machine porte déjà, à zéro sur la
+condition de découpe :
+
+```
+[No.1]  OVERCUT S.E. = 0.0mm, 0.0mm     ← celle qu'on employait
+[No.8]  OVERCUT S.E. = 0.2mm, 0.2mm     ← un préréglage Graphtec
+```
+
+Posé à **0,2 mm** sur la condition 1, les carrés se détachent proprement.
+
+**Deux paramètres nommés au passage**, cherchés parce qu'on en avait
+besoin — la meilleure façon de trouver :
+
+| | condition 1 | condition 8 | |
+|---|---|---|---|
+| `TC1002,9` | `0,0` | `40,40` | **débordement**, début et fin, **200 par mm** |
+| `TC1002,8` | `0` | `1` | **mode tangentiel** |
+
+**Et ça fausse toute lecture de nuancier.** Un carré qui se déchire au
+lieu de se détacher ne permet pas de juger « est-ce qu'il se détache
+proprement ? ». Le seuil du 80 g, relevé à 8 tant que le débordement était
+nul, est tombé à **7** une fois corrigé — et la force retenue de 10 à 8.
 
 ## Les pièges
 

@@ -100,6 +100,121 @@ def test_aucun_titre_ne_perd_son_esperluette(fenetre):
                 f"et soulignera la lettre suivante")
 
 
+def test_tous_les_reglages_sont_enregistres(fenetre):
+    """Un réglage absent de la table de `projet` ne serait jamais gardé.
+
+    Et ça ne se verrait pas : à la réouverture il reprendrait simplement
+    sa valeur par défaut, en silence. C'est le pire genre de défaut —
+    celui qui ressemble à une erreur de l'utilisateur.
+
+    D'où la table déclarative plutôt que deux fonctions symétriques, et
+    d'où ce test, qui exige que TOUT widget de réglage y figure.
+    """
+    import re
+    import projet
+
+    source = open(os.path.join(os.path.dirname(__file__), "..",
+                               "pupitre.py"), encoding="utf-8").read()
+    dans_l_interface = {n for n in re.findall(
+        r"self\.((?:spn|chk|cmb)_[a-z0-9_]+)\s*=", source)}
+    dans_la_table = {nom for nom, _ in projet.REGLAGES}
+
+    oublies = sorted(dans_l_interface - dans_la_table)
+    assert not oublies, (
+        f"réglage(s) absent(s) de projet.REGLAGES : {oublies} — ils ne "
+        f"seraient pas enregistrés, et reprendraient leur valeur par "
+        f"défaut sans rien dire")
+
+    fantomes = sorted(dans_la_table - dans_l_interface)
+    assert not fantomes, (
+        f"projet.REGLAGES nomme des widgets qui n'existent plus : "
+        f"{fantomes}")
+
+
+def test_un_projet_revient_comme_il_est_parti(fenetre):
+    """Enregistrer puis rouvrir doit rendre EXACTEMENT les mêmes réglages.
+
+    La propriété qui compte : un placement patiemment ajusté ne doit pas
+    se perdre. Le 13/08/2026, un print & cut a été gâché parce qu'il ne
+    vivait que dans la fenêtre ouverte.
+    """
+    import tempfile
+    import projet
+
+    fenetre.spn_x.setValue(37.5)
+    fenetre.spn_ech.setValue(62.0)
+    fenetre.cmb_rot.setCurrentText("90°")
+    fenetre.chk_contour.setChecked(True)
+    fenetre.spn_retrait.setValue(4.5)
+    avant = fenetre._lire_reglages()
+
+    with tempfile.TemporaryDirectory() as dossier:
+        chemin = projet.enregistrer(os.path.join(dossier, "essai"), avant,
+                                    svg="<svg/>", source="/tmp/x.svg")
+        relu = projet.charger(chemin)
+
+    # On dérange tout, puis on repose.
+    fenetre.spn_x.setValue(1.0)
+    fenetre.spn_ech.setValue(100.0)
+    fenetre.cmb_rot.setCurrentText("0°")
+    fenetre.chk_contour.setChecked(False)
+    fenetre._poser_reglages(relu["reglages"])
+
+    apres = fenetre._lire_reglages()
+    differences = {k: (avant[k], apres[k]) for k in avant
+                   if avant[k] != apres.get(k)}
+    assert not differences, f"réglages perdus au retour : {differences}"
+
+
+def test_un_deplacement_apres_export_est_signale(fenetre):
+    """Déplacer le dessin après l'export invalide la feuille imprimée.
+
+    Rien ne le signalait, et c'est ce qui a rendu la mesure du
+    13/08/2026 inexploitable : l'écart mêlait le décalage de la machine
+    et le recadrage fait entre-temps.
+    """
+    import projet
+
+    fenetre.spn_x.setValue(25.0)
+    reference = projet.empreinte(fenetre._lire_reglages())
+
+    assert not projet.a_bouge_depuis_export(
+        fenetre._lire_reglages(), reference), "faux positif sans rien bouger"
+
+    fenetre.spn_x.setValue(26.0)
+    assert projet.a_bouge_depuis_export(
+        fenetre._lire_reglages(), reference), (
+        "un déplacement de 1 mm après l'export n'est pas signalé")
+
+    # Sans export, il n'y a pas de référence : ne rien signaler.
+    assert not projet.a_bouge_depuis_export(fenetre._lire_reglages(), None)
+
+
+def test_un_recalcul_nefface_pas_ce_qui_a_ete_scelle(fenetre):
+    """Bouger un réglage ne doit effacer NI le SVG gardé NI l'empreinte.
+
+    Défaut réel, introduit et attrapé le 13/08/2026 : une insertion avait
+    touché deux endroits à la fois, parce que la même ligne existait dans
+    le constructeur et dans le recalcul. Chaque mouvement d'un curseur
+    remettait tout à zéro.
+
+    Rien ne l'aurait signalé : le projet enregistré aurait simplement été
+    vide, et l'alerte de déplacement n'aurait jamais pu se déclencher.
+    """
+    fenetre.brut = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)],
+                     True)]
+    fenetre.svg_source = "<svg/>"
+    fenetre.empreinte_export = "scelle"
+
+    fenetre.spn_x.setValue(12.0)
+    fenetre._recalculer()
+
+    assert fenetre.svg_source == "<svg/>", (
+        "le recalcul a effacé le dessin gardé pour l'enregistrement")
+    assert fenetre.empreinte_export == "scelle", (
+        "le recalcul a effacé l'empreinte de l'export")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

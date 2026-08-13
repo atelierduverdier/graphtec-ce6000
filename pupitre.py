@@ -22,6 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import contour
+import projet as fichier_projet
 import svg2hpgl as noyau
 import mosaique                                    # noqa: E402
 import materiaux                                   # noqa: E402
@@ -201,6 +202,16 @@ class Pupitre(QWidget):
         # DÉCOUPE le tour. Les confondre ferait imprimer le trait de coupe
         # sur l'autocollant, ou découper le dessin lui-même.
         self.contour = []
+        # Le contenu du SVG, gardé pour être recopié dans un projet : un
+        # chemin absolu vieillit dès qu'on range ses dossiers.
+        self.svg_source = None
+        # Empreinte du placement au moment du dernier export de feuille.
+        # Sert à prévenir quand le dessin a bougé depuis — c'est ce qui
+        # manquait le 13/08/2026, et une manche y est passée.
+        self.empreinte_export = None
+        # Vrai pendant qu'un projet repose ses réglages : sans ça chaque
+        # widget déclenche un recalcul complet, soit quarante pour rien.
+        self._silence = False
         self.calcule = []                 # après placement, ce qui sera tracé
         self.media = (380.9, 285.6)
         self.chemin = None
@@ -349,6 +360,18 @@ class Pupitre(QWidget):
 
         b_ouvrir = QPushButton("Ouvrir un SVG…")
         b_ouvrir.clicked.connect(self._ouvrir)
+        b_ouvrir_projet = QPushButton("Ouvrir un projet…")
+        b_ouvrir_projet.setToolTip(
+            "Rouvre un travail avec TOUS ses réglages : placement,\n"
+            "échelle, rotation, contour, repères. Le SVG est recopié\n"
+            "dans le projet, donc il survit à un rangement de dossiers.")
+        b_ouvrir_projet.clicked.connect(self._ouvrir_projet)
+        b_enregistrer = QPushButton("Enregistrer le projet…")
+        b_enregistrer.setToolTip(
+            "Garde le dessin ET son placement. Sans ça, un cadrage\n"
+            "patiemment ajusté ne vit que dans cette fenêtre — c'est\n"
+            "ainsi qu'un print & cut a été perdu le 13/08/2026.")
+        b_enregistrer.clicked.connect(self._enregistrer_projet)
         self.lbl_fichier = QLabel("aucun dessin")
         self.lbl_fichier.setObjectName("faible")
         self.lbl_fichier.setWordWrap(True)
@@ -726,7 +749,8 @@ class Pupitre(QWidget):
             return zone
 
         self.onglets = QTabWidget()
-        self.onglets.addTab(onglet(b_ouvrir, self.lbl_fichier, g_media,
+        self.onglets.addTab(onglet(b_ouvrir, b_ouvrir_projet,
+                                   b_enregistrer, self.lbl_fichier, g_media,
                                    g_placement, g_mosaique,
                                    g_perfo, g_contour, g_arms), "Dessin")
         self.onglets.addTab(onglet(g_outil, g_nuancier, g_copies), "Outil")
@@ -1009,6 +1033,119 @@ class Pupitre(QWidget):
                           in enumerate(arms.marche_a_suivre(self._type_arms()), 1))
         QMessageBox.information(self, "Print & cut (ARMS)", texte)
 
+    # ------------------------------------------------------- le projet
+    def _lire_reglages(self):
+        """Tous les réglages de l'interface, selon la table de `projet`."""
+        valeurs = {}
+        for nom, genre in fichier_projet.REGLAGES:
+            w = getattr(self, nom, None)
+            if w is None:
+                continue
+            if genre == "bool":
+                valeurs[nom] = w.isChecked()
+            elif genre == "texte":
+                valeurs[nom] = w.currentText()
+            elif genre == "entier_liste":
+                valeurs[nom] = w.currentIndex()
+            else:
+                valeurs[nom] = w.value()
+        return valeurs
+
+    def _poser_reglages(self, valeurs):
+        """Remet les réglages. Ce qui manque est LAISSÉ TEL QUEL plutôt que
+        remis par défaut : un projet ancien ne doit pas effacer en silence
+        des réglages qu'il ne connaissait pas."""
+        self._silence = True
+        try:
+            for nom, genre in fichier_projet.REGLAGES:
+                if nom not in valeurs:
+                    continue
+                w = getattr(self, nom, None)
+                if w is None:
+                    continue
+                v = valeurs[nom]
+                if genre == "bool":
+                    w.setChecked(bool(v))
+                elif genre == "texte":
+                    w.setCurrentText(str(v))
+                elif genre == "entier_liste":
+                    w.setCurrentIndex(int(v))
+                elif genre == "entier":
+                    w.setValue(int(v))
+                else:
+                    w.setValue(float(v))
+        finally:
+            self._silence = False
+        self._recalculer()
+
+    def _enregistrer_projet(self):
+        if not self.brut:
+            QMessageBox.information(self, "Enregistrer",
+                                    "Ouvre d'abord un dessin.")
+            return
+        depart = os.path.splitext(self.chemin or "travail")[0] \
+            + fichier_projet.EXTENSION
+        chemin, _ = QFileDialog.getSaveFileName(
+            self, "Enregistrer le projet", depart,
+            f"Projet traceur (*{fichier_projet.EXTENSION})")
+        if not chemin:
+            return
+        try:
+            ecrit = fichier_projet.enregistrer(
+                chemin, self._lire_reglages(), svg=self.svg_source,
+                source=self.chemin, empreinte_export=self.empreinte_export)
+        except OSError as e:
+            QMessageBox.warning(self, "Enregistrer", str(e))
+            return
+        self.lbl_fichier.setText(f"{os.path.basename(ecrit)} — enregistré")
+
+    def _ouvrir_projet(self):
+        chemin, _ = QFileDialog.getOpenFileName(
+            self, "Ouvrir un projet", os.path.expanduser("~"),
+            f"Projet traceur (*{fichier_projet.EXTENSION})")
+        if not chemin:
+            return
+        try:
+            projet = fichier_projet.charger(chemin)
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, "Ouvrir un projet", str(e))
+            return
+
+        svg = projet.get("svg")
+        if not svg:
+            QMessageBox.warning(self, "Ouvrir un projet",
+                                "Ce projet ne porte pas de dessin.")
+            return
+        # Le SVG est recopié dans un fichier temporaire parce que le
+        # parseur lit un chemin, pas une chaîne. Le projet reste la source.
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".svg", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(svg)
+            provisoire = f.name
+        try:
+            self.brut, avertissements = noyau.charger(provisoire)
+        except Exception as e:
+            QMessageBox.warning(self, "Ouvrir un projet", str(e))
+            return
+        finally:
+            os.unlink(provisoire)
+        if not self.brut:
+            QMessageBox.warning(self, "Ouvrir un projet",
+                                "Aucune géométrie exploitable.")
+            return
+
+        self.svg_source = svg
+        self.chemin = projet.get("source")
+        self.empreinte_export = projet.get("empreinte_export")
+        self._poser_reglages(projet.get("reglages", {}))
+        self.b_envoyer.setEnabled(True)
+        self.apercu.reinitialiser_vue()
+        self.lbl_fichier.setText(
+            os.path.basename(chemin)
+            + ("\n⚠ " + "\n⚠ ".join(avertissements) if avertissements else ""))
+        self._recalculer()
+
     def _type_arms(self):
         """2 ou 1, selon la liste — l'ordre de la liste met le 2 d'abord,
         parce que c'est celui des gabarits officiels et celui que la
@@ -1066,6 +1203,10 @@ class Pupitre(QWidget):
         ax, ay = infos["ecart"]
         self.spn_ecart_av.setValue(ax)
         self.spn_ecart_ch.setValue(ay)
+
+        # Sceller le placement : c'est cette empreinte qui dira, à
+        # l'envoi, si le dessin a bougé depuis que la feuille est sortie.
+        self.empreinte_export = fichier_projet.empreinte(self._lire_reglages())
 
         pl, ph = infos["page"]
         texte = (f"Feuille écrite : {os.path.basename(chemin)}\n"
@@ -1376,6 +1517,11 @@ class Pupitre(QWidget):
                                 + "\n".join(avertissements))
             return
         self.chemin = chemin
+        try:
+            self.svg_source = open(chemin, encoding="utf-8").read()
+        except OSError:
+            self.svg_source = None
+        self.empreinte_export = None      # un dessin neuf n'a pas de feuille
         self.lbl_fichier.setText(os.path.basename(chemin) +
                                  ("\n⚠ " + "\n⚠ ".join(avertissements)
                                   if avertissements else ""))
@@ -1435,6 +1581,8 @@ class Pupitre(QWidget):
                                  self.spn_recouv.value())
 
     def _recalculer(self):
+        if getattr(self, "_silence", False):
+            return
         self.media = (self.spn_mx.value(), self.spn_my.value())
         if not self.brut:
             self.apercu.poser([], self.media, False)
@@ -1506,6 +1654,22 @@ class Pupitre(QWidget):
         self.b_envoyer.setEnabled(bool(self.brut) and not deborde)
 
     def _envoyer(self):
+        # Le dessin a-t-il bougé depuis que la feuille a été imprimée ?
+        # Rien ne le signalait le 13/08/2026, et la manche y est passée :
+        # l'écart mesuré ensuite mêlait deux causes et ne disait rien.
+        if self.chk_arms.isChecked() and fichier_projet.a_bouge_depuis_export(
+                self._lire_reglages(), self.empreinte_export):
+            suite = QMessageBox.warning(
+                self, "Le dessin a bougé",
+                "Le placement a changé depuis que la feuille a été "
+                "exportée.\n\nLes repères disent où était le dessin au "
+                "moment de l'export, pas où il est maintenant : la "
+                "découpe ne retombera pas sur l'impression.\n\n"
+                "Envoyer quand même ?",
+                QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel)
+            if suite != QMessageBox.Ok:
+                return
+
         # Le réordonnancement ne tourne qu'ici : il est en n², donc trop
         # lourd à rejouer à chaque mouvement d'un réglage, et il ne change
         # rien à ce que l'aperçu montre.

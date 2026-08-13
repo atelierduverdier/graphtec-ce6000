@@ -137,6 +137,44 @@ Il aura permis de décoder tout le protocole — ce qui était son but — mais
 pas d'obtenir une détection réussie. Pour la réponse d'un scan qui
 aboutit, il faudra une vraie impression.
 
+## Un scan ARMS piloté par NOTRE code
+
+**Le 13/08/2026, la séquence a été rejouée depuis Linux**, sans Graphtec
+Studio, et la machine a cherché :
+
+    ESC.v:ESC.C10:  (deux fois)
+    TB99 / TB57,1,1 / TB59,0,0 / TB52,1 / TB51,800
+    TB53,40 / TB55,1 / TB54,0,0 / TB124,9080,5600 / TB99
+
+    0,1 s -> C11 = 1     elle cherche
+    7,7 s -> C11 = 6
+   18,0 s -> C11 = 1     elle cherche encore
+   24,0 s -> C11 = 10
+
+Vingt-quatre secondes de balayage, deux phases de recherche — ce qui
+ressemble à deux repères successifs. **Le protocole est donc utilisable
+en l'état** : ce qui manque n'est plus la commande, c'est la détection.
+
+## Pourquoi un repère TRACÉ ne se détecte pas
+
+Le niveau de détection descendu à **30 %**, le minimum que la machine
+accepte, ne change rien. Ce n'est donc pas une affaire de seuil.
+
+Le manuel le dit en toutes lettres :
+
+> « Le capteur est réglé pour scanner des repères **imprimés** en noir sur
+> un fond blanc. Réajustez le niveau de détection en fonction de la couleur
+> et de la **brillance** de la matière. »
+
+La brillance. Un feutre laisse un noir qui réfléchit ; un toner diffuse.
+Le noir « uniforme à l'œil » ne l'est pas pour le capteur.
+
+**Le seul essai restant** : la calibration du capteur emploie les valeurs
+UTILISATEUR (`USER SENSOR GAIN=14`, `USER BASE LEVEL=532`) et non celles
+d'usine (`gain 15`, `base 0`) — quelqu'un l'a réglée un jour sur une
+matière inconnue. `RM SENSOR LEVEL ADJ SELECT` la bascule. S'il échoue
+aussi, il faudra une impression.
+
 ## Ce que ça ouvre
 
 `TB124` **dit exactement où Studio attend les repères**. Le gabarit peut

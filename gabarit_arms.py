@@ -98,8 +98,13 @@ def en_svg(formes, largeur, hauteur):
 def main():
     ap = argparse.ArgumentParser(
         description="Gabarit de repères ARMS pour le CE6000-60.")
-    ap.add_argument("--media", default="210x297",
-                    help="cotes du média en mm (défaut A4 : 210x297)")
+    # PIÈGE : la taille de la FEUILLE n'est pas la zone atteignable. Sur
+    # un A4 chargé, les galets et les marges ramènent 210 x 297 à 256,8 x
+    # 197,7 -- un gabarit fait aux cotes du papier ne rentre pas, et on ne
+    # s'en aperçoit qu'au moment d'envoyer.
+    ap.add_argument("--media", default=None,
+                    help="cotes de la ZONE UTILE en mm, ex. 256x197. "
+                         "Par défaut, elle est demandée à la machine.")
     ap.add_argument("--marge", type=float, default=20.0,
                     help="distance du bord au coin des repères, mm (défaut 20)")
     ap.add_argument("--hachures", action="store_true",
@@ -108,10 +113,20 @@ def main():
     ap.add_argument("-o", "--sortie", default="reperes_arms.svg")
     args = ap.parse_args()
 
-    try:
-        L, H = (float(v) for v in args.media.lower().split("x"))
-    except ValueError:
-        raise SystemExit("--media attend LARGEURxHAUTEUR, ex. 210x297")
+    if args.media:
+        try:
+            L, H = (float(v) for v in args.media.lower().split("x"))
+        except ValueError:
+            raise SystemExit("--media attend LARGEURxHAUTEUR, ex. 256x197")
+    else:
+        import svg2hpgl
+        limites = svg2hpgl.limites_machine()
+        if not limites:
+            raise SystemExit(
+                "la machine ne répond pas — allumée, média chargé, READY ?\n"
+                "Sinon donner la zone utile à la main : --media 256x197")
+        L, H = limites
+        print(f"zone utile demandée à la machine : {L:.1f} × {H:.1f} mm")
 
     formes = planche(L, H, args.marge, args.hachures)
     open(args.sortie, "w", encoding="utf-8").write(en_svg(formes, L, H))

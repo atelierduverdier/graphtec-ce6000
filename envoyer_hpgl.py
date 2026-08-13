@@ -109,7 +109,8 @@ def emprise(programme):
 def main():
     ap = argparse.ArgumentParser(
         description="Envoie un fichier HP-GL au Graphtec CE6000-60.")
-    ap.add_argument("fichier", nargs="+", help="fichier(s) .hpgl")
+    ap.add_argument("fichier", nargs="+",
+                    help="fichier(s) .hpgl — ou .svg, converti au vol")
     ap.add_argument("--forcer", action="store_true",
                     help="envoie même si le dessin déborde de la zone utile")
     ap.add_argument("--materiau", metavar="NOM",
@@ -126,6 +127,14 @@ def main():
     for chemin in args.fichier:
         if not os.path.exists(chemin):
             sys.exit(f"fichier introuvable : {chemin}")
+
+    # Un SVG est converti ICI, dans le même processus. Le faire par un tube
+    # — `envoyer_hpgl <(svg2hpgl …)` — ne peut PAS marcher : les deux
+    # programmes tournent alors en parallèle et se disputent
+    # /dev/usb/lp0, que l'un ouvre pendant que l'autre l'interroge. Le
+    # second meurt sur « Device or resource busy », son tube se referme, et
+    # l'envoi part avec zéro octet en croyant avoir réussi.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
     if not os.path.exists(PERIPH):
         sys.exit(f"{PERIPH} absent : traceur allumé et branché ?")
@@ -178,8 +187,19 @@ def main():
         print()
 
     for chemin in args.fichier:
-        with open(chemin, encoding="ascii", errors="replace") as f:
-            programme = f.read()
+        if chemin.lower().endswith(".svg"):
+            import svg2hpgl
+            poly, avertissements = svg2hpgl.charger(chemin)
+            for a in avertissements:
+                print(f"   ⚠ {a}")
+            if not poly:
+                sys.exit(f"{chemin} : aucune géométrie exploitable.")
+            programme, _ = svg2hpgl.en_hpgl(svg2hpgl.ordonner(poly))
+            print(f"{os.path.basename(chemin)} : converti, "
+                  f"{len(poly)} tracé(s)")
+        else:
+            with open(chemin, encoding="ascii", errors="replace") as f:
+                programme = f.read()
 
         try:
             boite = emprise(programme)

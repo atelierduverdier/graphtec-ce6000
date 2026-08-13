@@ -21,6 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import contour
 import svg2hpgl as noyau
 import mosaique                                    # noqa: E402
 import materiaux                                   # noqa: E402
@@ -196,6 +197,10 @@ class Pupitre(QWidget):
         super().__init__()
         self.setWindowTitle("Pupitre de tracé — Graphtec CE6000-60")
         self.brut = []                    # polylignes du SVG, jamais modifiées
+        # Le CONTOUR est gardé à part du dessin : on IMPRIME le motif et on
+        # DÉCOUPE le tour. Les confondre ferait imprimer le trait de coupe
+        # sur l'autocollant, ou découper le dessin lui-même.
+        self.contour = []
         self.calcule = []                 # après placement, ce qui sera tracé
         self.media = (380.9, 285.6)
         self.chemin = None
@@ -520,7 +525,45 @@ class Pupitre(QWidget):
             "la découpe retombe sur l'impression.")
         b_feuille.clicked.connect(self._exporter_feuille)
         gl.addWidget(b_feuille, 8, 0, 1, 2)
+        self.spn_trait_arms = self._reel(0.3, 3.0, 1.0)
+        self.spn_trait_arms.setDecimals(1)
+        self.spn_trait_arms.setToolTip(
+            "épaisseur du trait des repères.\n"
+            "Le manuel donne 0,3 à 1 mm ; au-delà on sort de la plage\n"
+            "annoncée, mais un trait plus gros donne plus de signal au\n"
+            "capteur. C'est la feuille qui tranche, pas la notice.")
+        gl.addWidget(QLabel("trait repères"), 9, 0)
+        gl.addWidget(self.spn_trait_arms, 9, 1)
         g_arms = g
+
+        # --- contour de découpe
+        g = QGroupBox("Contour de découpe")
+        gl = QGridLayout(g)
+        self.chk_contour = QCheckBox("découper autour du dessin")
+        self.chk_contour.setToolTip(
+            "Fabrique le tour d'un autocollant : on imprime le motif, on\n"
+            "découpe AUTOUR, à quelques millimètres.\n\n"
+            "Vrai décalage de polygone, pas une boîte englobante — une\n"
+            "étoile garde ses creux. Les formes qui se touchent donnent un\n"
+            "seul contour.")
+        self.chk_contour.stateChanged.connect(self._recalculer)
+        self.spn_retrait = self._reel(0.5, 30.0, 3.0)
+        self.chk_trous = QCheckBox("garder les trous intérieurs")
+        self.chk_trous.setToolTip(
+            "Par défaut le contour ne garde que le tour EXTÉRIEUR : un\n"
+            "autocollant se détache d'un seul morceau. Cocher pour\n"
+            "évider aussi l'intérieur des formes creuses.")
+        self.chk_trous.stateChanged.connect(self._recalculer)
+        self.spn_retrait.valueChanged.connect(self._recalculer)
+        self.lbl_contour = QLabel("inactif")
+        self.lbl_contour.setObjectName("faible")
+        self.lbl_contour.setWordWrap(True)
+        gl.addWidget(self.chk_contour, 0, 0, 1, 2)
+        gl.addWidget(QLabel("retrait"), 1, 0)
+        gl.addWidget(self.spn_retrait, 1, 1)
+        gl.addWidget(self.chk_trous, 2, 0, 1, 2)
+        gl.addWidget(self.lbl_contour, 3, 0, 1, 2)
+        g_contour = g
 
         # --- copies
         g = QGroupBox("Copies matricielles")
@@ -674,7 +717,7 @@ class Pupitre(QWidget):
         self.onglets = QTabWidget()
         self.onglets.addTab(onglet(b_ouvrir, self.lbl_fichier, g_media,
                                    g_placement, g_mosaique,
-                                   g_perfo, g_arms), "Dessin")
+                                   g_perfo, g_contour, g_arms), "Dessin")
         self.onglets.addTab(onglet(g_outil, g_nuancier, g_copies), "Outil")
         self.onglets.addTab(onglet(self._groupe_machine()), "Machine")
         v.addWidget(self.onglets, 1)
@@ -971,7 +1014,9 @@ class Pupitre(QWidget):
             return
         marge = self.spn_marge_arms.value()
         try:
-            svg, infos = arms.composer(self.calcule, marge=marge)
+            svg, infos = arms.composer(
+                self.calcule, marge=marge,
+                epaisseur=self.spn_trait_arms.value())
         except ValueError as e:
             QMessageBox.warning(self, "Feuille à imprimer", str(e))
             return
@@ -1373,7 +1418,22 @@ class Pupitre(QWidget):
             self.apercu.poser([], self.media, False)
             return
         self.calcule = self._pipeline()
-        x0, y0, x1, y1 = noyau.cadre(self.calcule)
+        self.contour = []
+        if self.chk_contour.isChecked():
+            try:
+                self.contour = contour.contour(
+                    self.calcule, self.spn_retrait.value(),
+                    trous=self.chk_trous.isChecked())
+                self.lbl_contour.setText(
+                    f"{len(self.contour)} contour(s), "
+                    f"{contour.longueur(self.contour):.0f} mm de coupe à "
+                    f"{self.spn_retrait.value():g} mm du dessin. "
+                    f"C'est LUI qui part au traceur, pas le motif.")
+            except Exception as e:
+                self.lbl_contour.setText(f"contour impossible : {e}")
+        else:
+            self.lbl_contour.setText("inactif")
+        x0, y0, x1, y1 = noyau.cadre(self.calcule + self.contour)
         deborde = x1 > self.media[0] or y1 > self.media[1]
 
         panneaux = self._panneaux()
@@ -1405,7 +1465,7 @@ class Pupitre(QWidget):
         else:
             self.lbl_perfo.setText("inactive")
 
-        self.apercu.poser(self.calcule, self.media, deborde,
+        self.apercu.poser(self.calcule + self.contour, self.media, deborde,
                           [p[2] for p in panneaux])
 
         n = len(self.calcule)
@@ -1437,7 +1497,9 @@ class Pupitre(QWidget):
             lots = [(f"panneau {n}/{len(panneaux)}", m)
                     for n, (_i, _j, _r, m) in enumerate(panneaux, 1)]
         else:
-            lots = [("", self.calcule)]
+            # Ce qui part au traceur : le contour SEUL quand il est demandé.
+            # Découper aussi le motif trancherait l'autocollant en deux.
+            lots = [("", self.contour if self.contour else self.calcule)]
 
         programmes, gains = [], []
         for nom, morceaux in lots:

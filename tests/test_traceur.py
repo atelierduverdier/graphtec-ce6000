@@ -21,6 +21,7 @@ sys.path.insert(0, RACINE)
 import conditions                                            # noqa: E402
 import materiaux                                             # noqa: E402
 import arms
+import contour
 import mosaique                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 
@@ -280,6 +281,78 @@ def test_arms_voit_une_taille_de_repere_qui_ne_correspond_pas():
         "10 mm annoncés contre 20 mm tracés : non signalé")
 
 
+def test_contour_entoure_le_dessin_sans_le_toucher():
+    """Le tour d'un autocollant passe AUTOUR du motif, à la bonne distance.
+
+    Une boîte englobante serait plus simple et mentirait : une étoile
+    perdrait ses creux, et l'autocollant ne serait plus une étoile. Ce
+    test emploie donc une forme à creux, celle qui distingue un vrai
+    décalage d'une approximation.
+    """
+    import math
+    etoile = []
+    for k in range(11):
+        a = math.pi / 2 + k * math.pi / 5
+        r = 30.0 if k % 2 == 0 else 13.0
+        etoile.append((60 + r * math.cos(a), 45 + r * math.sin(a)))
+    dessin = [(etoile, True)]
+    retrait = 4.0
+
+    tour = contour.contour(dessin, retrait=retrait)
+    assert len(tour) == 1, f"{len(tour)} contours pour une seule forme"
+
+    # L'emprise doit grandir d'exactement deux retraits sur chaque axe.
+    dx0, dy0, dx1, dy1 = noyau.cadre(dessin)
+    cx0, cy0, cx1, cy1 = noyau.cadre(tour)
+    assert abs((cx1 - cx0) - (dx1 - dx0) - 2 * retrait) < 0.05, (
+        "le contour ne s'écarte pas du retrait demandé en largeur")
+    assert abs((cy1 - cy0) - (dy1 - dy0) - 2 * retrait) < 0.05
+
+    # Et il doit ENTOURER le dessin : aucun point du motif au-delà.
+    for x, y in etoile:
+        assert cx0 <= x <= cx1 and cy0 <= y <= cy1, (
+            "le dessin déborde de son propre contour")
+
+    # LA propriété d'un décalage, et non une approximation de longueur :
+    # chaque sommet du motif est à `retrait` de son contour. Un creux
+    # d'étoile est le cas qui tranche — une boîte englobante l'en
+    # éloignerait de plusieurs centimètres.
+    points_contour = tour[0][0]
+
+    def _distance_au_contour(px, py):
+        proche = float("inf")
+        for (x0, y0), (x1, y1) in zip(points_contour, points_contour[1:]):
+            dx, dy = x1 - x0, y1 - y0
+            long2 = dx * dx + dy * dy
+            u = 0.0 if long2 == 0 else max(0.0, min(
+                1.0, ((px - x0) * dx + (py - y0) * dy) / long2))
+            proche = min(proche, math.hypot(px - x0 - u * dx,
+                                            py - y0 - u * dy))
+        return proche
+
+    # Les sommets SAILLANTS (les pointes) reçoivent un raccord arrondi de
+    # rayon `retrait` : ils sont à exactement cette distance.
+    for x, y in etoile[0:10:2]:
+        d = _distance_au_contour(x, y)
+        assert abs(d - retrait) < 0.1, (
+            f"pointe ({x:.1f}, {y:.1f}) à {d:.2f} mm au lieu de {retrait}")
+
+    # Les sommets RENTRANTS — les creux — sont forcément plus loin : le
+    # décalage y forme un coin, à l'intersection des deux bords décalés.
+    # C'est correct. Ce qui ne le serait pas, c'est qu'ils soient loin au
+    # point de trahir une boîte englobante : ici 4,75 mm mesurés, contre
+    # une vingtaine si le contour ne suivait pas les creux.
+    for x, y in etoile[1:10:2]:
+        d = _distance_au_contour(x, y)
+        assert d >= retrait - 0.05, (
+            f"creux ({x:.1f}, {y:.1f}) à {d:.2f} mm : le contour mord "
+            f"dans le motif")
+        assert d < 2 * retrait, (
+            f"creux ({x:.1f}, {y:.1f}) à {d:.2f} mm du contour — il ne "
+            f"suit pas les creux, c'est une enveloppe déguisée et "
+            f"l'autocollant n'aura plus sa forme")
+
+
 def test_feuille_imprimee_et_decoupe_se_recouvrent():
     """Ce qu'on imprime et ce qu'on découpe doivent tomber au même endroit.
 
@@ -353,6 +426,13 @@ def test_unites_accordees():
     assert arms.UNITES_PAR_MM == noyau.UNITES_PAR_MM, (
         f"arms dit {arms.UNITES_PAR_MM} unités/mm, svg2hpgl dit "
         f"{noyau.UNITES_PAR_MM} — l'une des deux a vieilli")
+
+    # La tolérance du contour vaut la MOITIÉ du pas machine : plus fin ne
+    # se voit pas, plus grossier se voit dans les virages.
+    attendu = 1.0 / noyau.UNITES_PAR_MM / 2
+    assert abs(contour.TOLERANCE - attendu) < 1e-12, (
+        f"tolérance de contour {contour.TOLERANCE} pour un pas machine de "
+        f"{1.0 / noyau.UNITES_PAR_MM} mm — elle devrait valoir {attendu}")
 
 
 def test_sequence_de_scan_est_calculee():

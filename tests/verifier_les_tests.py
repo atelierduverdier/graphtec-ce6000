@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import materiaux                                             # noqa: E402
 import arms
+import contour
 import mosaique                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 import test_traceur as T                                     # noqa: E402
@@ -82,8 +83,30 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "desaccords": arms.desaccords,
           "PAGE": arms.PAGE,
           "composer": arms.composer,
+          "contour": contour.contour,
+          "TOLERANCE": contour.TOLERANCE,
           "decouper": arms.Ecoute.decouper,
           "UNITES_PAR_MM": arms.UNITES_PAR_MM}
+
+
+def contour_reduit_a_sa_boite_englobante():
+    """La faute : le raccourci qui vient à l'esprit — un rectangle autour.
+
+    L'emprise serait juste, le retrait aussi sur les côtés. Une étoile y
+    perdrait ses creux, et l'autocollant ne serait plus une étoile.
+    """
+    def boite(polylignes, retrait=3.0, **reste):
+        xs = [x for pts, _ in polylignes for x, _ in pts]
+        ys = [y for pts, _ in polylignes for _, y in pts]
+        x0, y0 = min(xs) - retrait, min(ys) - retrait
+        x1, y1 = max(xs) + retrait, max(ys) + retrait
+        return [([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)], True)]
+    contour.contour = boite
+
+
+def tolerance_de_contour_trop_grossiere():
+    """La faute : laisser la valeur par défaut de Clipper, 543 points."""
+    contour.TOLERANCE = 0.25
 
 
 def feuille_dont_la_marge_ne_vaut_que_d_un_cote():
@@ -196,6 +219,16 @@ CAS = [
      "test_gabarit_officiel_garde_ses_cotes_relevees",
      gabarit_officiel_arrondi_a_l_a4,
      lambda: setattr(arms, "PAGE", _VRAIS["PAGE"])),
+
+    ("contour ramené à une boîte englobante",
+     "test_contour_entoure_le_dessin_sans_le_toucher",
+     contour_reduit_a_sa_boite_englobante,
+     lambda: setattr(contour, "contour", _VRAIS["contour"])),
+
+    ("tolérance de contour décrochée du pas machine",
+     "test_unites_accordees",
+     tolerance_de_contour_trop_grossiere,
+     lambda: setattr(contour, "TOLERANCE", _VRAIS["TOLERANCE"])),
 
     ("marge comptée d'un seul côté de la feuille",
      "test_feuille_imprimee_et_decoupe_se_recouvrent",

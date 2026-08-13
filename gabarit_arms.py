@@ -44,7 +44,8 @@ def coin(x, y, sx, sy):
     ]
 
 
-def planche(largeur, hauteur, marge, hachures=False, ecart=None):
+def planche(largeur, hauteur, marge, hachures=False, ecart=None,
+            ancrage="centre"):
     """Quatre repères aux coins d'une zone utile centrée.
 
     `ecart` impose la distance entre les ANGLES des L, au lieu de la
@@ -55,8 +56,17 @@ def planche(largeur, hauteur, marge, hachures=False, ecart=None):
     n'a pas dit « marge par rapport à quoi ».
     """
     if ecart:
-        x0 = (largeur - ecart[0]) / 2.0
-        y0 = (hauteur - ecart[1]) / 2.0
+        # CENTRÉ par défaut, mais la machine ne cherche pas au centre : la
+        # capture du 13/08/2026 ne montre AUCUNE commande de positionnement
+        # avant la salve TB. Elle balaye donc depuis son ORIGINE, et un
+        # gabarit centré met le premier repère quinze millimètres plus
+        # loin — assez pour qu'elle scanne le bord de la feuille et ne
+        # trouve rien.
+        if ancrage == "origine":
+            x0 = y0 = 0.0
+        else:
+            x0 = (largeur - ecart[0]) / 2.0
+            y0 = (hauteur - ecart[1]) / 2.0
         x1, y1 = x0 + ecart[0], y0 + ecart[1]
         if x0 < 0 or y0 < 0:
             raise SystemExit(
@@ -128,6 +138,11 @@ def main():
                     help="distance entre les angles des repères, en mm — "
                          "celle que la machine attend, lisible dans le "
                          "TB124 d'une capture. Prime sur --marge.")
+    ap.add_argument("--ancrage", choices=("centre", "origine"),
+                    default="centre",
+                    help="où poser le PREMIER repère. « origine » le met en "
+                         "0,0 : c'est là que la machine commence à balayer, "
+                         "faute de commande de positionnement.")
     ap.add_argument("--hachures", action="store_true",
                     help="remplit les L par balayage au lieu du marqueur — "
                          "gris, donc peu sûr pour le capteur")
@@ -160,7 +175,7 @@ def main():
                 f"écart {ecart[0]:g} × {ecart[1]:g} + {BRANCHE:g} mm de "
                 f"branches dépasse la zone utile {L:.1f} × {H:.1f} mm.\n"
                 f"Réduire l'écart, donc AUGMENTER les marges dans Studio.")
-    formes = planche(L, H, args.marge, args.hachures, ecart)
+    formes = planche(L, H, args.marge, args.hachures, ecart, args.ancrage)
     open(args.sortie, "w", encoding="utf-8").write(en_svg(formes, L, H))
     utile = (ecart if ecart else
              (L - 2 * args.marge - BRANCHE, H - 2 * args.marge - BRANCHE))

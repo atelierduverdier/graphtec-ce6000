@@ -54,6 +54,33 @@ Ce n'est ni le marqueur ni le capteur : c'est un désaccord de repère entre
 deux logiciels qui parlaient chacun de « 20 mm de marge » sans parler de la
 même chose.
 
+## Seconde capture : la convention de Studio, vérifiée
+
+Marges portées de 20 à 35 mm dans Studio, et `TB124` devient
+**`9080,5600`** — soit **227,0 × 140,0 mm**, exactement l'écart que
+`gabarit_arms.py --ecart 227x140` produit.
+
+La convention supposée était donc juste : **écart = feuille − 2 × marge**,
+la feuille étant l'A4 dans le sens où elle est chargée. Elle n'est plus
+supposée, elle est vérifiée par la machine.
+
+## Le préambule de Studio, et la famille `ESC.C31`
+
+La seconde capture montre ce que Studio demande AVANT de scanner :
+
+    ESC.v:ESC.C31;9:       -> 'CE6000-60, V2.70'   modèle et micrologiciel
+    ESC.v:ESC.C31;9;5:     -> 'STD'                la variante
+    ESC.v:ESC.C31;60:      -> '0'
+    ESC.v:ESC.C31;16:      -> '3'
+    ESC.v:ESC.C31;20:      -> '0'
+    ESC.v:ESC.C31;29:      -> '4'
+    ESC.v:TC2008,1,3   TC2009,5   TC2002,1   TC2006,1
+
+`ESC.C31;<n>:` est une famille d'**identification** qu'on ne connaissait
+pas. Notre `sondes/sonde_ce6000.py` se contente d'`OI;`, qui rend `7586` —
+le modèle ÉMULÉ, pas la machine. `ESC.C31;9:` donne son vrai nom et sa
+version de micrologiciel.
+
 ## Ce que ça ouvre
 
 `TB124` **dit exactement où Studio attend les repères**. Le gabarit peut

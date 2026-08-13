@@ -22,6 +22,7 @@ logiciel.
 - [La force d'offset déchirait le papier](#la-force-doffset-déchirait-le-papier)
 - [La machine mesure sa propre lame](#la-machine-mesure-sa-propre-lame)
 - [Le débordement à zéro déchirait chaque coin de départ](#le-débordement-à-zéro-déchirait-chaque-coin-de-départ)
+- [Les repères ARMS, mesurés au pixel](#les-repères-arms-mesurés-au-pixel)
 - [Les pièges](#les-pièges)
 - [Ce qui a été mesuré sur la machine](#ce-qui-a-été-mesuré-sur-la-machine)
 - [Tracer une planche TechDraw au stylo](#tracer-une-planche-techdraw-au-stylo)
@@ -311,6 +312,40 @@ besoin — la meilleure façon de trouver :
 lieu de se détacher ne permet pas de juger « est-ce qu'il se détache
 proprement ? ». Le seuil du 80 g, relevé à 8 tant que le débordement était
 nul, est tombé à **7** une fois corrigé — et la force retenue de 10 à 8.
+
+## Les repères ARMS, mesurés au pixel
+
+Le manuel ne donne la forme des repères **qu'en image**, illisible par
+extraction de texte. Christophe a fait engendrer par Graphtec Studio les
+six variantes (2, 3 et 4 points, types 1 et 2) ; les PDF sont **raster**,
+donc sans géométrie vectorielle non plus.
+
+Ils ont donc été **rendus à 300 dpi et mesurés au pixel** :
+
+| | |
+|---|---|
+| forme | un **L**, deux branches à angle droit |
+| branches | **20,0 mm** — le `MARK SIZE=20.0` du vidage |
+| épaisseur | **1,0 mm** |
+| aire | 38 mm², qui recoupe 2 × 20 × 1 moins le coin |
+
+Les quatre repères portent les quatre orientations, chacun encadrant son
+coin de la zone utile. Sur l'A4 fourni, ceux de droite sont **tronqués par
+le bord** : Studio dessinait pour un média plus large.
+
+`gabarit_arms.py` engendre le gabarit aux cotes relevées, que **le traceur
+dessine lui-même** — il n'y a pas toujours une imprimante sous la main, et
+la machine pose la géométrie au dixième.
+
+```bash
+python3 gabarit_arms.py --media 210x297 -o reperes.svg
+```
+
+**Tracer au stylo, puis remplir au marqueur NOIR.** Le capteur est réglé
+pour du noir franc sur du blanc ; un contour au stylo ne suffit pas, et le
+remplissage en hachures (`--hachures`) reste gris. Le manuel ajoute deux
+limites : matière de **0,3 mm au plus** — donc le 80 g, pas le 300 g — et
+presse-papier activé, sans quoi la feuille se soulève pendant le balayage.
 
 ## Les pièges
 

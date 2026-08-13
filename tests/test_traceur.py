@@ -22,7 +22,8 @@ import conditions                                            # noqa: E402
 import materiaux                                             # noqa: E402
 import arms
 import contour
-import mosaique                                              # noqa: E402
+import mosaique
+import roles                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 
 
@@ -441,6 +442,76 @@ def test_type_1_laisse_la_place_a_ses_branches():
     assert abs((h1 - h2) - 2 * branche) < 1e-9
 
 
+def test_un_repere_ne_se_confond_pas_avec_un_carre():
+    """La forme du repère se reconnaît à son AIRE, pas à son encombrement.
+
+    Un L de 20 mm de côté et un carré de 20 mm ont exactement la même
+    boîte. Ce qui les sépare est l'aire : 39 mm² pour le L, 400 pour le
+    carré. S'en tenir à la boîte ferait passer tout carré de 20 mm pour
+    un repère — et il serait alors écarté de la découpe, en silence.
+    """
+    b, e = 20.0, 1.0
+    repere = [(list(arms._coin(0.0, 0.0, +1, +1, b, e))
+               + [(0.0, 0.0)], True)]
+    carre = [([(0.0, 0.0), (b, 0.0), (b, b), (0.0, b), (0.0, 0.0)], True)]
+
+    assert roles.reperes_arms(repere) == {0}, "un vrai repère n'est pas vu"
+    assert roles.reperes_arms(carre) == set(), (
+        "un carré de 20 mm est pris pour un repère — il serait écarté de "
+        "la découpe sans rien dire")
+
+
+def test_les_reperes_dune_feuille_composee_sont_reconnus():
+    """Rouvrir une feuille du composeur ne doit pas redécouper ses repères.
+
+    Les découper trancherait la feuille en travers des repères qui
+    viennent de servir à la détection.
+    """
+    dessin = [([(20.0, 20.0), (80.0, 20.0), (80.0, 60.0), (20.0, 60.0),
+                (20.0, 20.0)], True)]
+    svg, _infos = arms.composer(dessin, marge=25.0)
+
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".svg", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(svg)
+        chemin = f.name
+    try:
+        couleurs = []
+        relu, _ = noyau.charger(chemin, couleurs=couleurs)
+    finally:
+        os.unlink(chemin)
+
+    reperes = roles.reperes_arms(relu)
+    assert len(reperes) == 4, (
+        f"{len(reperes)} repère(s) reconnu(s) sur 4 dans une feuille "
+        f"sortie du composeur")
+
+    par_role = roles.classer(relu, couleurs, reperes=reperes)
+    assert len(par_role["repere"]) == 4
+    assert len(par_role["tracer"]) == len(relu) - 4, (
+        "le dessin a été rangé avec les repères")
+
+
+def test_la_couleur_decide_du_role():
+    """Rouge se découpe, bleu se raine, noir se trace.
+
+    C'est la convention des logiciels de découpe, et elle permet à un
+    seul fichier de porter le motif et son contour.
+    """
+    assert roles.role_par_defaut((1.0, 0.0, 0.0)) == "decouper"
+    assert roles.role_par_defaut((0.0, 0.0, 1.0)) == "rainer"
+    assert roles.role_par_defaut((0.0, 0.0, 0.0)) == "tracer"
+
+    # Une nuance voisine doit tomber du même côté : Inkscape n'exporte pas
+    # toujours un rouge exactement pur.
+    assert roles.role_par_defaut((0.94, 0.06, 0.04)) == "decouper", (
+        "un rouge légèrement dénaturé n'est plus reconnu")
+
+    # Et une couleur inconnue ne doit pas être découpée par surprise.
+    assert roles.role_par_defaut((0.0, 0.65, 0.0)) != "decouper"
+
+
 def test_unites_accordees():
     """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
 
@@ -681,6 +752,76 @@ def test_type_1_laisse_la_place_a_ses_branches():
         f"page type 1 large de {l1} contre {l2} en type 2 : il manque la "
         f"place des branches sortantes")
     assert abs((h1 - h2) - 2 * branche) < 1e-9
+
+
+def test_un_repere_ne_se_confond_pas_avec_un_carre():
+    """La forme du repère se reconnaît à son AIRE, pas à son encombrement.
+
+    Un L de 20 mm de côté et un carré de 20 mm ont exactement la même
+    boîte. Ce qui les sépare est l'aire : 39 mm² pour le L, 400 pour le
+    carré. S'en tenir à la boîte ferait passer tout carré de 20 mm pour
+    un repère — et il serait alors écarté de la découpe, en silence.
+    """
+    b, e = 20.0, 1.0
+    repere = [(list(arms._coin(0.0, 0.0, +1, +1, b, e))
+               + [(0.0, 0.0)], True)]
+    carre = [([(0.0, 0.0), (b, 0.0), (b, b), (0.0, b), (0.0, 0.0)], True)]
+
+    assert roles.reperes_arms(repere) == {0}, "un vrai repère n'est pas vu"
+    assert roles.reperes_arms(carre) == set(), (
+        "un carré de 20 mm est pris pour un repère — il serait écarté de "
+        "la découpe sans rien dire")
+
+
+def test_les_reperes_dune_feuille_composee_sont_reconnus():
+    """Rouvrir une feuille du composeur ne doit pas redécouper ses repères.
+
+    Les découper trancherait la feuille en travers des repères qui
+    viennent de servir à la détection.
+    """
+    dessin = [([(20.0, 20.0), (80.0, 20.0), (80.0, 60.0), (20.0, 60.0),
+                (20.0, 20.0)], True)]
+    svg, _infos = arms.composer(dessin, marge=25.0)
+
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".svg", delete=False,
+                                     encoding="utf-8") as f:
+        f.write(svg)
+        chemin = f.name
+    try:
+        couleurs = []
+        relu, _ = noyau.charger(chemin, couleurs=couleurs)
+    finally:
+        os.unlink(chemin)
+
+    reperes = roles.reperes_arms(relu)
+    assert len(reperes) == 4, (
+        f"{len(reperes)} repère(s) reconnu(s) sur 4 dans une feuille "
+        f"sortie du composeur")
+
+    par_role = roles.classer(relu, couleurs, reperes=reperes)
+    assert len(par_role["repere"]) == 4
+    assert len(par_role["tracer"]) == len(relu) - 4, (
+        "le dessin a été rangé avec les repères")
+
+
+def test_la_couleur_decide_du_role():
+    """Rouge se découpe, bleu se raine, noir se trace.
+
+    C'est la convention des logiciels de découpe, et elle permet à un
+    seul fichier de porter le motif et son contour.
+    """
+    assert roles.role_par_defaut((1.0, 0.0, 0.0)) == "decouper"
+    assert roles.role_par_defaut((0.0, 0.0, 1.0)) == "rainer"
+    assert roles.role_par_defaut((0.0, 0.0, 0.0)) == "tracer"
+
+    # Une nuance voisine doit tomber du même côté : Inkscape n'exporte pas
+    # toujours un rouge exactement pur.
+    assert roles.role_par_defaut((0.94, 0.06, 0.04)) == "decouper", (
+        "un rouge légèrement dénaturé n'est plus reconnu")
+
+    # Et une couleur inconnue ne doit pas être découpée par surprise.
+    assert roles.role_par_defaut((0.0, 0.65, 0.0)) != "decouper"
 
 
 def test_unites_accordees():

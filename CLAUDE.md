@@ -98,7 +98,7 @@ Trois étages, du quotidien vers l'archéologie :
 |---|---|
 | `pupitre.py` | **l'application** — le seul fichier à lancer |
 | `svg2hpgl.py`, `envoyer_hpgl.py`, `gabarit_traceur.py`, `nuancier_force.py`, `preparer_planche.py` | les mêmes traitements en ligne de commande |
-| `conditions.py`, `materiaux.py`, `mosaique.py`, `arms.py`, `contour.py`, `etat_machine.py`, `theme.py`, `icones.py` | le moteur, importé par les précédents |
+| `conditions.py`, `materiaux.py`, `mosaique.py`, `arms.py`, `contour.py`, `roles.py`, `projet.py`, `etat_machine.py`, `theme.py`, `icones.py` | le moteur, importé par les précédents |
 | `sondes/` | les huit programmes qui ont servi à **comprendre** la machine, pas à s'en servir. On n'y touche que pour reprendre l'enquête |
 
 ## À l'établi

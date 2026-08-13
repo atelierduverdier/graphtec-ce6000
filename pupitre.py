@@ -23,6 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import contour
 import projet as fichier_projet
+import roles as roles_couleur
 import svg2hpgl as noyau
 import mosaique                                    # noqa: E402
 import materiaux                                   # noqa: E402
@@ -205,6 +206,12 @@ class Pupitre(QWidget):
         # Le contenu du SVG, gardé pour être recopié dans un projet : un
         # chemin absolu vieillit dès qu'on range ses dossiers.
         self.svg_source = None
+        # Couleur de chaque tracé, en parallèle de `brut`. Sert à donner
+        # un RÔLE à chacun : le motif qu'on imprime, le contour qu'on
+        # découpe, les plis qu'on raine.
+        self.couleurs = []
+        self.correspondance = {}          # couleur arrondie -> rôle
+        self.reperes = set()              # indices reconnus comme repères
         # Empreinte du placement au moment du dernier export de feuille.
         # Sert à prévenir quand le dessin a bougé depuis — c'est ce qui
         # manquait le 13/08/2026, et une manche y est passée.
@@ -570,6 +577,34 @@ class Pupitre(QWidget):
         gl.addWidget(self.cmb_type_arms, 10, 1)
         g_arms = g
 
+        # --- rôles des couleurs
+        g = QGroupBox("Rôles des couleurs")
+        gl = QVBoxLayout(g)
+        self.cmb_travail = QComboBox()
+        self.cmb_travail.addItems(["tout, sauf les repères", "tracer",
+                                   "rainer", "découper"])
+        self.cmb_travail.setToolTip(
+            "Ce qui part au traceur MAINTENANT. Un fichier peut porter\n"
+            "le motif et son contour : on envoie l'un, on change d'outil,\n"
+            "on envoie l'autre.\n\n"
+            "Les repères ARMS ne sont jamais envoyés — les découper\n"
+            "trancherait la feuille en travers de ce qui vient de servir.")
+        self.cmb_travail.currentIndexChanged.connect(self._recalculer)
+        ligne = QHBoxLayout()
+        ligne.addWidget(QLabel("envoyer"))
+        ligne.addWidget(self.cmb_travail, 1)
+        gl.addLayout(ligne)
+        # Rempli à l'ouverture d'un fichier : une ligne par couleur trouvée.
+        self.zone_couleurs = QWidget()
+        self.grille_couleurs = QGridLayout(self.zone_couleurs)
+        self.grille_couleurs.setContentsMargins(0, 4, 0, 0)
+        gl.addWidget(self.zone_couleurs)
+        self.lbl_roles = QLabel("aucun dessin")
+        self.lbl_roles.setObjectName("faible")
+        self.lbl_roles.setWordWrap(True)
+        gl.addWidget(self.lbl_roles)
+        g_roles = g
+
         # --- contour de découpe
         g = QGroupBox("Contour de découpe")
         gl = QGridLayout(g)
@@ -752,7 +787,8 @@ class Pupitre(QWidget):
         self.onglets.addTab(onglet(b_ouvrir, b_ouvrir_projet,
                                    b_enregistrer, self.lbl_fichier, g_media,
                                    g_placement, g_mosaique,
-                                   g_perfo, g_contour, g_arms), "Dessin")
+                                   g_perfo, g_roles, g_contour,
+                                   g_arms), "Dessin")
         self.onglets.addTab(onglet(g_outil, g_nuancier, g_copies), "Outil")
         self.onglets.addTab(onglet(self._groupe_machine()), "Machine")
         v.addWidget(self.onglets, 1)
@@ -1093,7 +1129,9 @@ class Pupitre(QWidget):
         try:
             ecrit = fichier_projet.enregistrer(
                 chemin, self._lire_reglages(), svg=self.svg_source,
-                source=self.chemin, empreinte_export=self.empreinte_export)
+                source=self.chemin, empreinte_export=self.empreinte_export,
+                correspondance={",".join(f"{c:.3f}" for c in rgb): role
+                                for rgb, role in self.correspondance.items()})
         except OSError as e:
             QMessageBox.warning(self, "Enregistrer", str(e))
             return
@@ -1123,8 +1161,10 @@ class Pupitre(QWidget):
                                          encoding="utf-8") as f:
             f.write(svg)
             provisoire = f.name
+        couleurs_relues = []
         try:
-            self.brut, avertissements = noyau.charger(provisoire)
+            self.brut, avertissements = noyau.charger(
+                provisoire, couleurs=couleurs_relues)
         except Exception as e:
             QMessageBox.warning(self, "Ouvrir un projet", str(e))
             return
@@ -1136,15 +1176,86 @@ class Pupitre(QWidget):
             return
 
         self.svg_source = svg
+        self.couleurs = couleurs_relues
+        self.correspondance = {
+            tuple(float(x) for x in cle.split(",")): role
+            for cle, role in (projet.get("correspondance") or {}).items()}
+        self.reperes = roles_couleur.reperes_arms(self.brut)
         self.chemin = projet.get("source")
         self.empreinte_export = projet.get("empreinte_export")
         self._poser_reglages(projet.get("reglages", {}))
+        self._refaire_liste_couleurs()
         self.b_envoyer.setEnabled(True)
         self.apercu.reinitialiser_vue()
         self.lbl_fichier.setText(
             os.path.basename(chemin)
             + ("\n⚠ " + "\n⚠ ".join(avertissements) if avertissements else ""))
         self._recalculer()
+
+    def _refaire_liste_couleurs(self):
+        """Une ligne par couleur du fichier, avec son rôle.
+
+        Reconstruite à chaque ouverture : les couleurs d'un fichier ne
+        sont pas celles du précédent, et garder d'anciennes lignes ferait
+        croire à des tracés qui n'existent plus.
+        """
+        while self.grille_couleurs.count():
+            item = self.grille_couleurs.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._combos_couleur = {}
+        if not self.couleurs:
+            self.lbl_roles.setText("aucun dessin")
+            return
+        for rang, (rgb, nombre) in enumerate(
+                roles_couleur.couleurs_presentes(self.couleurs)):
+            pastille = QLabel("■")
+            r, v, b = (round(c * 255) for c in rgb)
+            pastille.setStyleSheet(f"color: rgb({r},{v},{b}); font-size: 16px;")
+            cmb = QComboBox()
+            cmb.addItems([roles_couleur.LIBELLES[x]
+                          for x in roles_couleur.ROLES])
+            choisi = self.correspondance.get(rgb) \
+                or roles_couleur.role_par_defaut(rgb)
+            cmb.setCurrentText(roles_couleur.LIBELLES[choisi])
+            cmb.currentIndexChanged.connect(self._roles_changes)
+            self._combos_couleur[rgb] = cmb
+            self.grille_couleurs.addWidget(pastille, rang, 0)
+            self.grille_couleurs.addWidget(
+                QLabel(f"{roles_couleur.nom_couleur(rgb)} ({nombre})"), rang, 1)
+            self.grille_couleurs.addWidget(cmb, rang, 2)
+        self._roles_changes()
+
+    def _roles_changes(self):
+        """Relit les listes déroulantes et recalcule."""
+        inverse = {v: k for k, v in roles_couleur.LIBELLES.items()}
+        self.correspondance = {rgb: inverse[cmb.currentText()]
+                               for rgb, cmb in
+                               getattr(self, "_combos_couleur", {}).items()}
+        self._recalculer()
+
+    def _retenus(self):
+        """Les tracés que le travail choisi doit envoyer.
+
+        Les repères ARMS sont écartés dans TOUS les cas — c'est le point
+        3 de la demande de Christophe, et la raison en est physique :
+        les découper trancherait la feuille en travers des repères qui
+        viennent de servir à la détection.
+        """
+        if not self.couleurs or len(self.couleurs) != len(self.brut):
+            return self.brut
+        par_role = roles_couleur.classer(self.brut, self.couleurs,
+                                         self.correspondance, self.reperes)
+        choix = self.cmb_travail.currentText()
+        if choix.startswith("tout"):
+            garde = ["tracer", "rainer", "decouper"]
+        else:
+            garde = {"tracer": ["tracer"], "rainer": ["rainer"],
+                     "découper": ["decouper"]}[choix]
+        retenus = []
+        for role in garde:
+            retenus += par_role[role]
+        return retenus
 
     def _type_arms(self):
         """2 ou 1, selon la liste — l'ordre de la liste met le 2 d'abord,
@@ -1507,7 +1618,9 @@ class Pupitre(QWidget):
         if not chemin:
             return
         try:
-            self.brut, avertissements = noyau.charger(chemin)
+            self.couleurs = []
+            self.brut, avertissements = noyau.charger(
+                chemin, couleurs=self.couleurs)
         except Exception as e:
             QMessageBox.warning(self, "Lecture impossible", str(e))
             return
@@ -1516,16 +1629,25 @@ class Pupitre(QWidget):
                                 "Aucune géométrie exploitable dans ce SVG.\n\n"
                                 + "\n".join(avertissements))
             return
+        self.correspondance = {}
+        self.reperes = roles_couleur.reperes_arms(self.brut)
         self.chemin = chemin
         try:
             self.svg_source = open(chemin, encoding="utf-8").read()
         except OSError:
             self.svg_source = None
+        # Couleur de chaque tracé, en parallèle de `brut`. Sert à donner
+        # un RÔLE à chacun : le motif qu'on imprime, le contour qu'on
+        # découpe, les plis qu'on raine.
+        self.couleurs = []
+        self.correspondance = {}          # couleur arrondie -> rôle
+        self.reperes = set()              # indices reconnus comme repères
         self.empreinte_export = None      # un dessin neuf n'a pas de feuille
         self.lbl_fichier.setText(os.path.basename(chemin) +
                                  ("\n⚠ " + "\n⚠ ".join(avertissements)
                                   if avertissements else ""))
         self.b_envoyer.setEnabled(True)
+        self._refaire_liste_couleurs()
         # Un dessin neuf mérite un cadrage neuf ; un simple réglage, non.
         self.apercu.reinitialiser_vue()
         self._recalculer()
@@ -1560,7 +1682,14 @@ class Pupitre(QWidget):
         self.spn_ech.setValue(f * 100.0)
 
     def _pipeline(self):
-        p = noyau.tourner(self.brut, int(self.cmb_rot.currentText().rstrip("°")))
+        retenus = self._retenus()
+        if not retenus:
+            # Un rôle sans aucun tracé — « découper » sur un fichier qui
+            # n'a pas de rouge. Le recadrage calcule une emprise, et une
+            # emprise de rien n'existe pas : sortir avant.
+            return []
+        p = noyau.tourner(retenus,
+                          int(self.cmb_rot.currentText().rstrip("°")))
         p = noyau.refleter(p, self.chk_mx.isChecked(), self.chk_my.isChecked())
         p = noyau.mettre_a_echelle(p, self.spn_ech.value() / 100.0)
         p = noyau.dupliquer(p, self.spn_rang.value(), self.spn_col.value(),
@@ -1588,6 +1717,17 @@ class Pupitre(QWidget):
             self.apercu.poser([], self.media, False)
             return
         self.calcule = self._pipeline()
+        if not self.calcule:
+            # Un rôle sans aucun tracé : « découper » sur un fichier qui
+            # n'a pas de rouge. Rien à montrer, et surtout rien à envoyer.
+            self.contour = []
+            self.apercu.poser([], self.media, False)
+            self.lbl_roles.setText(
+                f"aucun tracé pour « {self.cmb_travail.currentText()} » — "
+                f"rien ne partira au traceur")
+            self.b_envoyer.setEnabled(False)
+            self.info.setText("aucun tracé pour ce travail")
+            return
         self.contour = []
         if self.chk_contour.isChecked():
             try:
@@ -1603,6 +1743,17 @@ class Pupitre(QWidget):
                 self.lbl_contour.setText(f"contour impossible : {e}")
         else:
             self.lbl_contour.setText("inactif")
+
+        if self.couleurs and len(self.couleurs) == len(self.brut):
+            par_role = roles_couleur.classer(
+                self.brut, self.couleurs, self.correspondance, self.reperes)
+            resume = ", ".join(f"{len(v)} à {roles_couleur.LIBELLES[k].split(' ')[0]}"
+                               for k, v in par_role.items() if v)
+            envoyes = len(self._retenus())
+            self.lbl_roles.setText(
+                f"{resume}. {envoyes} tracé(s) partiront au traceur."
+                + (f" {len(self.reperes)} repère(s) ARMS reconnu(s) et "
+                   f"écarté(s)." if self.reperes else ""))
         x0, y0, x1, y1 = noyau.cadre(self.calcule + self.contour)
         deborde = x1 > self.media[0] or y1 > self.media[1]
 

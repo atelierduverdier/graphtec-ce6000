@@ -45,6 +45,8 @@ REGLAGES = [
     ("spn_recouv", "reel"),
     # perforation
     ("chk_perfo", "bool"), ("spn_coupe", "reel"), ("spn_saut", "reel"),
+    # rôles des couleurs
+    ("cmb_travail", "texte"),
     # contour de découpe
     ("chk_contour", "bool"), ("spn_retrait", "reel"), ("chk_trous", "bool"),
     # print & cut
@@ -77,8 +79,14 @@ def empreinte(reglages):
     return hashlib.sha256("|".join(morceaux).encode()).hexdigest()[:12]
 
 
-def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None):
-    """Écrit un projet. `svg` est le CONTENU du fichier, pas son chemin."""
+def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None,
+                correspondance=None):
+    """Écrit un projet. `svg` est le CONTENU du fichier, pas son chemin.
+
+    `correspondance` associe une couleur à un rôle. Elle est enregistrée
+    à part des réglages parce qu'elle n'a pas de widget fixe : ses lignes
+    naissent du fichier ouvert.
+    """
     if not chemin.endswith(EXTENSION):
         chemin += EXTENSION
     projet = {
@@ -88,6 +96,7 @@ def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None):
         "reglages": reglages,
         "empreinte": empreinte(reglages),
         "empreinte_export": empreinte_export,
+        "correspondance": correspondance or {},
     }
     with open(chemin, "w", encoding="utf-8") as f:
         json.dump(projet, f, ensure_ascii=False, indent=1)

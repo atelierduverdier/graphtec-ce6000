@@ -61,8 +61,20 @@ def _formes_perdues(chemin):
     return perdues
 
 
-def charger(chemin):
-    """Fichier SVG -> [(points_mm, ferme), ...] + avertissements."""
+def charger(chemin, couleurs=None):
+    """Fichier SVG -> [(points_mm, ferme), ...] + avertissements.
+
+    Si une liste est passée en `couleurs`, elle est remplie EN PARALLÈLE
+    des polylignes : `couleurs[i]` est la couleur de `polylignes[i]`, en
+    (r, v, b) de 0 à 1. Une liste à part plutôt qu'un troisième champ dans
+    le tuple, pour que les dizaines d'appels existants ne changent pas de
+    forme — un tuple qui a deux longueurs selon l'appelant est une source
+    de fautes silencieuses.
+
+    Le parseur rend la couleur du REMPLISSAGE quand il y en a un, celle du
+    TRAIT sinon : c'est ce qu'on veut, un contour de découpe se déclare
+    aussi bien à l'un qu'à l'autre.
+    """
     records, avertissements = svg_import.parse_svg_file(chemin)
     for tag, nombre in sorted(_formes_perdues(chemin).items()):
         avertissements.append(
@@ -77,6 +89,8 @@ def charger(chemin):
                     points.append(points[0])
             if len(points) >= 2:
                 polylignes.append((points, sous["closed"]))
+                if couleurs is not None:
+                    couleurs.append(record.get("fill_rgb") or (0.0, 0.0, 0.0))
     return polylignes, avertissements
 
 

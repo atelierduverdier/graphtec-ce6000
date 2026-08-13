@@ -215,6 +215,34 @@ def test_un_recalcul_nefface_pas_ce_qui_a_ete_scelle(fenetre):
         "le recalcul a effacé l'empreinte de l'export")
 
 
+def test_un_role_sans_trace_ne_fait_pas_tomber_la_fenetre(fenetre):
+    """Demander « découper » sur un fichier sans rouge ne doit pas casser.
+
+    Défaut réel, attrapé le 13/08/2026 en essayant les rôles sur une
+    feuille composée : aucun tracé ne restait, et le calcul d'emprise
+    levait une exception sur une liste vide.
+
+    L'attendu n'est pas seulement de ne pas tomber : l'envoi doit être
+    refusé, sinon on lancerait un travail vide sans le savoir.
+    """
+    import svg2hpgl as noyau
+    import roles as roles_couleur
+
+    # Un dessin tout noir : rien à découper.
+    fenetre.brut = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)],
+                     True)]
+    fenetre.couleurs = [(0.0, 0.0, 0.0)]
+    fenetre.correspondance = {}
+    fenetre.reperes = set()
+    fenetre.cmb_travail.setCurrentText("découper")
+
+    fenetre._recalculer()          # ne doit pas lever
+
+    assert fenetre._retenus() == [], "un noir a été rangé dans la découpe"
+    assert not fenetre.b_envoyer.isEnabled(), (
+        "l'envoi reste possible alors qu'aucun tracé ne partirait")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

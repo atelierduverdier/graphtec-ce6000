@@ -26,7 +26,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import materiaux                                             # noqa: E402
 import arms
 import contour
-import mosaique                                              # noqa: E402
+import mosaique
+import roles                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 import test_traceur as T                                     # noqa: E402
 
@@ -84,9 +85,34 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "PAGE": arms.PAGE,
           "composer": arms.composer,
           "contour": contour.contour,
+          "reperes_arms": roles.reperes_arms,
+          "TOLERANCE_COULEUR": roles.TOLERANCE_COULEUR,
           "TOLERANCE": contour.TOLERANCE,
           "recolter": arms.Ecoute.recolter,
           "UNITES_PAR_MM": arms.UNITES_PAR_MM}
+
+
+def repere_reconnu_a_sa_seule_boite():
+    """La faute tentante : reconnaître un repère à son encombrement.
+
+    Un carré de 20 mm passerait alors pour un repère et serait écarté de
+    la découpe, sans le moindre message.
+    """
+    def sur_la_boite(polylignes, branche=20.0, epaisseur=1.0, tolerance=0.5):
+        trouves = set()
+        for i, (points, ferme) in enumerate(polylignes):
+            xs = [x for x, _ in points]
+            ys = [y for _, y in points]
+            if (ferme and abs((max(xs) - min(xs)) - branche) < tolerance
+                    and abs((max(ys) - min(ys)) - branche) < tolerance):
+                trouves.add(i)
+        return trouves
+    roles.reperes_arms = sur_la_boite
+
+
+def rouge_qui_cesse_d_etre_du_rouge():
+    """La faute : exiger un rouge EXACT, que peu de logiciels exportent."""
+    roles.TOLERANCE_COULEUR = 0.001
 
 
 def contour_reduit_a_sa_boite_englobante():
@@ -223,6 +249,16 @@ CAS = [
      "test_gabarit_officiel_garde_ses_cotes_relevees",
      gabarit_officiel_arrondi_a_l_a4,
      lambda: setattr(arms, "PAGE", _VRAIS["PAGE"])),
+
+    ("repère reconnu à sa seule boîte englobante",
+     "test_un_repere_ne_se_confond_pas_avec_un_carre",
+     repere_reconnu_a_sa_seule_boite,
+     lambda: setattr(roles, "reperes_arms", _VRAIS["reperes_arms"])),
+
+    ("tolérance de couleur ramenée à l'exactitude",
+     "test_la_couleur_decide_du_role",
+     rouge_qui_cesse_d_etre_du_rouge,
+     lambda: setattr(roles, "TOLERANCE_COULEUR", _VRAIS["TOLERANCE_COULEUR"])),
 
     ("contour ramené à une boîte englobante",
      "test_contour_entoure_le_dessin_sans_le_toucher",

@@ -20,6 +20,7 @@ logiciel.
 - [Les outils](#les-outils)
 - [Les réglages de l'établi](#les-réglages-de-létabli)
 - [La force d'offset déchirait le papier](#la-force-doffset-déchirait-le-papier)
+- [La machine mesure sa propre lame](#la-machine-mesure-sa-propre-lame)
 - [Les pièges](#les-pièges)
 - [Ce qui a été mesuré sur la machine](#ce-qui-a-été-mesuré-sur-la-machine)
 - [Tracer une planche TechDraw au stylo](#tracer-une-planche-techdraw-au-stylo)
@@ -244,6 +245,34 @@ sert pour du matériau épais, c'est le seul cas où il faudra le remonter.
 au départ vient-il de là ? », et un seul carré n'y aurait pas répondu — il
 aurait dit « ça marque » sans dire par rapport à quoi. Deux carrés, tout
 identique sauf une chose, et la réponse se lit sans instrument.
+
+## La machine mesure sa propre lame
+
+**Trouvé dans le manuel le 13/08/2026** (page 2-48), après treize ans
+d'usage de la machine. La sortie de lame est la seule cote de la chaîne
+qu'aucune commande ne règle — mais elle se **mesure**, et la machine dit
+elle-même de combien tourner la molette.
+
+`[COND/TEST]` → flèche `POSITION` jusqu'à `CONDITION (3/3)` → `[3]`
+(AJUSTEMENT LAME).
+
+1. molette rentrée **à fond vers la gauche** ;
+2. porte-lame en **position 1 (arrière)** — ailleurs l'ajustement refuse ;
+3. `[ENTER]`, puis `[1]` pour poser la longueur **cible** ;
+4. `[2]` (VÉRIFIER) : elle descend et remonte l'outil, affiche `T` la
+   cible et `H` le réel, et le nombre de tours à faire ;
+5. tourner, re-vérifier, jusqu'à ce que `H` rejoigne `T`. `[3]` pour finir.
+
+**Avertissement du manuel, qui compte sur du papier fin** : « selon la
+matière chargée, la lame pourrait s'enfoncer dans le média, ce qui rend
+impossible une mesure précise ». Si `H` s'affole sur du 80 g, mesurer sur
+une chute ferme : la lame ne change pas de longueur selon le papier, seule
+la mesure en dépend.
+
+Ce que ça change pour le carnet d'établi : les cotes de sortie de lame
+(0,17 pour du 0,10 mm, 0,55 pour du 0,42) cessent d'être des intentions
+pour devenir des réglages **vérifiables**. Jusque-là, rien n'attestait
+qu'une lame était bien où on croyait l'avoir mise.
 
 ## Les pièges
 

@@ -479,6 +479,24 @@ class Pupitre(QWidget):
         gl.addWidget(rappel_arms, 1, 0, 1, 2)
         gl.addWidget(b_arms, 2, 0, 1, 2)
         gl.addWidget(self.lbl_arms, 3, 0, 1, 2)
+        # Écart entre repères, dans l'ordre de TB124 : l'avance d'abord.
+        # Défauts = les cotes relevées sur le gabarit officiel de Graphtec.
+        self.spn_ecart_av = self._reel(20, 900, 160.0)
+        self.spn_ecart_ch = self._reel(20, 600, 150.0)
+        gl.addWidget(QLabel("écart avance"), 4, 0)
+        gl.addWidget(self.spn_ecart_av, 4, 1)
+        gl.addWidget(QLabel("écart chariot"), 5, 0)
+        gl.addWidget(self.spn_ecart_ch, 5, 1)
+        b_scan = QPushButton("Lancer une détection  (à éprouver)")
+        b_scan.setToolTip(
+            "Déclenche le balayage depuis le PC, au lieu du panneau.\n\n"
+            "CE CHEMIN N'A JAMAIS ABOUTI : la machine cherche bien, mais\n"
+            "aucune détection pilotée par le PC n'a été menée à son terme.\n"
+            "Toutes celles qui ont réussi le 13/08/2026 sont passées par\n"
+            "le panneau. À employer pour reprendre l'enquête, pas pour\n"
+            "travailler.")
+        b_scan.clicked.connect(self._scanner_arms)
+        gl.addWidget(b_scan, 6, 0, 1, 2)
         g_arms = g
 
         # --- copies
@@ -898,6 +916,52 @@ class Pupitre(QWidget):
         texte += "\n".join(f"  {i}. {e}" for i, e
                           in enumerate(arms.marche_a_suivre(2), 1))
         QMessageBox.information(self, "Print & cut (ARMS)", texte)
+
+    def _scanner_arms(self):
+        """Déclenche une détection depuis le PC. Chemin NON ÉPROUVÉ.
+
+        La tête se met à balayer : on demande avant, comme pour tout ce qui
+        fait descendre un outil sur du papier posé par quelqu'un.
+        """
+        import conditions as M
+        import arms
+        if not os.path.exists(M.PERIPH):
+            QMessageBox.information(self, "Traceur absent",
+                                    f"{M.PERIPH} n'existe pas.")
+            return
+        av = self.spn_ecart_av.value()
+        ch = self.spn_ecart_ch.value()
+        rep = QMessageBox.question(
+            self, "Lancer une détection",
+            f"La tête va balayer la feuille pendant une vingtaine de "
+            f"secondes, à la recherche de repères espacés de "
+            f"{av:g} mm dans l'avance et {ch:g} mm sous le chariot.\n\n"
+            f"Ce chemin N'A JAMAIS ABOUTI : la machine cherche, mais aucune "
+            f"détection pilotée par le PC n'a été menée à son terme. Celles "
+            f"qui ont réussi sont passées par le panneau.\n\n"
+            f"Continuer ?",
+            QMessageBox.Ok | QMessageBox.Cancel)
+        if rep != QMessageBox.Ok:
+            return
+        try:
+            annonces, journal = arms.scanner(av, ch)
+        except Exception as e:
+            QMessageBox.warning(self, "Traceur", str(e))
+            return
+        texte = "\n".join(journal) or "(la machine n'a rien dit)"
+        if annonces:
+            texte += "\n\nAnnonces recueillies :\n"
+            texte += "\n".join(f"  {t:5.1f} s   « {a} »" for t, a in annonces)
+            texte += ("\n\nSeule forme connue à ce jour : « 1,254 », "
+                      "laissée par un scan qui a ÉCHOUÉ. Celle d'une "
+                      "réussite n'a jamais été observée — si celle-ci "
+                      "diffère, elle vaut d'être notée.")
+        else:
+            texte += "\n\nAucune annonce poussée."
+        self.lbl_arms.setText(
+            f"scan : {len(annonces)} annonce(s)" if annonces
+            else "scan : aucune annonce")
+        QMessageBox.information(self, "Détection ARMS", texte)
 
     def _lire_condition(self, silencieux=False):
         """Charge la condition choisie depuis la machine.

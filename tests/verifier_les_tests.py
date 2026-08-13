@@ -80,7 +80,34 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "en_hpgl": noyau.en_hpgl,
           "MATERIAUX": dict(materiaux.MATERIAUX),
           "desaccords": arms.desaccords,
-          "PAGE": arms.PAGE}
+          "PAGE": arms.PAGE,
+          "decouper": arms.Ecoute.decouper,
+          "UNITES_PAR_MM": arms.UNITES_PAR_MM}
+
+
+def purge_muette_qui_jette_les_annonces():
+    """La faute d'origine : jeter le tampon au lieu de le découper.
+
+    C'est le code d'avant le 13/08/2026. Il ne se voit sur AUCUNE
+    réponse — seulement sur l'annonce du scan, qui disparaît sans laisser
+    de trace. Treize captures pour s'en apercevoir.
+    """
+    def decouper_sans_garder(self, depart=0.0):
+        reponses = []
+        while b"\x03" in self.reste or b"\r" in self.reste:
+            i = min(x for x in (self.reste.find(b"\x03"),
+                                self.reste.find(b"\r")) if x >= 0)
+            trame, self.reste = self.reste[:i], self.reste[i + 1:]
+            texte = trame.decode("ascii", "replace").strip()
+            if texte:
+                reponses.append(texte)
+        return reponses
+    arms.Ecoute.decouper = decouper_sans_garder
+
+
+def unites_desaccordees():
+    """La faute : changer 40 d'un côté sans l'autre. Le piège VERSION."""
+    arms.UNITES_PAR_MM = 50
 
 
 def arms_qui_ne_compare_pas_les_types():
@@ -152,6 +179,16 @@ CAS = [
      "test_gabarit_officiel_garde_ses_cotes_relevees",
      gabarit_officiel_arrondi_a_l_a4,
      lambda: setattr(arms, "PAGE", _VRAIS["PAGE"])),
+
+    ("purge muette qui jette l'annonce du scan",
+     "test_annonce_poussee_nest_jamais_avalee",
+     purge_muette_qui_jette_les_annonces,
+     lambda: setattr(arms.Ecoute, "decouper", _VRAIS["decouper"])),
+
+    ("unités par mm recopiées et laissées vieillir",
+     "test_unites_accordees",
+     unites_desaccordees,
+     lambda: setattr(arms, "UNITES_PAR_MM", _VRAIS["UNITES_PAR_MM"])),
 
     ("rainage « corrigé » en découpe",
      "test_rainage_reste_du_rainage",

@@ -15,6 +15,11 @@ CE QUI EST MESURÉ, ET CE QUI NE L'EST PAS. Le point de chute du type 2 a
 type 1 ne l'a pas été. Les deux sont ici, mais pas au même titre.
 """
 
+import os
+import select
+import time
+
+import conditions
 import etat_machine
 
 # Le CD livré avec la machine porte les gabarits de Graphtec, datés de 2008 :
@@ -22,6 +27,11 @@ import etat_machine
 # tout ce qu'on redessine, et leurs cotes sont relevées sur le fichier même,
 # pas recopiées d'une documentation.
 CHEMIN_CD = "~/Projets/logiciels/GRAPHTEC-CD/ARMS Test Files"
+
+# Mesuré, pas supposé : réponse de `OF;`. Recopié ici parce qu'importer
+# svg2hpgl entraînerait svg_import, donc LaserAtelier, pour un seul entier.
+# Un test le compare à sa source — voir test_unites_accordees.
+UNITES_PAR_MM = 40
 
 PAGE = (208.8, 296.3)     # mm — ce n'est PAS de l'A4, d'où le piège ci-dessous
 BRANCHE = 20.0            # longueur d'une branche de L
@@ -133,6 +143,179 @@ def desaccords(reglages_lus, type_gabarit=2, branche=BRANCHE):
             "détection (menu ARMS, LECTURE MANUELLE REPERES).")
 
     return ennuis
+
+
+# ======================================================================
+# LE SCAN, PILOTÉ DEPUIS LE PC — À ÉPROUVER
+# ======================================================================
+#
+# La séquence vient de l'analyseur USB, relevée pendant que Graphtec
+# Studio lançait une détection. Rejouée depuis Linux, elle fait bien
+# CHERCHER la machine — mais aucune détection pilotée par le PC n'a
+# encore abouti. Toutes celles qui ont réussi le 13/08/2026 ont été
+# lancées au panneau.
+#
+# Ce n'est donc pas un chemin éprouvé, et il est nommé comme tel.
+
+PREAMBULE = "\x1b.v:\x1b.C10:"
+ETAT_RICHE = "\x1b.v:\x1b.C11:"      # 0 repos, 1 CHERCHE, 6 et 10 terminaux
+ETAT_SIMPLE = "\x1b.v:\x1b.C1:"      # 8 occupée, 0 libre — trop pauvre ici
+
+# `TB55` reste incertain : Studio envoie 1 tout en dessinant des repères
+# de TYPE 2 dans son propre PDF. Soit la famille compte à partir de zéro,
+# soit ce champ ne désigne pas le type. Dit plutôt que deviné.
+TB55_DOUTEUX = ("TB55 vaut 1 chez Studio alors que son gabarit est de "
+                "type 2 : le sens de ce champ n'est pas établi.")
+
+
+class Ecoute:
+    """Un tampon unique, découpé en trames, qui ne jette RIEN.
+
+    DEUX SORTES DE TRAMES, et c'est toute la découverte du 13/08/2026 :
+
+        ...\x03   une RÉPONSE à une question qu'on a posée
+        ...\r     une ANNONCE que la machine pousse d'elle-même
+
+    Le résultat d'un scan est une annonce. Aucune commande ne le rend :
+    `TB50`, `TB100`, `TB124`, `TB125`, `TB126` répondent toujours vide.
+    La première version de ce code vidait le tampon avant chaque question
+    et jetait donc l'annonce à tous les coups — elle n'a été vue que parce
+    qu'une capture USB tournait en parallèle.
+
+    Une purge muette détruit exactement ce qu'on cherche.
+    """
+
+    def __init__(self, fd, journal=None):
+        self.fd = fd
+        self.reste = b""
+        self.annonces = []
+        self.journal = journal if journal is not None else []
+
+    def _avaler(self, delai=0.05):
+        prets, _, _ = select.select([self.fd], [], [], delai)
+        if not prets:
+            return False
+        try:
+            morceau = os.read(self.fd, 64)
+        except BlockingIOError:
+            return False
+        if not morceau:
+            return False
+        self.reste += morceau
+        return True
+
+    def decouper(self, depart=0.0):
+        """Sort les trames complètes : range les annonces, rend les réponses."""
+        reponses = []
+        while True:
+            i_etx, i_cr = self.reste.find(b"\x03"), self.reste.find(b"\r")
+            if i_etx < 0 and i_cr < 0:
+                return reponses
+            if i_cr < 0 or (0 <= i_etx < i_cr):
+                trame, self.reste = self.reste[:i_etx], self.reste[i_etx + 1:]
+                reponses.append(trame.decode("ascii", "replace").strip())
+            else:
+                trame, self.reste = self.reste[:i_cr], self.reste[i_cr + 1:]
+                texte = trame.decode("ascii", "replace").strip()
+                if texte:
+                    self.annonces.append((time.monotonic() - depart, texte))
+                    self.journal.append(f"annonce : « {texte} »")
+
+    def demander(self, question, depart=0.0, delai=1.0):
+        self.decouper(depart)
+        conditions._ecrire(self.fd, question)
+        limite = time.monotonic() + delai
+        while time.monotonic() < limite:
+            self._avaler()
+            reponses = self.decouper(depart)
+            if reponses:
+                return reponses[-1]
+        return ""
+
+    def guetter(self, depart=0.0, duree=0.3):
+        """N'interroge rien : écoute seulement."""
+        limite = time.monotonic() + duree
+        while time.monotonic() < limite:
+            self._avaler()
+            self.decouper(depart)
+
+
+def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
+                  type_repere=1):
+    """Les commandes `TB` d'une détection, dans l'ordre de la capture.
+
+    Les valeurs qui portent une cote sont CALCULÉES à partir des
+    millimètres, jamais recopiées de la capture : un chiffre recopié
+    vieillit. `TB51,800` vaut 800 parce que 20 mm font 800 unités, pas
+    parce qu'on l'a lu quelque part.
+
+    `ecart_x` est l'axe d'AVANCE, `ecart_y` celui du chariot — l'ordre de
+    `TB124` dans la capture du 13/08/2026.
+    """
+    u = UNITES_PAR_MM
+    return ["TB99", "TB57,1,1", "TB59,0,0", "TB52,1",
+            f"TB51,{round(branche * u)}",
+            f"TB53,{round(epaisseur * u)}",
+            f"TB55,{type_repere}",
+            "TB54,0,0",
+            f"TB124,{round(ecart_x * u)},{round(ecart_y * u)}",
+            "TB99"]
+
+
+def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
+            type_repere=1, periph=None, patience=90.0, journal=None):
+    """Lance une détection depuis le PC. NON ÉPROUVÉ — voir l'en-tête.
+
+    Rend `(annonces, journal)`. Une annonce est `(instant, texte)`. La
+    seule forme connue à ce jour est `1,254`, laissée par un scan qui a
+    ÉCHOUÉ ; celle d'une réussite n'a jamais été observée.
+    """
+    journal = journal if journal is not None else []
+    fd = os.open(periph or conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
+    depart = time.monotonic()
+    ecoute = Ecoute(fd, journal)
+    try:
+        # Ce qui dort dans le tampon vient du coup précédent : un scan
+        # lancé au panneau y laisse parfois son annonce, qui attend un
+        # lecteur. On la ramasse au lieu de la jeter.
+        ecoute.guetter(depart, 0.3)
+
+        libre = ecoute.demander(ETAT_SIMPLE, depart)
+        if libre not in ("0", ""):
+            journal.append(f"la machine n'est pas libre (C1 = {libre}) — "
+                           f"le scan risque de ne pas partir")
+
+        conditions._ecrire(fd, PREAMBULE)
+        conditions._ecrire(fd, PREAMBULE)
+        for commande in sequence_scan(ecart_x, ecart_y, branche,
+                                      epaisseur, type_repere):
+            conditions._ecrire(fd, f"\x1b.v:{commande}\x03")
+
+        sens = {"0": "au repos", "1": "elle cherche",
+                "6": "terminé", "10": "terminé"}
+        precedent, cherche = None, False
+        while time.monotonic() - depart < patience:
+            valeur = ecoute.demander(ETAT_RICHE, depart, delai=0.6)
+            if valeur != precedent:
+                t = time.monotonic() - depart
+                journal.append(f"{t:5.1f} s  C11 = {valeur or '?'}  "
+                               f"{sens.get(valeur, '')}")
+                precedent = valeur
+            if valeur == "1":
+                cherche = True
+            if cherche and valeur in ("6", "10"):
+                # L'annonce précède l'état terminal de quelques dizaines de
+                # millisecondes — mais rien ne dit qu'il n'en vient qu'une.
+                ecoute.guetter(depart, 2.0)
+                break
+            ecoute.guetter(depart, 0.3)
+
+        if not cherche:
+            journal.append("elle n'a jamais cherché : machine occupée, ou "
+                           "réglages du panneau incompatibles avec le gabarit")
+        return ecoute.annonces, journal
+    finally:
+        os.close(fd)
 
 
 def marche_a_suivre(type_gabarit=2):

@@ -280,6 +280,65 @@ def test_arms_voit_une_taille_de_repere_qui_ne_correspond_pas():
         "10 mm annoncés contre 20 mm tracés : non signalé")
 
 
+def test_unites_accordees():
+    """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
+
+    Quarante unités par millimètre, mesuré par `OF;`. La constante est
+    dupliquée pour ne pas entraîner tout LaserAtelier dans un module qui
+    n'en a pas besoin — donc elle est surveillée, comme la ligne VERSION
+    restée quarante-quatre versions en retard.
+    """
+    assert arms.UNITES_PAR_MM == noyau.UNITES_PAR_MM, (
+        f"arms dit {arms.UNITES_PAR_MM} unités/mm, svg2hpgl dit "
+        f"{noyau.UNITES_PAR_MM} — l'une des deux a vieilli")
+
+
+def test_sequence_de_scan_est_calculee():
+    """Les commandes `TB` se déduisent des millimètres, pas de la capture.
+
+    `TB51,800` vaut 800 parce que 20 mm font 800 unités. Recopier les
+    valeurs de la capture du 13/08/2026 aurait figé un gabarit particulier
+    dans le code.
+    """
+    seq = arms.sequence_scan(190.0, 140.0, branche=20.0, epaisseur=1.0)
+    assert "TB51,800" in seq, "la longueur de branche n'est pas calculée"
+    assert "TB53,40" in seq, "l'épaisseur de trait n'est pas calculée"
+    assert "TB124,7600,5600" in seq, (
+        "TB124 doit porter l'AVANCE puis le chariot, en unités machine")
+
+    # Changer une cote doit changer la commande, sinon elle est en dur.
+    autre = arms.sequence_scan(190.0, 140.0, branche=10.0)
+    assert "TB51,400" in autre, "TB51 ne suit pas la longueur de branche"
+
+
+def test_annonce_poussee_nest_jamais_avalee():
+    """Une trame terminée par CR est une ANNONCE, et doit être gardée.
+
+    C'est la découverte du 13/08/2026, et elle a failli être manquée : la
+    boucle purgeait le tampon avant chaque question, donc jetait le
+    résultat du scan à tous les coups. Il n'a été vu que parce qu'une
+    capture USB tournait à côté.
+
+    Le découpage doit rendre les réponses (`\x03`) ET conserver les
+    annonces (`\r`), même quand les deux arrivent dans le même paquet.
+    """
+    class _Faux:
+        pass
+
+    ecoute = arms.Ecoute.__new__(arms.Ecoute)
+    ecoute.fd = None
+    ecoute.reste = b"1,254\r10\x03"
+    ecoute.annonces = []
+    ecoute.journal = []
+
+    reponses = ecoute.decouper()
+
+    assert reponses == ["10"], f"réponse perdue : {reponses}"
+    assert [t for _, t in ecoute.annonces] == ["1,254"], (
+        "l'annonce du scan a été avalée — c'est la faute qui a coûté "
+        "treize captures")
+
+
 def test_gabarit_officiel_garde_ses_cotes_relevees():
     """Les cotes du gabarit Graphtec sont RELEVÉES sur le fichier.
 

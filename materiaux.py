@@ -60,17 +60,32 @@ MATERIAUX = {
         lame="CB09U",
         mesure="13/08/2026 — force d'offset 4, débordement 0,2 mm, "
                "lame mesurée à 0,25 par la machine"),
-    # Nuancier du 11/08/2026 sur chute de 300 g, lame à 0,55 : la force 16
-    # laisse le carré tenir par un coin, 18 traverse. On garde le 25 du
-    # carnet -- sept crans de marge, comme le 80 g en garde deux. La marge
-    # est ce qui fait qu'une coupe réussit encore quand la lame s'émousse.
+    # REMESURÉ le 13/08/2026, comme le 80 g et pour les mêmes raisons : la
+    # force est passée de 25 à 18. Nuancier de 10 à 30 par pas de 2 sur une
+    # zone SAINE de la bande téflon : 10, 12 et 14 ne traversent pas, 16 se
+    # décroche bien. Seuil 16, on retient 18 -- un cran au-dessus, la même
+    # marge relative que le 80 g (7 -> 8).
+    #
+    # L'ancien 25 tenait sept crans au-dessus du seuil, ce qui paraissait
+    # prudent et usait la bande de coupe. Il avait été établi avec une force
+    # d'offset à 30, un débordement nul et une lame invérifiée.
+    #
+    # NON MESURÉ : la borne haute. Sur le 80 g, Christophe avait senti que
+    # ça appuyait trop dès 9 ; ici on ne l'a pas cherchée. Si 18 marque la
+    # bande, descendre à 17 -- le seuil est à 16.
+    #
+    # ÉPAISSEUR : 0,40 mm mesuré, d'où une lame à 0,50 (+0,10, l'écart que
+    # le carnet applique partout). Le 0,55 d'avant visait 0,45, la borne
+    # haute de la fourchette.
     "papier 300 g": dict(
-        vitesse=7, force=25, acceleration=None, passages=1, seuil_coupe=18,
-        epaisseur=(0.40, 0.45), hauteur_lame=0.55, perforation=(8.0, 0.25),
-        # 0,42 mm : c'est la plage de la CB15U (0,25 à 0,5), pas celle de la
-        # CB09U (jusqu'à 0,25). Coupé à la CB09U le 11/08/2026 -- ça marche,
-        # mais avec une lame sous-dimensionnée qui s'usera plus vite.
-        lame="CB15U"),
+        vitesse=7, force=18, acceleration=None, passages=1, seuil_coupe=16,
+        epaisseur=(0.40, 0.45), hauteur_lame=0.50, perforation=(8.0, 0.25),
+        # 0,40 mm : plage de la CB15U (0,25 à 0,5), pas celle de la CB09U
+        # (jusqu'à 0,25).
+        lame="CB15U",
+        mesure="13/08/2026 — CB15U, lame 0,50 mesurée par la machine, "
+               "force d'offset 4, débordement 0,2 mm, 7 cm/s, "
+               "zone saine de la bande téflon"),
     # Les profils qui suivent viennent de l'usage réel sous Windows, ce qui
     # est une mesure — Christophe, le 11/08/2026 : « ce sont mes paramètres
     # testés ».

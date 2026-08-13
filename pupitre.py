@@ -447,6 +447,27 @@ class Pupitre(QWidget):
         gl.addWidget(self.lbl_perfo, 3, 0, 1, 2)
         g_perfo = g
 
+        # --- print & cut
+        g = QGroupBox("Print & cut (ARMS)")
+        gl = QGridLayout(g)
+        self.chk_arms = QCheckBox("après une détection de repères")
+        self.chk_arms.setToolTip(
+            "À cocher quand la machine vient de détecter les repères d'une\n"
+            "feuille imprimée. Le travail part alors SANS IN;, qui\n"
+            "réinitialiserait le traceur et effacerait l'origine que la\n"
+            "détection vient de poser — la découpe repartirait du coin de\n"
+            "la feuille au lieu du dessin, sans aucun message.\n\n"
+            "La détection elle-même se fait au panneau :\n"
+            "[PAUSE/MENU] > [2] ARMS > [1] LECT. AUTO REPERES.")
+        self.chk_arms.stateChanged.connect(self._recalculer)
+        rappel_arms = QLabel(
+            "imprimer à l'échelle 1, jamais « ajuster à la page »")
+        rappel_arms.setObjectName("faible")
+        rappel_arms.setWordWrap(True)
+        gl.addWidget(self.chk_arms, 0, 0, 1, 2)
+        gl.addWidget(rappel_arms, 1, 0, 1, 2)
+        g_arms = g
+
         # --- copies
         g = QGroupBox("Copies matricielles")
         gl = QGridLayout(g)
@@ -584,7 +605,7 @@ class Pupitre(QWidget):
         self.onglets = QTabWidget()
         self.onglets.addTab(onglet(b_ouvrir, self.lbl_fichier, g_media,
                                    g_placement, g_mosaique,
-                                   g_perfo), "Dessin")
+                                   g_perfo, g_arms), "Dessin")
         self.onglets.addTab(onglet(g_outil, g_nuancier, g_copies), "Outil")
         self.onglets.addTab(onglet(self._groupe_machine()), "Machine")
         v.addWidget(self.onglets, 1)
@@ -1215,7 +1236,8 @@ class Pupitre(QWidget):
                                         self.spn_saut.value())
             prog, _ = noyau.en_hpgl(retenu, condition,
                                     self.spn_force.value(),
-                                    self.spn_passages.value())
+                                    self.spn_passages.value(),
+                                    self.chk_arms.isChecked())
             programmes.append((nom, prog))
             gains.append((min(ap, av), (1 - min(ap, av) / av) * 100 if av else 0))
         avant = sum(g[0] for g in gains)

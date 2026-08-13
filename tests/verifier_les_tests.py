@@ -80,6 +80,19 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "MATERIAUX": dict(materiaux.MATERIAUX)}
 
 
+def reperage_qui_reinitialise_quand_meme():
+    """La faute : ignorer l'option et émettre IN; dans tous les cas.
+
+    C'est exactement l'état du code avant le 13/08/2026, et le défaut ne
+    se voit sur AUCUN travail ordinaire — seulement sur une feuille déjà
+    repérée, où il fait rater la découpe sans rien dire.
+    """
+    def toujours_initialiser(polylignes, outil=1, force=None, passages=1,
+                             reperage=False):
+        return _VRAIS["en_hpgl"](polylignes, outil, force, passages, False)
+    noyau.en_hpgl = toujours_initialiser
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
@@ -106,6 +119,11 @@ CAS = [
     ("repassage à l'endroit, avec retour au départ",
      "test_passages_sans_deplacement",
      lambda: setattr(noyau, "en_hpgl", passages_a_l_endroit),
+     lambda: setattr(noyau, "en_hpgl", _VRAIS["en_hpgl"])),
+
+    ("IN; émis malgré le mode repérage",
+     "test_reperage_sans_reinitialisation",
+     reperage_qui_reinitialise_quand_meme,
      lambda: setattr(noyau, "en_hpgl", _VRAIS["en_hpgl"])),
 
     ("rainage « corrigé » en découpe",

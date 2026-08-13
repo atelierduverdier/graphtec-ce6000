@@ -122,6 +122,12 @@ def main():
                          "arrondi les angles d'une découpe.")
     ap.add_argument("--condition", type=int, default=1,
                     help="numéro de condition à régler (1 à 8, défaut 1)")
+    ap.add_argument("--reperage", action="store_true",
+                    help="travail lancé APRÈS une détection de repères "
+                         "ARMS : omet le IN; initial, qui effacerait "
+                         "l'origine posée par la détection. Sans lui la "
+                         "découpe part du coin de la feuille au lieu du "
+                         "dessin imprimé, sans aucun message.")
     args = ap.parse_args()
 
     for chemin in args.fichier:
@@ -194,12 +200,20 @@ def main():
                 print(f"   ⚠ {a}")
             if not poly:
                 sys.exit(f"{chemin} : aucune géométrie exploitable.")
-            programme, _ = svg2hpgl.en_hpgl(svg2hpgl.ordonner(poly))
+            programme, _ = svg2hpgl.en_hpgl(svg2hpgl.ordonner(poly),
+                                            reperage=args.reperage)
             print(f"{os.path.basename(chemin)} : converti, "
                   f"{len(poly)} tracé(s)")
         else:
             with open(chemin, encoding="ascii", errors="replace") as f:
                 programme = f.read()
+            if args.reperage and "IN;" in programme:
+                # Un .hpgl déjà écrit porte son IN; ; on le retire, mais on
+                # l'annonce. Corriger un fichier de l'utilisateur en silence
+                # serait pire que le défaut qu'on évite.
+                programme = programme.replace("IN;", "", 1)
+                print(f"   IN; retiré de {os.path.basename(chemin)} : il "
+                      f"aurait effacé l'origine des repères")
 
         try:
             boite = emprise(programme)

@@ -217,6 +217,34 @@ def test_rainage_reste_du_rainage():
             f"force {m['force']} : ce n'est plus un rainage mais une coupe")
 
 
+def test_reperage_sans_reinitialisation():
+    """Un travail lancé après une détection ARMS ne doit PAS émettre IN;.
+
+    `IN;` réinitialise le traceur, donc efface l'origine que la détection
+    des repères vient de poser sur le premier repère. La découpe repartirait
+    du coin de la feuille au lieu du dessin imprimé, sans le moindre
+    message — on croirait la détection ratée alors que c'est le fichier
+    qui l'a défaite.
+
+    Vérifié sur le papier le 13/08/2026 : la croix témoin du gabarit
+    officiel de Graphtec ne retombe sur celle imprimée que sans `IN;`.
+    """
+    carre = [([(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)], True)]
+
+    ordinaire, _ = noyau.en_hpgl(carre)
+    assert "IN;" in ordinaire, (
+        "un travail ordinaire doit initialiser la machine")
+
+    reperage, _ = noyau.en_hpgl(carre, reperage=True)
+    assert "IN;" not in reperage, (
+        "IN; émis après une détection de repères : il efface l'origine")
+
+    # Et le reste du programme doit être intact — c'est la seule
+    # différence attendue, pas une sortie appauvrie.
+    assert reperage.count("PD") == ordinaire.count("PD"), (
+        "le mode repérage a perdu des tracés en route")
+
+
 # ======================================================================
 
 def lancer():

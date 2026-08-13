@@ -281,7 +281,7 @@ def _grouper(prefixe, couples):
     return lignes
 
 
-def en_hpgl(polylignes, outil=1, force=None, passages=1):
+def en_hpgl(polylignes, outil=1, force=None, passages=1, reperage=False):
     """Rend le programme HP-GL complet.
 
     `passages` repasse sur chaque tracé. C'est ce que Christophe faisait
@@ -307,8 +307,16 @@ def en_hpgl(polylignes, outil=1, force=None, passages=1):
     huit fois l'écart -- a duré 30 s dans les deux cas, soit 85 mm/s, la
     vitesse de la condition réglée au panneau. Un réglage qui ne fait rien
     est pire qu'absent : il fait croire qu'on a agi.
+
+    `reperage=True` OMET le `IN;` initial. Après une détection de repères
+    ARMS, la machine a posé une nouvelle origine sur le premier repère —
+    et `IN;` la réinitialise, donc l'efface. Le travail partirait alors du
+    coin de la feuille au lieu du dessin imprimé, sans le moindre message :
+    on croirait la détection ratée alors que c'est le fichier qui l'a
+    défaite. Vérifié le 13/08/2026 en traçant la croix témoin du gabarit
+    officiel, qui ne retombe sur celle imprimée que sans `IN;`.
     """
-    lignes = ["IN;"]
+    lignes = [] if reperage else ["IN;"]
     if force:
         lignes.append(f"FS{force};")
     lignes.append(f"SP{outil};")
@@ -443,6 +451,14 @@ def main():
                          "note 2 pour le feutre et pour le Bic — c'est ce qui "
                          "rend le trait franc. Gratuit en déplacement : le "
                          "repassage se fait à l'envers depuis où la plume est.")
+    ap.add_argument("--reperage", action="store_true",
+                    help="pour un travail lancé APRÈS une détection de "
+                         "repères ARMS : omet le IN; initial, qui "
+                         "réinitialiserait la machine et effacerait "
+                         "l'origine que la détection vient de poser. Sans "
+                         "cette option le travail part du coin de la "
+                         "feuille au lieu du dessin imprimé, sans aucun "
+                         "message.")
     ap.add_argument("--perforation", metavar="COUPE,SAUT",
                     help="découpe en pointillé : COUPE mm coupés, SAUT laissés. "
                          "Carnet d'établi : 8,0.25 sur la plupart des papiers, "
@@ -543,7 +559,7 @@ def main():
     if args.force is not None and not 1 <= args.force <= 38:
         sys.exit("--force attend une valeur de 1 à 38 (plage du CE6000-60)")
     programme, ignorees = en_hpgl(polylignes, args.outil, args.force,
-                                  args.passages)
+                                  args.passages, args.reperage)
 
     xmin, ymin, xmax, ymax = cadre(polylignes)
     largeur, hauteur = xmax - xmin, ymax - ymin
@@ -602,7 +618,7 @@ def main():
                 if trajet_a_vide(candidat) < trajet_a_vide(morceaux):
                     morceaux = candidat
             prog, _ = en_hpgl(morceaux, args.outil, args.force,
-                              args.passages)
+                              args.passages, args.reperage)
             nom = f"{racine}_p{i}{j}.hpgl"
             with open(nom, "w", encoding="ascii") as f:
                 f.write(prog)

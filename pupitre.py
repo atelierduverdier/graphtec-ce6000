@@ -1103,6 +1103,8 @@ class Pupitre(QWidget):
             f"La tête va balayer la feuille pendant une vingtaine de "
             f"secondes, à la recherche de repères espacés de "
             f"{av:g} mm dans l'avance et {ch:g} mm sous le chariot.\n\n"
+            f"Type de repère annoncé : {self._type_arms()} — la machine "
+            f"est réglée sur ce que dit « Lire les réglages ARMS ».\n\n"
             f"Ce chemin N'A JAMAIS ABOUTI : la machine cherche, mais aucune "
             f"détection pilotée par le PC n'a été menée à son terme. Celles "
             f"qui ont réussi sont passées par le panneau.\n\n"
@@ -1111,7 +1113,9 @@ class Pupitre(QWidget):
         if rep != QMessageBox.Ok:
             return
         try:
-            annonces, journal = arms.scanner(av, ch)
+            annonces, journal = arms.scanner(
+                av, ch, epaisseur=self.spn_trait_arms.value(),
+                type_repere=self._type_arms())
         except Exception as e:
             QMessageBox.warning(self, "Traceur", str(e))
             return

@@ -277,7 +277,9 @@ ETAT_SIMPLE = "\x1b.v:\x1b.C1:"      # 8 occupée, 0 libre — trop pauvre ici
 
 # `TB55` reste incertain : Studio envoie 1 tout en dessinant des repères
 # de TYPE 2 dans son propre PDF. Soit la famille compte à partir de zéro,
-# soit ce champ ne désigne pas le type. Dit plutôt que deviné.
+# soit ce champ ne désigne pas le type. Dit plutôt que deviné — et laissé
+# réglable, parce que c'est le dernier désaccord connu entre ce qu'on
+# envoie et ce que la machine annonce dans son vidage (`MARK TYPE=2`).
 TB55_DOUTEUX = ("TB55 vaut 1 chez Studio alors que son gabarit est de "
                 "type 2 : le sens de ce champ n'est pas établi.")
 
@@ -378,6 +380,8 @@ def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
 
 def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
             type_repere=1, periph=None, patience=90.0, journal=None):
+    # `type_repere` part dans `TB55`. Sa numérotation n'est PAS établie :
+    # voir TB55_DOUTEUX. C'est pour ça qu'il est réglable et non deviné.
     """Lance une détection depuis le PC. NON ÉPROUVÉ — voir l'en-tête.
 
     Rend `(annonces, journal)`. Une annonce est `(instant, texte)`. La

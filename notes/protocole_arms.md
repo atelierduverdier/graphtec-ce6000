@@ -426,3 +426,39 @@ vidage montre `USER SENSOR GAIN=14`, `USER BASE LEVEL=532`,
 `RM SENSOR LEVEL ADJ SELECT=USER` : quelqu'un a lancé cette calibration
 une fois, sur une matière inconnue, et la machine juge tout papier avec ce
 seuil depuis. On tournait un bouton en aval d'un réglage faux en amont.
+
+## La calibration du capteur : ce qu'elle change vraiment
+
+Lancée par Christophe le 13/08/2026 sur une feuille sortie du composeur,
+puis relevée dans le vidage avant/après :
+
+| | avant | après |
+|---|---|---|
+| `USER SENSOR GAIN` | 14 | **34** |
+| `USER BASE LEVEL` | 532 | 515 |
+| `USER SENSING LEVEL(X,Y)` | 22, 24 | **397, 525** |
+
+Le gain a plus que doublé. Les anciennes valeurs venaient de quelqu'un
+qui avait calibré une fois, sur une matière inconnue, il y a des années.
+`AJUST NIVEAU CAPTEUR` agit donc réellement — ce n'est pas un geste
+symbolique.
+
+**Bouger les galets remet `MARK DISTANCE` à zéro.** Constaté le même jour.
+La machine repart de neuf quand le média change, et un réglage fait avant
+un rechargement est perdu sans avertissement.
+
+## Le dernier désaccord connu : TB55
+
+Un scan piloté par le pupitre, sur une feuille dont l'écart concordait
+(`TB124,9036,5952` = 225,9 × 148,8 mm, la valeur même du composeur), avec
+le capteur fraîchement calibré : la machine cherche **8,8 secondes** puis
+`C11 = 6`, sans aucune annonce.
+
+Tout concordait sauf une chose : on envoie **`TB55,1`** alors que le
+vidage annonce `MARK TYPE=2`. Studio fait pareil — d'où l'hypothèse d'une
+numérotation à partir de zéro — mais c'est désormais le seul écart debout
+entre ce qu'on envoie et ce que la machine dit d'elle-même.
+
+Rendu réglable plutôt que tranché : `arms.scanner(type_repere=...)`, câblé
+sur le choix du pupitre. **Reste à essayer les deux sur la même feuille**,
+et à comparer. C'est un essai, pas une conclusion.

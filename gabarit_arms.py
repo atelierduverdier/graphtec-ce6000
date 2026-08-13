@@ -45,7 +45,7 @@ def coin(x, y, sx, sy):
 
 
 def planche(largeur, hauteur, marge, hachures=False, ecart=None,
-            ancrage="centre"):
+            ancrage="centre", trait=0.0):
     """Quatre repères aux coins d'une zone utile centrée.
 
     `ecart` impose la distance entre les ANGLES des L, au lieu de la
@@ -83,11 +83,11 @@ def planche(largeur, hauteur, marge, hachures=False, ecart=None,
     formes = (coin(x0, y0, +1, +1) + coin(x1, y0, -1, +1)
               + coin(x0, y1, +1, -1) + coin(x1, y1, -1, -1))
     if hachures:
-        formes += _hachures(formes)
+        formes = _hachures(formes, trait=trait) if trait else formes + _hachures(formes)
     return formes
 
 
-def _hachures(contours, pas=0.15):
+def _hachures(contours, pas=0.15, trait=0.0):
     """Remplit chaque branche de traits parallèles, dans sa LONGUEUR.
 
     Idée de Christophe, et meilleure que le marqueur pour une raison qui
@@ -109,6 +109,13 @@ def _hachures(contours, pas=0.15):
     for c in contours:
         xs = [p[0] for p in c]; ys = [p[1] for p in c]
         x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        # Rentrer d'une DEMI-largeur de plume : un trait est centré sur sa
+        # trajectoire, donc un feutre de 0,4 mm posé sur le bord déborde de
+        # 0,2 de chaque côté et la branche finit à 1,4 au lieu de 1,0. La
+        # machine, elle, attend exactement ce que TB53 déclare.
+        r = trait / 2.0
+        if r and (x1 - x0) > 2 * r and (y1 - y0) > 2 * r:
+            x0, x1, y0, y1 = x0 + r, x1 - r, y0 + r, y1 - r
         etroit_en_x = (x1 - x0) < (y1 - y0)
         largeur = (x1 - x0) if etroit_en_x else (y1 - y0)
         n = max(1, int(round(largeur / pas)) - 1)
@@ -159,6 +166,12 @@ def main():
                     help="où poser le PREMIER repère. « origine » le met en "
                          "0,0 : c'est là que la machine commence à balayer, "
                          "faute de commande de positionnement.")
+    ap.add_argument("--trait", type=float, default=0.0, metavar="MM",
+                    help="largeur du trait de la plume, ex. 0.4 pour un "
+                         "feutre fin. Les hachures se resserrent d'une "
+                         "demi-largeur pour que le RÉSULTAT fasse 1,0 mm, "
+                         "ce que la machine attend. Sans elle, le contour "
+                         "est tracé en plus des hachures.")
     ap.add_argument("--hachures", action="store_true",
                     help="remplit les L par balayage au lieu du marqueur — "
                          "gris, donc peu sûr pour le capteur")
@@ -191,7 +204,8 @@ def main():
                 f"écart {ecart[0]:g} × {ecart[1]:g} + {BRANCHE:g} mm de "
                 f"branches dépasse la zone utile {L:.1f} × {H:.1f} mm.\n"
                 f"Réduire l'écart, donc AUGMENTER les marges dans Studio.")
-    formes = planche(L, H, args.marge, args.hachures, ecart, args.ancrage)
+    formes = planche(L, H, args.marge, args.hachures, ecart, args.ancrage,
+                     args.trait)
     open(args.sortie, "w", encoding="utf-8").write(en_svg(formes, L, H))
     utile = (ecart if ecart else
              (L - 2 * args.marge - BRANCHE, H - 2 * args.marge - BRANCHE))

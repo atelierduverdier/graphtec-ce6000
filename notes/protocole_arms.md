@@ -109,6 +109,34 @@ Suivis pas à pas dans la capture, du déclenchement à l'échec :
 `ESC.C11` est donc l'état utile : c'est lui qui distingue la recherche du
 reste, là où `ESC.C1` se contente de dire « occupée ».
 
+## Pourquoi un repère au marqueur ne suffit pas
+
+**Établi par élimination le 13/08/2026**, en six captures. La dernière est
+la seule où TOUT concordait :
+
+    écart demandé par Studio : 227,0 × 140,0 mm
+    gabarit tracé            : 227,0 × 140,0 mm
+
+Et elle échoue comme les autres. Or les autres variables ont été
+contrôlées une à une :
+
+| | vérifié |
+|---|---|
+| position | premier repère à l'origine, là où la machine balaye |
+| place | 256,5 × 197,7 disponibles pour 227 × 140 |
+| inclinaison | feuille droite |
+| cotes | 20 mm de branche, 1 mm d'épaisseur — mesurées au pixel ET confirmées par `TB51`/`TB53` |
+
+Reste le **noir**. Un marqueur ne donne ni la densité ni la netteté de bord
+d'une impression, et le capteur est réglé serré : `SENSING LEVEL(X,Y)=22,24`.
+Le manuel prévient d'ailleurs que « les repères ne pourront pas être
+détectés si l'impression est de mauvaise qualité ».
+
+**Le banc d'essai sans imprimante a donc une limite**, et c'est celle-là.
+Il aura permis de décoder tout le protocole — ce qui était son but — mais
+pas d'obtenir une détection réussie. Pour la réponse d'un scan qui
+aboutit, il faudra une vraie impression.
+
 ## Ce que ça ouvre
 
 `TB124` **dit exactement où Studio attend les repères**. Le gabarit peut

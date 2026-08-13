@@ -183,3 +183,151 @@ Studio demande, on le trace, et la détection a une chance d'aboutir.
 
 Reste à obtenir une capture d'un scan RÉUSSI pour connaître la réponse qui
 porte les coordonnées trouvées — la moitié du protocole qui manque encore.
+
+## Le résultat est POUSSÉ, pas lu — 13/08/2026
+
+Ce qui manquait n'était pas une commande de lecture : **il n'y en a pas.**
+La machine annonce l'issue du scan d'elle-même, sur l'endpoint d'entrée,
+quelques dizaines de millisecondes avant de passer à l'état terminal.
+
+    17,522 s   C11 = 1        elle cherche
+    22,952 s   « 1,254 »      poussé SPONTANÉMENT, terminé par un CR
+    23,034 s   C11 = 10       fini
+
+Deux traits distinguent cette trame de toutes les autres :
+
+* elle finit par **`\r`**, là où chaque réponse à une question finit par
+  `\x03` ;
+* elle arrive **sans qu'on ait rien demandé**.
+
+Interroger `TB50`, `TB100`, `TB124`, `TB125`, `TB126` — en écriture comme
+en lecture, et leurs variantes `TB2xxx` — ne rend jamais rien. C'était la
+bonne question posée au mauvais mécanisme.
+
+### Pourquoi ça a échappé à treize captures
+
+Notre boucle vidait le tampon avant chaque question, pour ne pas lire la
+réponse précédente. Elle jetait donc l'annonce à tous les coups. La trame
+n'est apparue que le jour où la purge a été rendue **bavarde** — elle
+affiche ce qu'elle ramasse au lieu de l'avaler.
+
+C'est le même piège que les cinq détecteurs cassés du 11/08 : l'instrument
+détruisait ce qu'il était censé mesurer.
+
+### Les deux formes connues
+
+    1,254                     scan lancé depuis le PC, échoué
+    1,1,0,1,1,1,0,1           laissé par un scan lancé au PANNEAU
+
+Deux champs contre huit : ce ne sont pas les mêmes messages. Le sens de
+`254` (0xFE) n'est pas établi — dit plutôt que deviné. La forme que prend
+un scan RÉUSSI, celle qui portera les coordonnées, reste à voir.
+
+### Un scan lancé au panneau n'émet rien sur l'USB
+
+Vérifié le 13/08/2026 : capture ouverte pendant une détection déclenchée
+aux touches, 116 trames pour le traceur, **toutes nos propres questions**.
+On ne capturera donc jamais une détection réussie par cette voie. En
+revanche la machine LAISSE son annonce dans le tampon, où elle attend le
+premier lecteur — c'est de là que venait `1,1,0,1,1,1,0,1`.
+
+### La géométrie, et pourquoi 227 déborde
+
+`OH;` rend **255,8 × 197,7 mm** de zone utile pour un A4 chargé par le
+petit côté. Un écart de 227 mm dans l'avance ne laisse que 28,8 mm au-delà
+du premier repère, et il en faut 20 rien que pour la branche du dernier.
+Le scan au panneau l'a montré sur la pièce : **deux repères détectés, le
+troisième hors zone**.
+
+Un écart de **190 × 140** passe quel que soit le décalage de l'origine
+machine sur la feuille — décalage qu'on n'a pas encore mesuré.
+
+### Le toner passe, le feutre non
+
+Établi le 13/08/2026 : sur repères IMPRIMÉS, le scan au panneau en trouve
+deux. Sur repères au marqueur, jamais aucun, à tous les niveaux de
+détection. La limite était bien celle qu'annonçait le manuel — la
+brillance de la matière — et elle est franchie.
+
+Piège d'imprimante à noter : une laser qui a dormi laisse des **images
+fantômes** répétées à la circonférence du tambour (~74 mm), assez franches
+pour que le capteur les prenne pour des repères.
+
+## ARMS FONCTIONNE — vérifié sur le papier le 13/08/2026
+
+Fin de la chasse. Avec le gabarit **officiel de Graphtec** imprimé au
+toner, la détection aboutit et l'origine est posée.
+
+La preuve n'est pas un état lu dans un registre, c'est une croix tracée.
+Le gabarit `ARMStest_type2.pdf` porte une croix de 40 mm exactement au
+centre de ses quatre repères ; après détection, on a fait tracer une croix
+au même endroit calculé. **Elle est tombée à 5 mm.**
+
+### Le gabarit officiel
+
+`GRAPHTEC-CD/ARMS Test Files/ARMStest_type{1,2}.pdf`, datés de 2008. Ils
+valent mieux que tout ce qu'on redessine :
+
+    page          208,8 x 296,3 mm — PAS de l'A4, donc jamais « ajuster à la page »
+    branches      20,00 mm
+    écarts        150,00 et 160,00 mm entre les ANGLES
+    croix témoin  40 mm, au centre des quatre repères
+    forme         des TRAITS, pas des aplats — l'angle mesuré est donc
+                  déjà le centre de trait, la référence qu'exige le manuel
+
+### Ce que valent nos gabarits maison
+
+Ils étaient en **type 2** — angles vers l'extérieur — et la machine était
+réglée sur type 2. Ils s'accordaient. Ce n'était pas la forme qui clochait.
+
+### Où tomber : 75 ; 75, mesuré en trois croix
+
+Trois essais sur la même feuille, chacun tracé après une détection
+réussie, chacun comparé à la croix imprimée du gabarit :
+
+| centre visé (avance ; chariot) | résultat |
+|---|---|
+| 80 ; 75 | 5 mm de trop dans l'avance |
+| 75 ; 80 | avance juste, 5 mm d'écart sous le chariot |
+| **75 ; 75** | **superposée** |
+
+**Et ça ne colle pas avec la géométrie du gabarit.** Les repères officiels
+sont espacés de 150 et 160 mm ; leur centre est donc à 75 et **80**. La
+machine, elle, veut 75 et 75. Il y a **5 mm entre l'angle du repère et
+l'origine que pose la détection**, dans le sens de l'avance uniquement.
+
+C'est mesuré, ce n'est pas expliqué. Les candidats non éliminés :
+`MARK DIST.ADJ.UNIT=5mm` du vidage de configuration, qui vaut exactement
+5 mm ; ou une convention d'origine propre au type 2. Ne pas trancher sans
+un second gabarit d'écarts différents — c'est lui qui dira si les 5 mm
+sont une constante ou une proportion.
+
+L'hypothèse « les axes ont été intervertis » (`5 = (160-150)/2`) était
+séduisante et **fausse** : elle prédisait 75 ; 80, qui a raté.
+
+### Le rattrapage existe dans la machine
+
+`PARAM ARMS 2/4` -> `[4]` **OFFSET ORIGINE AXE**, X et Y, de -1000 à
++1000 mm, à 0,0 chez nous. Il règle l'écart entre le repère détecté et le
+point de départ de la découpe — quel que soit d'où vient le décalage.
+
+### L'origine après détection
+
+Le manuel (p. 5-18) la place **sur le repère point 1**, celui détecté en
+premier. C'est bien la convention qu'on a supposée.
+
+### Un scan au panneau n'émet RIEN — 3 fois sur 3
+
+Capture ouverte pendant trois détections lancées aux touches : aucune
+trame de données, et tampon vide après. Pour obtenir l'annonce qui porte
+le résultat, il faut **déclencher depuis le PC**.
+
+### La procédure manuelle, p. 5-39
+
+`[PAUSE/MENU]` -> `[2]` ARMS -> `[2]` LECTURE MANUELLE REPERES. On amène
+la **pointe de l'outil** — pas le capteur, pas le chariot — dans le quart
+de surface enfermé par l'angle du L, puis ENTER, et la machine redemande
+la même chose pour chaque repère.
+
+Le manuel avertit qu'une découpe est lancée juste après la détection :
+**mettre le stylo, pas la lame.**

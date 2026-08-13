@@ -128,12 +128,18 @@ def _hachures(contours, pas=0.15, trait=0.0):
     return traits
 
 
-def en_svg(formes, largeur, hauteur):
+def en_svg(formes, largeur, hauteur, plein=False):
     chemins = []
     for pts in formes:
         d = "M" + " L".join(f"{x:.3f},{y:.3f}" for x, y in pts)
-        chemins.append(f'  <path d="{d}" fill="none" stroke="#000" '
-                       f'stroke-width="0.1"/>')
+        if plein:
+            # Pour l'IMPRESSION : des surfaces noires, pas des contours.
+            # Une imprimante remplit sans déborder, ce qu'aucune plume ne
+            # sait faire sur une branche d'un millimètre.
+            chemins.append(f'  <path d="{d} Z" fill="#000000" stroke="none"/>')
+        else:
+            chemins.append(f'  <path d="{d}" fill="none" stroke="#000" '
+                           f'stroke-width="0.1"/>')
     return (f'<?xml version="1.0" encoding="UTF-8"?>\n'
             f'<!-- Repères ARMS, type 1, 4 points. Branches {BRANCHE:g} mm,\n'
             f'     épaisseur {EPAISSEUR:g} mm. Cotes relevées sur les PDF de\n'
@@ -172,6 +178,10 @@ def main():
                          "demi-largeur pour que le RÉSULTAT fasse 1,0 mm, "
                          "ce que la machine attend. Sans elle, le contour "
                          "est tracé en plus des hachures.")
+    ap.add_argument("--plein", action="store_true",
+                    help="repères remplis en noir, pour être IMPRIMÉS. "
+                         "Le capteur est fait pour du toner, pas pour un "
+                         "trait de plume — le manuel parle de brillance.")
     ap.add_argument("--hachures", action="store_true",
                     help="remplit les L par balayage au lieu du marqueur — "
                          "gris, donc peu sûr pour le capteur")
@@ -206,14 +216,18 @@ def main():
                 f"Réduire l'écart, donc AUGMENTER les marges dans Studio.")
     formes = planche(L, H, args.marge, args.hachures, ecart, args.ancrage,
                      args.trait)
-    open(args.sortie, "w", encoding="utf-8").write(en_svg(formes, L, H))
+    open(args.sortie, "w", encoding="utf-8").write(
+        en_svg(formes, L, H, args.plein))
     utile = (ecart if ecart else
              (L - 2 * args.marge - BRANCHE, H - 2 * args.marge - BRANCHE))
     print(f"écrit {args.sortie}")
     print(f"  média {L:g} × {H:g} mm, repères à {args.marge:g} mm des bords")
     print(f"  branches {BRANCHE:g} mm, épaisseur {EPAISSEUR:g} mm")
     print(f"  écart entre les angles : {utile[0]:.1f} × {utile[1]:.1f} mm")
-    if args.hachures:
+    if args.plein:
+        print("\n  Repères PLEINS, à imprimer à l'échelle 1 — vérifier au")
+        print("  pied à coulisse qu'une branche fait bien 20,0 mm.")
+    elif args.hachures:
         print("\n  Rempli par la MACHINE : rien à faire à la main.")
         print("  Envoyer avec --passages 2 : repasser ne coûte aucun")
         print("  déplacement et double la charge d'encre.")

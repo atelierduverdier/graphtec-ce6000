@@ -389,3 +389,40 @@ tomber sur le bord.
 C'est aussi ce qui manque à NOTRE scan piloté depuis Linux : il envoie
 la séquence `TB` et laisse la machine chercher depuis là où elle dort.
 Même cause, même échec en cinq secondes.
+
+## Les GALETS décident de là où la tête cherche
+
+Trouvé par Christophe le 13/08/2026, sur la machine — pas dans le code :
+**rapprocher les galets entraîneurs supprime le balayage du bord.**
+
+Les galets bornent la course utile du chariot. Écartés, ils laissent la
+tête démarrer au-delà du papier ou juste sur son bord, et la première
+transition qu'elle rencontre est ce bord. Resserrés autour de la feuille,
+le point de départ tombe à l'intérieur, et le bord n'est plus sur le
+chemin.
+
+Aucune ligne de configuration ne porte cette cote. Elle se règle à la
+main, sur la machine, et c'est en regardant la tête qu'on la trouve.
+
+## « NIVEAU DE SCAN INSUFFISANT » : la calibration du capteur
+
+Symptôme suivant, une fois le bord écarté : la tête atteint le repère et
+n'en tire pas assez de signal.
+
+Le manuel utilisateur (p. 5-20) prévoit exactement ça — **AJUST NIVEAU
+CAPTEUR**, qui règle le seuil AUTOMATIQUEMENT en scannant un vrai repère
+sur la vraie matière :
+
+    [PAUSE/MENU] > [2] ARMS > POSITION haut DEUX FOIS -> PARAM ARMS (3/4)
+    [2] AJUST NIVEAU CAPTEUR > [1] SCAN
+    amener l'outil dans la zone de détection du repère, puis [ENTER]
+
+Le manuel demande d'employer pour ça la « mirre de réglage », c'est-à-dire
+`ARMStest_type1.pdf` ou `ARMStest_type2.pdf` du CD — les mêmes fichiers
+que le gabarit d'essai.
+
+**Ça explique pourquoi changer SENSING LEVEL n'a jamais rien donné.** Le
+vidage montre `USER SENSOR GAIN=14`, `USER BASE LEVEL=532`,
+`RM SENSOR LEVEL ADJ SELECT=USER` : quelqu'un a lancé cette calibration
+une fois, sur une matière inconnue, et la machine juge tout papier avec ce
+seuil depuis. On tournait un bouton en aval d'un réglage faux en amont.

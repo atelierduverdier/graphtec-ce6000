@@ -76,8 +76,29 @@ pilote leur donne :
 
 Candidats restants côté protocole : `TC1002,6` (quatre champs, `[9,0,0,0]`),
 `TC1002,14`, `TC1002,15`, `TC2004,1`, et les familles `TC2005`, `TC2007`,
-`TC2010` jamais explorées. Plus **`TC33`** et **`TC35`**, deux familles
-neuves — `TC35` apparaît près de `Cross_cut_throttle`.
+`TC2010` jamais explorées.
+
+### `TC33` et `TC35` : sondées, muettes
+
+Essayées le 13/08/2026 sous les formes `TC33`, `TC33,1`, `TC35`, `TC2033`,
+`TC2035`, `TC1033`, `TC1035`. **Aucune ne répond, aucune ne change quoi que
+ce soit au vidage** — état complet identique avant et après.
+
+Le résultat est valide, et il a fallu s'y reprendre à deux fois pour qu'il
+le soit : la première série rendait huit réponses vides d'affilée, ce qui
+est la signature d'un instrument en panne autant que d'un vrai négatif.
+Refaite avec un **témoin** — `TC2002,3,1`, dont on connaît la réponse —
+intercalé entre chaque essai : le témoin a répondu `1,70` à chaque fois,
+donc la machine était bien vivante et les silences sont réels.
+
+Ce que ça laisse ouvert : ce sont peut-être des commandes d'ÉCRITURE, qui
+ne répondent pas par nature — `TC1002` non plus ne répond pas. Le `TC33,`
+du binaire porte d'ailleurs une virgule, donc il attend des arguments.
+
+**Ne pas les balayer à l'aveugle.** `TC35` apparaît dans le binaire à côté
+de `Cross_cut_throttle` : la coupe transversale du rouleau est un geste
+PHYSIQUE, et une valeur devinée au hasard pourrait la déclencher. Il faudra
+une capture USB du logiciel en train de s'en servir, pas du tâtonnement.
 
 ## L'ARMS
 

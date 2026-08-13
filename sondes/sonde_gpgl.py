@@ -23,6 +23,30 @@ quel paramètre est quel axe. Alors seulement on ajoute la vitesse.
 Si rien ne bouge, rien n'est cassé : rebasculer le panneau sur HP-GL.
 
 PRÉALABLE : panneau sur `COMMAND` → `GP-GL`.
+
+QUATRE COMMANDES ÉPROUVÉES LE 13/08/2026, machine sur `COMMANDE = HP-GL`
+et `CONDITION PRIORITY = PROGRAM`, chaque envoi encadré par un vidage
+complet et par le détecteur d'erreur à horodatage :
+
+    *15,20   accélération et force ...... aucun effet, avec ou sans CR
+    FCp,q    déport de lame ............. AGIT, mais c'est le SECOND champ
+                                          qui pose OFFSET FORCE
+    FD30     rotation de lame ........... aucun effet
+    !20      vitesse .................... aucun effet
+
+`FC` ne fait pas ce qu'on lui prête : `FC7,2` met OFFSET FORCE à 2,
+`FC20,1` la met à 1, et le premier paramètre ne change rien. Elle ne sert
+à rien pour autant — `TC1004,4` fait la même chose, se relit, et refuse
+les valeurs hors bornes.
+
+La vitesse a été REJOUÉE honnêtement : l'ancien verdict tournait avec
+`CONDITION PRIORITE` sur `MANUEL`, le réglage qui rendait `VS` muet, donc
+il était confondu. Refait sur `PROGRAMME`, `!20` reste sans effet.
+
+RÉSERVE : tout ceci a été mesuré en mode HP-GL. De vraies commandes GP-GL
+n'y sont peut-être pas analysées du tout ; les trancher demanderait de
+basculer le panneau sur GP-GL. `FC` prouve seulement qu'au moins une
+commande de cette famille passe en HP-GL.
 """
 
 import argparse

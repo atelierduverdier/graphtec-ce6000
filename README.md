@@ -567,6 +567,46 @@ en une heure là où trois suppositions avaient échoué. La leçon vaut au-del�
 du traceur : quand deux ou trois essais à l'aveugle échouent sur une question
 fermée, il est temps d'aller regarder ce que fait celui qui sait déjà.
 
+#### Les quatre commandes GP-GL éprouvées, et ce qu'elles donnent
+
+Un texte de conseils reçu le 13/08/2026 les présentait comme les pistes à
+suivre. Elles ont donc été essayées, machine sur `COMMANDE = HP-GL` et
+`CONDITION PRIORITY = PROGRAM`, chaque envoi encadré par un vidage complet
+et par le détecteur d'erreur à horodatage :
+
+| commande | annoncée comme | mesuré |
+|---|---|---|
+| `*15,20` | accélération et force | **aucun effet**, avec ou sans `CR` |
+| `FCp,q` | déport de lame | **agit** — mais c'est le **second** paramètre qui pose `OFFSET FORCE` |
+| `FD30` | rotation de lame, tangentiel | **aucun effet** |
+| `!20` | vitesse | **aucun effet** |
+
+**`FC` ne fait pas ce qu'on lui prête.** Le texte annonçait « `p` est
+l'offset, `q` est lié à la surcharge » : c'est l'inverse. `FC7,2` met
+`OFFSET FORCE` à 2, `FC20,1` la met à 1, et faire varier le premier
+paramètre ne change rien. Elle marche d'ailleurs alors que la machine est
+en `HP-GL`, ce qui contredit l'idée que ces réglages exigeraient le mode
+GP-GL.
+
+**Et elle ne sert à rien** : `TC1004,4` pose déjà `OFFSET FORCE`, se relit,
+et refuse les valeurs hors bornes. `FC` ne se relit pas, et `FC30,0` n'a
+rien fait sans dire pourquoi.
+
+**La mesure de vitesse a été rejouée honnêtement.** L'ancien verdict
+(`!5`…`!40` sans effet) était confondu : il tournait avec `CONDITION
+PRIORITE` sur `MANUEL`, le réglage qui rendait `VS` muet. Refait sur
+`PROGRAMME`, `!20` reste sans effet. Le verdict tient, mais il repose
+désormais sur une mesure valide.
+
+**Une réserve, dite plutôt que tue** : ces essais ont été faits avec
+`COMMANDE` sur `HP-GL`. Il se peut que de vraies commandes GP-GL n'y soient
+tout simplement pas analysées — les trancher demanderait de basculer le
+panneau sur `GP-GL`, ce qui n'a pas été fait. `FC` prouve seulement qu'au
+moins une commande de cette famille passe en mode HP-GL.
+
+Enfin, `FD` n'a plus d'objet : le **mode tangentiel** est `TC1002,8`,
+nommé le 13/08/2026 en comparant la condition 1 (OFF) à la 8 (mode 1).
+
 Les chiffres d'accélération ci-dessus restent valables : c'est bien elle qui
 plafonne les temps de tracé. Sa commande a été identifiée depuis
 (`TC1002,5`), mais elle n'a que **trois crans** — le levier existe et il est

@@ -5,6 +5,13 @@ Ces valeurs viennent du carnet de Christophe, tenu à l'usage réel de la
 machine sous Windows. Elles n'ont pas été calculées : elles ont été trouvées
 en coupant du papier, ce qui les rend plus sûres que n'importe quel modèle.
 
+UN RÉGLAGE MACHINE LES GOUVERNE TOUS : `FORCE OFFSET`, la force de la
+découpe légère qui oriente la lame avant chaque départ. À 30 — la valeur
+qu'y écrivait Graphtec Studio — elle DÉCHIRE le papier 80 g, mesuré le
+13/08/2026 sur deux carrés jumeaux. Sa valeur par défaut est **4**, et le
+manuel demande « la plus faible possible ». Elle se règle dans l'onglet
+Machine du pupitre, pas ici : elle ne dépend pas du matériau.
+
 DEUX RÉGLAGES NE SONT PAS PILOTABLES et doivent se faire à la main :
 
   - **la hauteur de lame**, sur le porte-lame lui-même. C'est le

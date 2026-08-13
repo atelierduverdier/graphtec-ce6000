@@ -19,6 +19,7 @@ logiciel.
 - [Vérifier qu'on n'a rien cassé](#vérifier-quon-na-rien-cassé)
 - [Les outils](#les-outils)
 - [Les réglages de l'établi](#les-réglages-de-létabli)
+- [La force d'offset déchirait le papier](#la-force-doffset-déchirait-le-papier)
 - [Les pièges](#les-pièges)
 - [Ce qui a été mesuré sur la machine](#ce-qui-a-été-mesuré-sur-la-machine)
 - [Tracer une planche TechDraw au stylo](#tracer-une-planche-techdraw-au-stylo)
@@ -208,6 +209,41 @@ premiers essais était dans ce carnet.
 Une valeur reste douteuse et n'est pas corrigée en douce : le canson 224 g
 à force **2**, quand l'aquarelle de même épaisseur en demande 14 et le 300 g
 en demande 25. Probable faute de recopie pour 20 — à retrouver au nuancier.
+
+## La force d'offset déchirait le papier
+
+**Mesuré le 13/08/2026, deux carrés sur la même feuille.** Même papier
+80 g, même CB09U, même force de coupe 10, même vitesse — une seule chose
+différente :
+
+| | `FORCE OFFSET` | résultat |
+|---|---|---|
+| carré de gauche | **4** | quatre bords propres et droits |
+| carré de droite | **30** | un bord **déchiqueté** sur toute sa longueur, fibres arrachées, une languette restée accrochée |
+
+`FORCE OFFSET` n'est pas la force de coupe : c'est celle de la **découpe
+légère qui oriente la lame** avant de partir. Le manuel le dit — « cette
+FORCE la plus faible possible est nécessaire par rapport à la découpe
+normale » — et sa **valeur par défaut est 4**, plage 1 à 38 sur le -60.
+
+À 30, elle valait **trois fois** la force de coupe du 80 g. L'orientation
+de lame n'était plus une caresse mais une coupe à part entière : elle
+laboure au lieu de pivoter.
+
+**D'où venait le 30 ?** De Graphtec Studio, qui l'affiche à 30 dans ses
+captures et l'écrit dans la machine. Il abîmait donc chaque départ de
+découpe depuis toujours, sans que rien ne le signale — ni le panneau, ni
+le logiciel, ni le journal d'erreurs.
+
+Le réglage se pose depuis le pupitre, onglet **Machine**, champ *force
+d'offset*. Il sert aussi au contrôle de rotation de la lame en mode
+tangentiel : si un jour la condition n° 8 (CB15U, `TANGENTIAL MODE = 1`)
+sert pour du matériau épais, c'est le seul cas où il faudra le remonter.
+
+**Ce que cette planche rappelle** : la question était « le petit crochet
+au départ vient-il de là ? », et un seul carré n'y aurait pas répondu — il
+aurait dit « ça marque » sans dire par rapport à quoi. Deux carrés, tout
+identique sauf une chose, et la réponse se lit sans instrument.
 
 ## Les pièges
 

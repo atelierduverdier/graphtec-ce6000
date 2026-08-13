@@ -151,19 +151,15 @@ def desaccords(reglages_lus, type_gabarit=2, branche=BRANCHE):
 
 
 def _coin(x, y, sx, sy, branche, epaisseur):
-    """Un L plein de TYPE 2 : l'angle est en (x, y), les branches rentrent.
-
-    Type 2 = angles vers l'EXTÉRIEUR, repères dans la zone de découpe.
-    C'est la forme des gabarits officiels de Graphtec, et celle que la
-    machine de l'atelier attend (`MARK TYPE=2`).
-    """
+    """Un L plein dont l'angle est en (x, y) et dont les branches vont
+    vers (sx, sy)."""
     e, b = epaisseur, branche
     return [(x, y), (x + sx*b, y), (x + sx*b, y + sy*e), (x + sx*e, y + sy*e),
             (x + sx*e, y + sy*b), (x, y + sy*b)]
 
 
 def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
-             bord=10.0):
+             bord=10.0, type_repere=2):
     """Le dessin et ses quatre repères sur une même feuille, en SVG.
 
     C'est la pièce qui manquait : un motif imprimé AVEC ses repères, pour
@@ -173,6 +169,19 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
 
     `polylignes` sont en convention machine : millimètres, Y vers le
     haut. `marge` est la distance entre le dessin et l'ANGLE des repères.
+
+    `type_repere` change le SENS des angles, pas leur position :
+
+        type 2   angles vers l'extérieur, branches qui rentrent — les
+                 repères sont DANS la zone de découpe, ce qui laisse la
+                 plus grande surface utile
+        type 1   angles vers l'intérieur, branches qui sortent — les
+                 repères entourent la zone de découpe
+
+    Ce n'est pas un détail d'aspect : la machine cherche la forme réglée
+    dans `MARK TYPE`, et un désaccord la fait balayer après une forme
+    absente du papier. Le type 1 déborde en outre de `branche` millimètres
+    au-delà des angles, ce dont la page tient compte.
 
     Rend `(svg, infos)`. `infos` porte ce qu'il faudra pour la découpe :
     l'écart à annoncer à la machine, et la position du dessin par rapport
@@ -191,8 +200,12 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
     ax0, ay0, ax1, ay1 = x0 - marge, y0 - marge, x1 + marge, y1 + marge
     ecart_x, ecart_y = ax1 - ax0, ay1 - ay0
 
+    if type_repere not in (1, 2):
+        raise ValueError("type de repère : 1 ou 2")
+    sortant = (type_repere == 1)
+
     avertissements = []
-    if marge < branche:
+    if marge < branche and not sortant:
         avertissements.append(
             f"marge de {marge:g} mm plus courte que les branches "
             f"({branche:g} mm) : les repères vont mordre sur le dessin.")
@@ -201,19 +214,26 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
             "dessin très petit devant les repères : la machine peut "
             "confondre deux repères voisins.")
 
-    # La page : tout ce qui précède, plus une bordure blanche. Les branches
-    # rentrent vers le centre, donc les angles SONT les points extrêmes.
-    page_l, page_h = ecart_x + 2*bord, ecart_y + 2*bord
-    dx, dy = bord - ax0, bord - ay0          # translation vers la page
+    # La page. En type 2 les branches rentrent, donc les angles SONT les
+    # points extrêmes. En type 1 elles sortent, et il faut leur faire place
+    # des deux côtés — sans quoi les repères seraient rognés à l'impression.
+    debord = branche if sortant else 0.0
+    page_l = ecart_x + 2*(bord + debord)
+    page_h = ecart_y + 2*(bord + debord)
+    dx, dy = bord + debord - ax0, bord + debord - ay0
 
     def _svg_y(v):
         return page_h - v                    # le SVG compte Y vers le bas
 
+    # Le sens des branches : vers le dessin en type 2, vers l'extérieur
+    # en type 1. C'est toute la différence entre les deux formes.
+    v = -1 if sortant else +1
+
     chemins = []
-    for pts in (_coin(ax0, ay0, +1, +1, branche, epaisseur),
-                _coin(ax1, ay0, -1, +1, branche, epaisseur),
-                _coin(ax0, ay1, +1, -1, branche, epaisseur),
-                _coin(ax1, ay1, -1, -1, branche, epaisseur)):
+    for pts in (_coin(ax0, ay0, +v, +v, branche, epaisseur),
+                _coin(ax1, ay0, -v, +v, branche, epaisseur),
+                _coin(ax0, ay1, +v, -v, branche, epaisseur),
+                _coin(ax1, ay1, -v, -v, branche, epaisseur)):
         d = "M " + " L ".join(f"{x+dx:.3f} {_svg_y(y+dy):.3f}" for x, y in pts)
         chemins.append(f'  <path d="{d} Z" fill="#000000" stroke="none"/>')
 
@@ -234,6 +254,7 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
         "page": (page_l, page_h),
         "origine_dessin": (marge, marge),     # depuis l'angle du repère 1
         "emprise": (x1 - x0, y1 - y0),
+        "type_repere": type_repere,
         "avertissements": avertissements,
     }
 

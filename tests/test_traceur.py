@@ -415,6 +415,32 @@ def test_reperes_composes_sont_de_type_2():
     assert abs(ph - (ay + 2 * bord)) < 1e-9
 
 
+def test_type_1_laisse_la_place_a_ses_branches():
+    """En type 1 les branches SORTENT : la page doit s'agrandir d'autant.
+
+    Sans quoi les repères seraient rognés à l'impression — et un repère
+    tronqué n'est plus détectable. Le type 2, dont les branches rentrent,
+    n'a pas ce besoin : ses angles sont déjà les points extrêmes.
+    """
+    dessin = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True)]
+    bord, branche = 10.0, 20.0
+
+    _s2, i2 = arms.composer(dessin, marge=25.0, bord=bord,
+                            branche=branche, type_repere=2)
+    _s1, i1 = arms.composer(dessin, marge=25.0, bord=bord,
+                            branche=branche, type_repere=1)
+
+    assert i1["ecart"] == i2["ecart"], (
+        "le type ne change que le SENS des angles, pas leur position")
+
+    l2, h2 = i2["page"]
+    l1, h1 = i1["page"]
+    assert abs((l1 - l2) - 2 * branche) < 1e-9, (
+        f"page type 1 large de {l1} contre {l2} en type 2 : il manque la "
+        f"place des branches sortantes")
+    assert abs((h1 - h2) - 2 * branche) < 1e-9
+
+
 def test_unites_accordees():
     """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
 

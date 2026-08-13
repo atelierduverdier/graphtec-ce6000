@@ -534,6 +534,17 @@ class Pupitre(QWidget):
             "capteur. C'est la feuille qui tranche, pas la notice.")
         gl.addWidget(QLabel("trait repères"), 9, 0)
         gl.addWidget(self.spn_trait_arms, 9, 1)
+        self.cmb_type_arms = QComboBox()
+        self.cmb_type_arms.addItems(["type 2 — angles vers l'extérieur",
+                                     "type 1 — angles vers l'intérieur"])
+        self.cmb_type_arms.setToolTip(
+            "Doit correspondre au MARK TYPE réglé dans la machine.\n"
+            "Un désaccord la fait balayer après une forme absente du\n"
+            "papier, puis s'arrêter sur le bord de la feuille.\n\n"
+            "Type 2 : repères DANS la zone de découpe, plus de surface\n"
+            "utile. Type 1 : repères autour, feuille plus grande.")
+        gl.addWidget(QLabel("type de repère"), 10, 0)
+        gl.addWidget(self.cmb_type_arms, 10, 1)
         g_arms = g
 
         # --- contour de découpe
@@ -985,7 +996,7 @@ class Pupitre(QWidget):
             return
         lignes = [f"{libelle} : {valeur}" for libelle, _, valeur in lus]
         self.lbl_arms.setText("   ·   ".join(lignes[:4]))
-        ennuis = arms.desaccords(lus, type_gabarit=2)
+        ennuis = arms.desaccords(lus, type_gabarit=self._type_arms())
         texte = "\n".join(f"  {lib:<28} {val}" for lib, _, val in lus)
         if ennuis:
             texte += "\n\nÀ CORRIGER avant de scanner :\n"
@@ -995,8 +1006,14 @@ class Pupitre(QWidget):
             texte += "\nce qui ne dit rien de la feuille elle-même."
         texte += "\n\nMarche à suivre :\n"
         texte += "\n".join(f"  {i}. {e}" for i, e
-                          in enumerate(arms.marche_a_suivre(2), 1))
+                          in enumerate(arms.marche_a_suivre(self._type_arms()), 1))
         QMessageBox.information(self, "Print & cut (ARMS)", texte)
+
+    def _type_arms(self):
+        """2 ou 1, selon la liste — l'ordre de la liste met le 2 d'abord,
+        parce que c'est celui des gabarits officiels et celui que la
+        machine de l'atelier attend."""
+        return 2 if self.cmb_type_arms.currentIndex() == 0 else 1
 
     def _exporter_feuille(self):
         """Écrit le dessin entouré de ses repères, et cale la découpe.
@@ -1016,7 +1033,8 @@ class Pupitre(QWidget):
         try:
             svg, infos = arms.composer(
                 self.calcule, marge=marge,
-                epaisseur=self.spn_trait_arms.value())
+                epaisseur=self.spn_trait_arms.value(),
+                type_repere=self._type_arms())
         except ValueError as e:
             QMessageBox.warning(self, "Feuille à imprimer", str(e))
             return

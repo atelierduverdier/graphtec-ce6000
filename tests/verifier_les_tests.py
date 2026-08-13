@@ -24,6 +24,7 @@ sys.path.insert(0, RACINE)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import materiaux                                             # noqa: E402
+import arms
 import mosaique                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 import test_traceur as T                                     # noqa: E402
@@ -77,7 +78,23 @@ def croix_sur_la_tuile(rect, voisins, dessin=None, taille=8.0):
 _VRAIS = {"en_unites": noyau.en_unites,
           "reperes": mosaique.reperes,
           "en_hpgl": noyau.en_hpgl,
-          "MATERIAUX": dict(materiaux.MATERIAUX)}
+          "MATERIAUX": dict(materiaux.MATERIAUX),
+          "desaccords": arms.desaccords,
+          "PAGE": arms.PAGE}
+
+
+def arms_qui_ne_compare_pas_les_types():
+    """La faute : lire les réglages sans les confronter au gabarit.
+
+    C'est l'état de la journée du 13/08/2026 — le renseignement était
+    disponible, personne ne le rapprochait de la feuille employée.
+    """
+    arms.desaccords = lambda lus, type_gabarit=2, branche=arms.BRANCHE: []
+
+
+def gabarit_officiel_arrondi_a_l_a4():
+    """La faute : « corriger » 208,8 x 296,3 en 210 x 297, ça y ressemble."""
+    arms.PAGE = (210.0, 297.0)
 
 
 def reperage_qui_reinitialise_quand_meme():
@@ -125,6 +142,16 @@ CAS = [
      "test_reperage_sans_reinitialisation",
      reperage_qui_reinitialise_quand_meme,
      lambda: setattr(noyau, "en_hpgl", _VRAIS["en_hpgl"])),
+
+    ("réglages ARMS lus mais jamais confrontés au gabarit",
+     "test_arms_voit_un_type_de_repere_qui_ne_correspond_pas",
+     arms_qui_ne_compare_pas_les_types,
+     lambda: setattr(arms, "desaccords", _VRAIS["desaccords"])),
+
+    ("page du gabarit officiel arrondie à l'A4",
+     "test_gabarit_officiel_garde_ses_cotes_relevees",
+     gabarit_officiel_arrondi_a_l_a4,
+     lambda: setattr(arms, "PAGE", _VRAIS["PAGE"])),
 
     ("rainage « corrigé » en découpe",
      "test_rainage_reste_du_rainage",

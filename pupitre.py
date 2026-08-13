@@ -448,7 +448,7 @@ class Pupitre(QWidget):
         g_perfo = g
 
         # --- print & cut
-        g = QGroupBox("Print & cut (ARMS)")
+        g = QGroupBox("Print && cut (ARMS)")
         gl = QGridLayout(g)
         self.chk_arms = QCheckBox("après une détection de repères")
         self.chk_arms.setToolTip(
@@ -464,8 +464,21 @@ class Pupitre(QWidget):
             "imprimer à l'échelle 1, jamais « ajuster à la page »")
         rappel_arms.setObjectName("faible")
         rappel_arms.setWordWrap(True)
+        b_arms = QPushButton("Lire les réglages ARMS")
+        b_arms.setToolTip(
+            "Interroge la machine et signale ce qui contredit le gabarit.\n"
+            "Le 13/08/2026, un MARK TYPE mal réglé est resté invisible des\n"
+            "heures dans un vidage de configuration.\n\n"
+            "À ne PAS faire juste avant un envoi : une grosse lecture\n"
+            "laisse la machine muette si l'on referme derrière.")
+        b_arms.clicked.connect(self._lire_arms)
+        self.lbl_arms = QLabel("réglages non lus")
+        self.lbl_arms.setObjectName("faible")
+        self.lbl_arms.setWordWrap(True)
         gl.addWidget(self.chk_arms, 0, 0, 1, 2)
         gl.addWidget(rappel_arms, 1, 0, 1, 2)
+        gl.addWidget(b_arms, 2, 0, 1, 2)
+        gl.addWidget(self.lbl_arms, 3, 0, 1, 2)
         g_arms = g
 
         # --- copies
@@ -850,6 +863,41 @@ class Pupitre(QWidget):
         largeur = max((metrique.horizontalAdvance(self.cmb_cond.itemText(i))
                        for i in range(self.cmb_cond.count())), default=0)
         self.cmb_cond.view().setMinimumWidth(largeur + 44)
+
+    def _lire_arms(self):
+        """Lit les réglages ARMS et dit ce qui contredit le gabarit.
+
+        Le type de repère est le premier montré parce que c'est celui qui
+        fait rater une détection sans qu'on comprenne pourquoi : la machine
+        balaie en cherchant une forme absente du papier, puis s'arrête sur
+        le bord de la feuille, qui offre exactement le même contraste.
+        """
+        import conditions as M
+        import arms
+        if not os.path.exists(M.PERIPH):
+            QMessageBox.information(self, "Traceur absent",
+                                    f"{M.PERIPH} n'existe pas.")
+            return
+        try:
+            lus = arms.lire()
+        except Exception as e:
+            QMessageBox.warning(self, "Traceur",
+                                f"{e}\n\nLa machine est-elle sur READY ?")
+            return
+        lignes = [f"{libelle} : {valeur}" for libelle, _, valeur in lus]
+        self.lbl_arms.setText("   ·   ".join(lignes[:4]))
+        ennuis = arms.desaccords(lus, type_gabarit=2)
+        texte = "\n".join(f"  {lib:<28} {val}" for lib, _, val in lus)
+        if ennuis:
+            texte += "\n\nÀ CORRIGER avant de scanner :\n"
+            texte += "\n".join(f"  • {e}" for e in ennuis)
+        else:
+            texte += "\n\nRien à signaler du côté des réglages —"
+            texte += "\nce qui ne dit rien de la feuille elle-même."
+        texte += "\n\nMarche à suivre :\n"
+        texte += "\n".join(f"  {i}. {e}" for i, e
+                          in enumerate(arms.marche_a_suivre(2), 1))
+        QMessageBox.information(self, "Print & cut (ARMS)", texte)
 
     def _lire_condition(self, silencieux=False):
         """Charge la condition choisie depuis la machine.

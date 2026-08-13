@@ -20,6 +20,7 @@ sys.path.insert(0, RACINE)
 
 import conditions                                            # noqa: E402
 import materiaux                                             # noqa: E402
+import arms
 import mosaique                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 
@@ -243,6 +244,60 @@ def test_reperage_sans_reinitialisation():
     # différence attendue, pas une sortie appauvrie.
     assert reperage.count("PD") == ordinaire.count("PD"), (
         "le mode repérage a perdu des tracés en route")
+
+
+def test_arms_voit_un_type_de_repere_qui_ne_correspond_pas():
+    """Le désaccord qui a coûté le plus cher le 13/08/2026.
+
+    La machine était réglée sur `MARK TYPE=2` ; tant qu'on l'ignorait,
+    elle balayait en cherchant une forme absente du papier et s'arrêtait
+    sur le bord de la feuille — qui offre exactement le même contraste
+    qu'un repère pour un capteur de réflexion.
+
+    Le renseignement dormait dans un vidage de configuration, lisible
+    depuis le début. Ce test exige qu'un logiciel le dise.
+    """
+    machine = {"ARMS": {"MARK TYPE": "2", "MARK SIZE": "20.0",
+                        "MARK AUTO SCAN": "ON"}}
+    lus = arms.reglages(machine)
+
+    assert not arms.desaccords(lus, type_gabarit=2), (
+        "un gabarit type 2 sur une machine réglée type 2 : rien à signaler")
+
+    ennuis = arms.desaccords(lus, type_gabarit=1)
+    assert ennuis, "type 1 sur une machine réglée type 2 : non signalé"
+    assert any("TYPE" in e for e in ennuis), (
+        "le désaccord est signalé mais ne nomme pas le type de repère")
+
+
+def test_arms_voit_une_taille_de_repere_qui_ne_correspond_pas():
+    """MARK SIZE doit valoir la longueur de branche du gabarit."""
+    machine = {"ARMS": {"MARK TYPE": "2", "MARK SIZE": "10.0",
+                        "MARK AUTO SCAN": "ON"}}
+    ennuis = arms.desaccords(arms.reglages(machine), type_gabarit=2,
+                             branche=20.0)
+    assert any("MARK SIZE" in e for e in ennuis), (
+        "10 mm annoncés contre 20 mm tracés : non signalé")
+
+
+def test_gabarit_officiel_garde_ses_cotes_relevees():
+    """Les cotes du gabarit Graphtec sont RELEVÉES sur le fichier.
+
+    Page 208,8 × 296,3 mm — et surtout PAS de l'A4. C'est ce qui rend
+    toute « mise à l'échelle » à l'impression fatale, et c'est le genre de
+    nombre qu'on arrondit en croyant bien faire.
+    """
+    assert arms.PAGE == (208.8, 296.3), (
+        "la page du gabarit officiel n'est pas de l'A4 — ne pas l'arrondir")
+    assert arms.BRANCHE == 20.0
+    assert arms.GABARITS[2]["chute"] == (75.0, 75.0), (
+        "le point de chute a été MESURÉ en trois croix, pas calculé")
+    assert arms.GABARITS[1]["chute"] is None, (
+        "le type 1 n'a jamais été mesuré : ne pas lui inventer une valeur")
+
+    echelle = " ".join(arms.marche_a_suivre(2)).lower()
+    assert "échelle 1" in echelle and "ajuster" in echelle, (
+        "la marche à suivre ne rappelle plus le piège de la mise à l'échelle")
 
 
 # ======================================================================

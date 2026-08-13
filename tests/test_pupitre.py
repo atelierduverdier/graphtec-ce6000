@@ -80,6 +80,26 @@ def test_tous_les_champs_sont_places(fenetre):
     assert not orphelins, f"champs jamais placés : {orphelins}"
 
 
+def test_aucun_titre_ne_perd_son_esperluette(fenetre):
+    """Qt lit `&` comme un raccourci clavier et l'EFFACE de l'affichage.
+
+    « Print & cut » s'affichait « Print _cut », le `c` souligné. Aucun
+    test ne pouvait le voir : le texte est bien celui qu'on a écrit, c'est
+    le rendu qui diffère. Repéré sur une capture d'écran, comme la liste
+    « outil » qui avait disparu sous un autre widget.
+
+    La règle : dans un libellé Qt, une esperluette littérale se double.
+    """
+    from PySide6.QtWidgets import QGroupBox, QCheckBox, QPushButton, QLabel
+    for classe in (QGroupBox, QCheckBox, QPushButton, QLabel):
+        for w in fenetre.findChildren(classe):
+            titre = w.title() if classe is QGroupBox else w.text()
+            sans_doubles = titre.replace("&&", "")
+            assert "&" not in sans_doubles, (
+                f"« {titre} » : esperluette non doublée, Qt l'effacera "
+                f"et soulignera la lettre suivante")
+
+
 def test_les_onglets_sont_nommes(fenetre):
     attendus = ["Dessin", "Outil", "Machine"]
     obtenus = [fenetre.onglets.tabText(i)

@@ -507,3 +507,47 @@ Le renseignement qui manque n'est pas dans un binaire — il est dans une
 capture USB d'un scan qui aboutit, sous Windows, avec Cutting Master 3 ou
 Studio. C'est la seule mesure qui reste à faire, et elle est à portée
 maintenant que le print & cut fonctionne au panneau.
+
+## LE PRINT & CUT EST BOUCLÉ — 14/08/2026
+
+Croix tracée sur croix imprimée, **superposées**. La chaîne complète est
+vérifiée sur le papier, du SVG ouvert dans le pupitre au tracé qui
+retombe dessus.
+
+**La correction est NULLE.** Les deux champs restent à zéro. L'écart de
+2,5 et 3 mm relevé la veille venait du recadrage fait entre l'export et
+l'envoi — la mesure était polluée, comme on le soupçonnait, et non d'un
+défaut de la machine. C'est ce qu'a montré la mire à la croix : deux
+traits qui se croisent se comparent au dixième, un dessin non.
+
+### La recette, dans l'ordre
+
+1. dessiner, ouvrir dans le pupitre
+2. marges de repères telles que l'ensemble tienne dans la zone
+   ATTEIGNABLE — le pupitre le calcule et prévient
+3. exporter ou imprimer la feuille, **à l'échelle 1**
+4. charger, **rapprocher les galets** juste assez
+5. détecter au panneau, en amenant la tête sur le premier repère
+6. envoyer, case « après une détection de repères » cochée
+
+### Les quatre conditions, toutes nécessaires
+
+| | pourquoi |
+|---|---|
+| repères imprimés au **toner** | un feutre réfléchit, le capteur ne le voit pas |
+| **galets rapprochés** | sinon la tête démarre hors du papier et trouve le bord |
+| **capteur recalibré** sur la matière | le seuil d'usine datait d'une matière inconnue |
+| **tête posée** sur le premier repère | l'automatique l'exige aussi, pas seulement le manuel |
+
+Aucune ne se voit dans le protocole. Trois se règlent à la main sur la
+machine, et la quatrième dépend de l'encre.
+
+### Ce qui reste ouvert
+
+Le scan piloté **depuis le PC** n'a jamais abouti — neuf variantes, même
+issue. Notre séquence vient d'une capture d'ÉCHEC de Graphtec Studio, et
+aucun réglage ne peut faire aboutir ce qui ne menait pas au succès. Il
+faudrait capturer une détection **réussie** sous Windows.
+
+Mais ce n'est plus un besoin : la détection au panneau prend dix secondes
+et fonctionne.

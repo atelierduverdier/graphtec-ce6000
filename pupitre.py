@@ -25,6 +25,7 @@ import contour
 import projet as fichier_projet
 import impression
 import roles as roles_couleur
+import silhouette
 import svg2hpgl as noyau
 import mosaique                                    # noqa: E402
 import materiaux                                   # noqa: E402
@@ -264,6 +265,10 @@ class Pupitre(QWidget):
         # découpe, les plis qu'on raine.
         self.couleurs = []
         self.correspondance = {}          # couleur arrondie -> rôle
+        # Le dessin d'ORIGINE, à imprimer tel quel : un SVG en couleur, ou
+        # une image enveloppée dans un SVG. Sans lui la feuille sortirait
+        # en fil de fer, les aplats perdus.
+        self.visuel = None
         self.reperes = set()              # indices reconnus comme repères
         # Empreinte du placement au moment du dernier export de feuille.
         # Sert à prévenir quand le dessin a bougé depuis — c'est ce qui
@@ -1446,6 +1451,58 @@ class Pupitre(QWidget):
             + ("\n⚠ " + "\n⚠ ".join(avertissements) if avertissements else ""))
         self._recalculer()
 
+    def _ouvrir_image(self, chemin):
+        """Une image : sa SILHOUETTE sert de géométrie, elle-même d'impression.
+
+        Une image n'a pas de géométrie, seulement des pixels. On en tire
+        le tour de l'encre — trous bouchés, liseré compris — et c'est lui
+        qui sert de dessin. L'image d'origine, elle, part à l'impression
+        telle quelle : c'est le seul moyen d'imprimer des polices qu'on
+        n'a pas.
+        """
+        import base64
+        from PIL import Image
+
+        trace = silhouette.detourer(chemin)
+        with Image.open(chemin) as im:
+            largeur_px, hauteur_px = im.size
+        echelle = 25.4 / 96.0
+        largeur_mm = largeur_px * echelle
+        hauteur_mm = hauteur_px * echelle
+        genre = "png" if chemin.lower().endswith(".png") else "jpeg"
+        donnees = base64.b64encode(open(chemin, "rb").read()).decode()
+        enveloppe = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'xmlns:xlink="http://www.w3.org/1999/xlink" '
+            f'width="{largeur_mm:.3f}mm" height="{hauteur_mm:.3f}mm" '
+            f'viewBox="0 0 {largeur_mm:.3f} {hauteur_mm:.3f}">'
+            f'<image x="0" y="0" width="{largeur_mm:.3f}" '
+            f'height="{hauteur_mm:.3f}" '
+            f'xlink:href="data:image/{genre};base64,{donnees}"/></svg>')
+        self.visuel = {"contenu": enveloppe,
+                       "boite": noyau.cadre(trace),
+                       "hauteur": hauteur_mm}
+        avert = [f"image détourée : {len(trace[0][0])} points. La silhouette "
+                 f"sert de découpe, l'image part à l'impression telle quelle."]
+        # Une seule « couleur » : la silhouette. Son rôle par défaut est de
+        # DÉCOUPER — c'est ce qu'on attend d'un motif détouré.
+        couleurs = [(1.0, 0.0, 0.0)] * len(trace)
+        return trace, couleurs, avert
+
+    def _visuel_svg(self, chemin, polylignes):
+        """Le SVG d'origine, pour l'imprimer avec ses aplats."""
+        try:
+            contenu = open(chemin, encoding="utf-8").read()
+        except OSError:
+            return None
+        import re as _re
+        vb = _re.search(r'viewBox="([-\d.eE ]+)"', contenu)
+        if not vb or not polylignes:
+            return None
+        hauteur = float(vb.group(1).split()[3])
+        return {"contenu": contenu, "boite": noyau.cadre(polylignes),
+                "hauteur": hauteur}
+
     def _refaire_liste_couleurs(self):
         """Une ligne par couleur du fichier, avec son rôle.
 
@@ -1567,7 +1624,7 @@ class Pupitre(QWidget):
             svg, infos = arms.composer(
                 self.calcule, marge=marge, marges=quatre,
                 epaisseur=self.spn_trait_arms.value(),
-                type_repere=self._type_arms())
+                type_repere=self._type_arms(), visuel=self.visuel)
         except ValueError as e:
             QMessageBox.warning(self, "Feuille à imprimer", str(e))
             return
@@ -1649,7 +1706,7 @@ class Pupitre(QWidget):
             svg, infos = arms.composer(
                 self.calcule, marge=marge, marges=quatre,
                 epaisseur=self.spn_trait_arms.value(),
-                type_repere=self._type_arms())
+                type_repere=self._type_arms(), visuel=self.visuel)
         except ValueError as e:
             QMessageBox.warning(self, "Imprimer", str(e))
             return
@@ -1974,13 +2031,21 @@ class Pupitre(QWidget):
     # ------------------------------------------------------------ actions
     def _ouvrir(self):
         chemin, _ = QFileDialog.getOpenFileName(
-            self, "Choisir un SVG", os.path.expanduser("~"), "SVG (*.svg)")
+            self, "Choisir un dessin", os.path.expanduser("~"),
+            "Dessins (*.svg *.png *.jpg *.jpeg);;SVG (*.svg);;"
+            "Images (*.png *.jpg *.jpeg)")
         if not chemin:
             return
+        avertissements = []
         try:
-            self.couleurs = []
-            self.brut, avertissements = noyau.charger(
-                chemin, couleurs=self.couleurs)
+            if chemin.lower().endswith((".png", ".jpg", ".jpeg")):
+                self.brut, self.couleurs, avertissements = \
+                    self._ouvrir_image(chemin)
+            else:
+                self.couleurs = []
+                self.brut, avertissements = noyau.charger(
+                    chemin, couleurs=self.couleurs)
+                self.visuel = self._visuel_svg(chemin, self.brut)
         except Exception as e:
             QMessageBox.warning(self, "Lecture impossible", str(e))
             return
@@ -2001,6 +2066,10 @@ class Pupitre(QWidget):
         # découpe, les plis qu'on raine.
         self.couleurs = []
         self.correspondance = {}          # couleur arrondie -> rôle
+        # Le dessin d'ORIGINE, à imprimer tel quel : un SVG en couleur, ou
+        # une image enveloppée dans un SVG. Sans lui la feuille sortirait
+        # en fil de fer, les aplats perdus.
+        self.visuel = None
         self.reperes = set()              # indices reconnus comme repères
         self.empreinte_export = None      # un dessin neuf n'a pas de feuille
         self.lbl_fichier.setText(os.path.basename(chemin) +

@@ -168,8 +168,51 @@ def _coin(x, y, sx, sy, branche, epaisseur):
 A4 = (297.0, 210.0)
 
 
+def _poser_visuel(visuel, place, dx, dy, page_h):
+    """Le dessin d'origine, mis à l'échelle et posé sur la feuille.
+
+    Un `<svg>` imbriqué : son `viewBox` cadre l'emprise du dessin DANS SON
+    FICHIER, et ses `x`/`y`/`width`/`height` disent où la poser sur la
+    page. Le contenu garde donc ses aplats et ses couleurs, sans qu'on ait
+    à les comprendre — on ne les recopie pas, on les transporte.
+
+    Le retournement en Y est le point délicat : le fichier source compte
+    Y vers le bas, nos polylignes Y vers le haut, et la feuille composée Y
+    vers le bas de nouveau. Deux retournements qui s'annulent, à condition
+    de savoir lequel s'applique où.
+    """
+    sx0, sy0, sx1, sy1 = visuel["boite"]        # emprise DANS LA SOURCE
+    px0, py0, px1, py1 = place                  # emprise APRÈS placement
+    largeur_s, hauteur_s = sx1 - sx0, sy1 - sy0
+    if largeur_s <= 0 or hauteur_s <= 0:
+        return ""
+    # Le viewBox est en coordonnées SOURCE, qui comptent Y vers le bas :
+    # l'emprise y commence donc à la hauteur totale moins le haut.
+    haut_source = visuel.get("hauteur", sy1)
+    vb_y = haut_source - sy1
+    contenu = visuel["contenu"]
+    debut = contenu.index("<svg")
+    fin_balise = contenu.index(">", debut)
+    entete = contenu[debut:fin_balise]
+    interieur = contenu[fin_balise + 1:].rsplit("</svg>", 1)[0]
+
+    # Reprendre les DÉCLARATIONS D'ESPACES DE NOMS du fichier source. Un
+    # SVG d'Inkscape porte des attributs `sodipodi:` et `inkscape:` que
+    # notre feuille ne déclare pas : sans elles, le rendu échoue sur
+    # « Namespace prefix sodipodi on namedview is not defined » et la
+    # feuille entière est perdue, pas seulement le dessin.
+    import re as _re
+    espaces = " ".join(m.group(0) for m in
+                       _re.finditer(r'xmlns:[\w-]+="[^"]*"', entete))
+    return (f'  <svg {espaces} x="{px0 + dx:.3f}" '
+            f'y="{page_h - (py1 + dy):.3f}" '
+            f'width="{px1 - px0:.3f}" height="{py1 - py0:.3f}" '
+            f'viewBox="{sx0:.3f} {vb_y:.3f} {largeur_s:.3f} {hauteur_s:.3f}" '
+            f'preserveAspectRatio="none">{interieur}</svg>')
+
+
 def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
-             bord=10.0, type_repere=2, page=A4, marges=None):
+             bord=10.0, type_repere=2, page=A4, marges=None, visuel=None):
     """Le dessin et ses quatre repères sur une même feuille, en SVG.
 
     C'est la pièce qui manquait : un motif imprimé AVEC ses repères, pour
@@ -179,6 +222,18 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
 
     `polylignes` sont en convention machine : millimètres, Y vers le
     haut. `marge` est la distance entre le dessin et l'ANGLE des repères.
+
+    `visuel` fait imprimer le DESSIN D'ORIGINE au lieu de ses polylignes :
+    `{"contenu": <svg complet>, "boite": (x0, y0, x1, y1)}`, où la boîte
+    est l'emprise des polylignes DANS LE FICHIER SOURCE, en millimètres et
+    Y vers le haut — celle que rend `cadre()` sur le résultat de
+    `charger()`.
+
+    Sans lui, le composeur redessine les chemins en traits fins et perd
+    tout ce qui n'est pas un contour : les aplats, les couleurs, les
+    dégradés. Pour un logo en couleur, la feuille sortirait en fil de fer.
+    Avec lui, on imprime le fichier tel qu'il est et on ne découpe que ses
+    contours.
 
     `marges` permet quatre valeurs différentes, comme le panneau de
     Graphtec Studio : `(gauche, droite, bas, haut)`. Attention aux axes —
@@ -285,6 +340,8 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
     v = -1 if sortant else +1
 
     chemins = []
+    if visuel and visuel.get("contenu"):
+        chemins.append(_poser_visuel(visuel, (x0, y0, x1, y1), dx, dy, page_h))
     for pts in (_coin(ax0, ay0, +v, +v, branche, epaisseur),
                 _coin(ax1, ay0, -v, +v, branche, epaisseur),
                 _coin(ax0, ay1, +v, -v, branche, epaisseur),
@@ -292,12 +349,14 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
         d = "M " + " L ".join(f"{x+dx:.3f} {_svg_y(y+dy):.3f}" for x, y in pts)
         chemins.append(f'  <path d="{d} Z" fill="#000000" stroke="none"/>')
 
-    for pts, ferme in polylignes:
-        d = "M " + " L ".join(f"{x+dx:.3f} {_svg_y(y+dy):.3f}" for x, y in pts)
-        if ferme:
-            d += " Z"
-        chemins.append(f'  <path d="{d}" fill="none" stroke="#000000" '
-                       f'stroke-width="0.2"/>')
+    if not (visuel and visuel.get("contenu")):
+        for pts, ferme in polylignes:
+            d = "M " + " L ".join(f"{x+dx:.3f} {_svg_y(y+dy):.3f}"
+                                  for x, y in pts)
+            if ferme:
+                d += " Z"
+            chemins.append(f'  <path d="{d}" fill="none" stroke="#000000" '
+                           f'stroke-width="0.2"/>')
 
     svg = ([f'<svg xmlns="http://www.w3.org/2000/svg" width="{page_l:.2f}mm" '
             f'height="{page_h:.2f}mm" viewBox="0 0 {page_l:.3f} {page_h:.3f}">',

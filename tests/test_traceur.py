@@ -23,7 +23,8 @@ import materiaux                                             # noqa: E402
 import arms
 import contour
 import mosaique
-import roles                                              # noqa: E402
+import roles
+import silhouette                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 
 
@@ -679,6 +680,68 @@ def test_le_pointille_est_un_role_comme_un_autre():
         "le magenta n'a pas été rangé dans la perforation")
 
 
+def test_une_image_se_detoure_trous_bouches():
+    """Le tour de l'encre, y compris ce qui est enfermé par le motif.
+
+    Une image n'a pas de géométrie, seulement des pixels. Un seuil suivi
+    d'un suivi de bord naïf se perdrait dans les trous — l'intérieur d'un
+    « o », le blanc entre deux lettres — ou les prendrait pour des
+    contours à part.
+
+    On inonde donc le fond depuis le BORD de l'image : ce que l'inondation
+    n'atteint pas est intérieur au motif, quelle que soit sa couleur. Le
+    liseré blanc d'un autocollant est exactement ce cas, et c'est ce qui
+    le range du bon côté sans qu'on ait à le reconnaître.
+    """
+    import numpy as np
+    # Un anneau : de l'encre en couronne, du blanc au milieu ET autour.
+    encre = np.zeros((60, 60), dtype=bool)
+    yy, xx = np.mgrid[0:60, 0:60]
+    r = ((yy - 30) ** 2 + (xx - 30) ** 2) ** 0.5
+    encre[(r > 15) & (r < 22)] = True
+
+    plein = silhouette._boucher_les_trous(encre)
+    assert plein[30, 30], (
+        "le centre de l'anneau n'a pas été bouché — un suivi de bord y "
+        "verrait un second contour")
+    assert not plein[2, 2], "le fond extérieur a été bouché aussi"
+
+    bord = silhouette._suivre_le_bord(plein)
+    assert len(bord) > 40, f"contour de {len(bord)} points sur un anneau"
+    # Il doit longer le RAYON EXTÉRIEUR, pas l'intérieur.
+    rayons = [(((y - 30) ** 2 + (x - 30) ** 2) ** 0.5) for y, x in bord]
+    # L'anneau va de 15 à 22 px ; une fois bouché c'est un disque de 22.
+    # Le contour doit longer ce bord-là, pas celui de 15 — relevé à 19,1
+    # au plus près, la marche en diagonale coupant les angles.
+    assert min(rayons) > 18, (
+        f"le contour passe à {min(rayons):.0f} px du centre : il a suivi "
+        f"le bord intérieur")
+
+
+def test_le_detourage_simplifie_sans_deformer():
+    """Un contour suivi pixel par pixel en compte des dizaines de milliers.
+
+    Les garder ferait un fichier énorme et un tracé qui vibre, pour une
+    précision que la machine ne rend pas. Mais simplifier ne doit pas
+    déformer : l'emprise doit survivre.
+    """
+    carre = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)]
+    dense = []
+    for a, b in zip(carre, carre[1:]):
+        for i in range(50):
+            t = i / 50
+            dense.append((a[0] + (b[0] - a[0]) * t,
+                          a[1] + (b[1] - a[1]) * t))
+    dense.append(carre[0])
+
+    simple = silhouette._simplifier(dense, 0.15)
+    assert len(simple) < 12, f"{len(simple)} points pour un carré"
+    xs = [p[0] for p in simple]
+    ys = [p[1] for p in simple]
+    assert abs(max(xs) - min(xs) - 10.0) < 0.2, "l'emprise a bougé"
+    assert abs(max(ys) - min(ys) - 10.0) < 0.2
+
+
 def test_unites_accordees():
     """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
 
@@ -1163,6 +1226,68 @@ def test_le_pointille_est_un_role_comme_un_autre():
     assert len(par_role["tracer"]) == 1
     assert len(par_role["perforer"]) == 1, (
         "le magenta n'a pas été rangé dans la perforation")
+
+
+def test_une_image_se_detoure_trous_bouches():
+    """Le tour de l'encre, y compris ce qui est enfermé par le motif.
+
+    Une image n'a pas de géométrie, seulement des pixels. Un seuil suivi
+    d'un suivi de bord naïf se perdrait dans les trous — l'intérieur d'un
+    « o », le blanc entre deux lettres — ou les prendrait pour des
+    contours à part.
+
+    On inonde donc le fond depuis le BORD de l'image : ce que l'inondation
+    n'atteint pas est intérieur au motif, quelle que soit sa couleur. Le
+    liseré blanc d'un autocollant est exactement ce cas, et c'est ce qui
+    le range du bon côté sans qu'on ait à le reconnaître.
+    """
+    import numpy as np
+    # Un anneau : de l'encre en couronne, du blanc au milieu ET autour.
+    encre = np.zeros((60, 60), dtype=bool)
+    yy, xx = np.mgrid[0:60, 0:60]
+    r = ((yy - 30) ** 2 + (xx - 30) ** 2) ** 0.5
+    encre[(r > 15) & (r < 22)] = True
+
+    plein = silhouette._boucher_les_trous(encre)
+    assert plein[30, 30], (
+        "le centre de l'anneau n'a pas été bouché — un suivi de bord y "
+        "verrait un second contour")
+    assert not plein[2, 2], "le fond extérieur a été bouché aussi"
+
+    bord = silhouette._suivre_le_bord(plein)
+    assert len(bord) > 40, f"contour de {len(bord)} points sur un anneau"
+    # Il doit longer le RAYON EXTÉRIEUR, pas l'intérieur.
+    rayons = [(((y - 30) ** 2 + (x - 30) ** 2) ** 0.5) for y, x in bord]
+    # L'anneau va de 15 à 22 px ; une fois bouché c'est un disque de 22.
+    # Le contour doit longer ce bord-là, pas celui de 15 — relevé à 19,1
+    # au plus près, la marche en diagonale coupant les angles.
+    assert min(rayons) > 18, (
+        f"le contour passe à {min(rayons):.0f} px du centre : il a suivi "
+        f"le bord intérieur")
+
+
+def test_le_detourage_simplifie_sans_deformer():
+    """Un contour suivi pixel par pixel en compte des dizaines de milliers.
+
+    Les garder ferait un fichier énorme et un tracé qui vibre, pour une
+    précision que la machine ne rend pas. Mais simplifier ne doit pas
+    déformer : l'emprise doit survivre.
+    """
+    carre = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0), (0.0, 0.0)]
+    dense = []
+    for a, b in zip(carre, carre[1:]):
+        for i in range(50):
+            t = i / 50
+            dense.append((a[0] + (b[0] - a[0]) * t,
+                          a[1] + (b[1] - a[1]) * t))
+    dense.append(carre[0])
+
+    simple = silhouette._simplifier(dense, 0.15)
+    assert len(simple) < 12, f"{len(simple)} points pour un carré"
+    xs = [p[0] for p in simple]
+    ys = [p[1] for p in simple]
+    assert abs(max(xs) - min(xs) - 10.0) < 0.2, "l'emprise a bougé"
+    assert abs(max(ys) - min(ys) - 10.0) < 0.2
 
 
 def test_unites_accordees():

@@ -30,10 +30,13 @@ LARGEUR_TRAVAIL = 900     # l'image est réduite avant analyse : au-delà, on
 def masque(chemin, seuil=SEUIL, largeur=LARGEUR_TRAVAIL):
     """Vrai là où il y a de l'encre, faux sur le fond.
 
+    Rend `(masque, taille_du_masque, taille_du_fichier)`.
+
     Le seuil porte sur le canal le plus CLAIR : un orange vif a un canal
     rouge à 255, et le juger sur la moyenne le rangerait dans le fond.
     """
     im = Image.open(chemin).convert("RGB")
+    taille_reelle = im.size
     if im.width > largeur:
         im = im.resize((largeur, round(im.height * largeur / im.width)),
                        Image.LANCZOS)
@@ -44,7 +47,12 @@ def masque(chemin, seuil=SEUIL, largeur=LARGEUR_TRAVAIL):
     # ne revient jamais à son départ, et rend autant de points que le
     # plafond d'itérations l'autorise. Constaté le 14/08/2026 sur un logo
     # recadré au plus juste — 1 422 001 points, et le programme figé.
-    return np.pad(encre, 1, constant_values=False), im.size
+    # Deux tailles rendues : celle du masque, sur laquelle on travaille,
+    # et celle du FICHIER, qui seule dit combien l'image mesure. Les
+    # confondre faisait dépendre la taille du dessin de notre largeur de
+    # travail — 900 px — c'est-à-dire d'un réglage interne. Une image de
+    # 2563 px et une de 900 px sortaient à la même taille.
+    return np.pad(encre, 1, constant_values=False), im.size, taille_reelle
 
 
 def _boucher_les_trous(encre):
@@ -198,7 +206,7 @@ def detourer(chemin, largeur_mm=None, hauteur_mm=None, seuil=SEUIL,
     Les points sont en convention machine — Y vers le haut — comme tout le
     reste du logiciel.
     """
-    encre, (w_px, h_px) = masque(chemin, seuil)
+    encre, (w_px, h_px), (w_reel, h_reel) = masque(chemin, seuil)
     if not encre.any():
         raise ValueError("aucune encre trouvée : le seuil est-il trop bas ?")
     plein = _boucher_les_trous(encre)
@@ -211,7 +219,9 @@ def detourer(chemin, largeur_mm=None, hauteur_mm=None, seuil=SEUIL,
     elif hauteur_mm:
         echelle = hauteur_mm / h_px
     else:
-        echelle = 25.4 / 96.0
+        # 96 points par pouce, la convention du SVG — mais sur la taille
+        # RÉELLE du fichier, pas sur celle du masque réduit.
+        echelle = (w_reel / w_px) * 25.4 / 96.0
 
     # (y, x) en pixels, Y vers le BAS -> (x, y) en mm, Y vers le HAUT.
     # Le masque porte une bordure d'un pixel : la retirer ici, sinon tout

@@ -538,6 +538,79 @@ def test_les_cotes_en_millimetres_pilotent_lechelle(fenetre):
         f"emprise {x1-x0:.1f} × {y1-y0:.1f} au lieu de 50 × 40")
 
 
+def test_un_projet_rouvert_garde_la_TAILLE_du_dessin(fenetre):
+    """Rouvrir doit rendre la PIÈCE, pas seulement ses chiffres.
+
+    Christophe, le 14/08/2026 : « l'enregistrement ne m'a pas gardé les
+    dimensions ». Mesuré : les champs affichaient bien 150 x 40, et le
+    dessin mesurait 100 x 50. Le défaut ne se voyait donc pas dans
+    l'interface — seulement sur la découpe.
+
+    La cause : `_poser_reglages` remet les champs en silence, exprès,
+    sinon ils se répondent l'un l'autre. Mais le silence coupe aussi le
+    calcul des FACTEURS, et ce sont eux qui agrandissent le dessin.
+
+    D'où la forme de ce test : il mesure `fenetre.calcule`, la géométrie
+    réellement envoyée. Comparer les champs à ce qu'on y a écrit aurait
+    passé avec le défaut présent.
+    """
+    import svg2hpgl as noyau
+    import projet as fichier_projet
+    import tempfile
+
+    carre = [([(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0),
+               (0.0, 0.0)], True)]
+
+    def poser():
+        fenetre.brut = [(list(pts), fe) for pts, fe in carre]
+        fenetre.couleurs = [(0.0, 0.0, 0.0)]
+        fenetre.reperes = set()
+        fenetre.correspondance = {}
+        fenetre.ech_x = fenetre.ech_y = 1.0
+        fenetre.spn_ech.setValue(100.0)
+        fenetre._rafraichir_cotes()
+        fenetre._recalculer()
+
+    def emprise():
+        x0, y0, x1, y1 = noyau.cadre(fenetre.calcule)
+        return (x1 - x0, y1 - y0)
+
+    # Deux tailles différentes sur les deux axes : une échelle uniforme
+    # les rendrait toutes deux justes par hasard.
+    poser()
+    fenetre.chk_prop.setChecked(False)
+    fenetre.spn_larg.setValue(150.0)
+    fenetre.spn_haut.setValue(40.0)
+    attendu = emprise()
+    assert abs(attendu[0] - 150.0) < 0.01 and abs(attendu[1] - 40.0) < 0.01
+
+    chemin = os.path.join(tempfile.gettempdir(), "essai_taille.traceur")
+    fichier_projet.enregistrer(chemin, fenetre._lire_reglages(),
+                               svg="<svg/>", source="essai.svg",
+                               echelles=(fenetre.ech_x, fenetre.ech_y))
+    lu = fichier_projet.charger(chemin)
+
+    poser()                                   # comme une fenêtre neuve
+    fenetre._poser_reglages(lu["reglages"], lu.get("echelles"))
+    obtenu = emprise()
+    os.unlink(chemin)
+    assert abs(obtenu[0] - attendu[0]) < 0.05 and \
+           abs(obtenu[1] - attendu[1]) < 0.05, (
+        f"le dessin rouvert mesure {obtenu[0]:.1f} x {obtenu[1]:.1f} mm "
+        f"au lieu de {attendu[0]:.1f} x {attendu[1]:.1f}")
+
+    # Un projet ÉCRIT AVANT que ce défaut soit vu n'a pas la clé
+    # « echelles ». Il doit quand même rouvrir juste, en redéduisant les
+    # facteurs des cotes : refuser de lire ses anciens projets serait une
+    # deuxième perte de travail.
+    poser()
+    fenetre._poser_reglages({"spn_larg": 150.0, "spn_haut": 40.0,
+                             "chk_prop": False})
+    vieux = emprise()
+    assert abs(vieux[0] - 150.0) < 0.05 and abs(vieux[1] - 40.0) < 0.05, (
+        f"projet sans clé echelles : {vieux[0]:.1f} x {vieux[1]:.1f} mm")
+
+
 def test_traîner_le_dessin_ecrit_dans_les_champs(fenetre):
     """Traîner à la souris doit RÉGLER le placement, pas s'y superposer.
 

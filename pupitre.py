@@ -1440,7 +1440,7 @@ class Pupitre(QWidget):
                 valeurs[nom] = w.value()
         return valeurs
 
-    def _poser_reglages(self, valeurs):
+    def _poser_reglages(self, valeurs, echelles=None):
         """Remet les réglages. Ce qui manque est LAISSÉ TEL QUEL plutôt que
         remis par défaut : un projet ancien ne doit pas effacer en silence
         des réglages qu'il ne connaissait pas."""
@@ -1465,7 +1465,34 @@ class Pupitre(QWidget):
                     w.setValue(float(v))
         finally:
             self._silence = False
+        self._accorder_echelles(echelles)
         self._recalculer()
+
+    def _accorder_echelles(self, echelles=None):
+        """Remettre `ech_x`/`ech_y` d'accord avec les champs rétablis.
+
+        `_poser_reglages` travaille en silence, exprès : sans ça les
+        champs se répondent l'un l'autre et la dernière valeur posée
+        écrase les précédentes. Mais le silence coupe aussi le seul
+        endroit qui recalcule les FACTEURS — et ce sont eux qui
+        agrandissent le dessin, pas les champs. D'où un projet rouvert
+        qui annonçait 150 x 40 mm en découpant 100 x 50.
+
+        Les facteurs enregistrés l'emportent : ils sont exacts. À défaut
+        — un projet écrit avant que ce défaut soit vu — on les redéduit
+        des cotes, quitte à perdre l'arrondi du champ ; et s'il n'y a pas
+        de dessin pour donner l'emprise, du pour cent, qui est uniforme.
+        """
+        if echelles and len(echelles) == 2 and all(echelles):
+            self.ech_x, self.ech_y = float(echelles[0]), float(echelles[1])
+        else:
+            source = self._emprise_source()
+            if source and min(source) > 0:
+                self.ech_x = self.spn_larg.value() / source[0]
+                self.ech_y = self.spn_haut.value() / source[1]
+            else:
+                self.ech_x = self.ech_y = self.spn_ech.value() / 100.0
+        self._rafraichir_cotes()
 
     def _enregistrer_projet(self):
         if not self.brut:
@@ -1485,6 +1512,7 @@ class Pupitre(QWidget):
                 chemin, self._lire_reglages(), svg=self.svg_source,
                 image=self.image_source, extension=extension,
                 source=self.chemin, empreinte_export=self.empreinte_export,
+                echelles=(self.ech_x, self.ech_y),
                 correspondance={",".join(f"{c:.3f}" for c in rgb): role
                                 for rgb, role in self.correspondance.items()})
         except OSError as e:
@@ -1550,7 +1578,8 @@ class Pupitre(QWidget):
         self.reperes = roles_couleur.reperes_arms(self.brut)
         self.chemin = projet.get("source")
         self.empreinte_export = projet.get("empreinte_export")
-        self._poser_reglages(projet.get("reglages", {}))
+        self._poser_reglages(projet.get("reglages", {}),
+                             projet.get("echelles"))
         self._refaire_liste_couleurs()
         self.b_envoyer.setEnabled(True)
         self.apercu.reinitialiser_vue()

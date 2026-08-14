@@ -31,6 +31,23 @@ import roles                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
 import test_traceur as T                                     # noqa: E402
 
+# Les tests d'interface s'éprouvent aussi. Ils prennent une fenêtre en
+# argument et demandent Qt ; elle n'est construite que si un cas en
+# réclame une, pour que ce programme reste lançable sans écran.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import test_pupitre as P                                     # noqa: E402
+
+_FENETRE = [None]
+
+
+def fenetre():
+    if _FENETRE[0] is None:
+        from PySide6.QtWidgets import QApplication
+        import pupitre
+        QApplication.instance() or QApplication([])
+        _FENETRE[0] = pupitre.Pupitre()
+    return _FENETRE[0]
+
 
 def sans_arrondi(points):
     """La faute : des coordonnées décimales au lieu d'unités entières."""
@@ -248,11 +265,34 @@ def reperage_qui_reinitialise_quand_meme():
     noyau.en_hpgl = toujours_initialiser
 
 
+_vraies = {}
+
+
+def echelles_non_accordees():
+    """La faute vue le 14/08/2026 : les champs rétablis, pas les facteurs.
+
+    `_poser_reglages` travaille en silence pour que les champs ne se
+    répondent pas ; le silence coupait du même coup le calcul de
+    `ech_x`/`ech_y`. Un projet rouvert affichait 150 x 40 mm et découpait
+    100 x 50 — le défaut ne se voyait pas dans l'interface.
+    """
+    import pupitre
+    _vraies["accorder"] = pupitre.Pupitre._accorder_echelles
+    pupitre.Pupitre._accorder_echelles = lambda self, echelles=None: None
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
         if m.get("usage") == "rainer":
             m["force"] = 20
+
+
+# La vraie méthode, gardée avant toute casse : la remettre après coup
+# suppose de l'avoir prise intacte.
+def _vraie_methode():
+    import pupitre
+    return pupitre.Pupitre._accorder_echelles
 
 
 CAS = [
@@ -351,6 +391,12 @@ CAS = [
      rainage_devenu_coupe,
      lambda: materiaux.MATERIAUX.update(_VRAIS["MATERIAUX"])),
 
+    ("taille d'un projet rétablie à l'affichage mais pas au dessin",
+     "test_un_projet_rouvert_garde_la_TAILLE_du_dessin",
+     echelles_non_accordees,
+     lambda: setattr(__import__("pupitre").Pupitre,
+                     "_accorder_echelles", _vraies["accorder"])),
+
     ("profil dont la force sort des bornes machine",
      "test_profils_coherents",
      lambda: materiaux.MATERIAUX.__setitem__(
@@ -366,7 +412,10 @@ def main():
     for intitule, nom_test, casser, reparer in CAS:
         casser()
         try:
-            getattr(T, nom_test)()
+            if hasattr(T, nom_test):
+                getattr(T, nom_test)()
+            else:
+                getattr(P, nom_test)(fenetre())
             vu = False
         except AssertionError:
             vu = True

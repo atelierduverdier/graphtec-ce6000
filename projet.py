@@ -97,7 +97,8 @@ def empreinte(reglages):
 
 
 def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None,
-                correspondance=None, image=None, extension=None):
+                correspondance=None, image=None, extension=None,
+                echelles=None):
     """Écrit un projet. `svg` est le CONTENU du fichier, pas son chemin.
 
     `correspondance` associe une couleur à un rôle. Elle est enregistrée
@@ -109,6 +110,12 @@ def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None,
     pas comme du texte, et le ranger dans `svg` donnait un projet sans
     dessin — qui refusait de se rouvrir en annonçant qu'il était vide.
     `extension` dit de quel format il s'agit, pour le relire pareil.
+
+    `echelles` porte les DEUX facteurs d'agrandissement tels quels. Les
+    champs « largeur » et « hauteur » n'en sont que l'affichage, arrondi
+    au dixième ; les rejouer ne rend pas le facteur. Un projet rouvert le
+    14/08/2026 affichait 150 x 40 mm sur un dessin qui en mesurait
+    100 x 50 : les chiffres montrés étaient justes, la pièce non.
     """
     if not chemin.endswith(EXTENSION):
         chemin += EXTENSION
@@ -122,6 +129,7 @@ def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None,
         "correspondance": correspondance or {},
         "image": image,                   # base64, pour un PNG ou un JPG
         "extension": extension,           # ".png", ".jpg"…
+        "echelles": list(echelles) if echelles else None,
     }
     with open(chemin, "w", encoding="utf-8") as f:
         json.dump(projet, f, ensure_ascii=False, indent=1)

@@ -394,6 +394,12 @@ def apercu_impression_par_qsvgrenderer():
     pupitre._PageRendue._rendre = staticmethod(par_qt)
 
 
+def tb51_non_bride():
+    """La faute introduite le 14/08/2026 : annoncer la vraie longueur."""
+    _vraies["branche_max"] = arms.BRANCHE_MAX_DECLAREE
+    arms.BRANCHE_MAX_DECLAREE = 1e9
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
@@ -537,6 +543,11 @@ CAS = [
      apercu_impression_par_qsvgrenderer,
      lambda: setattr(__import__("pupitre")._PageRendue, "_rendre",
                      staticmethod(_vraies["rendre"]))),
+
+    ("TB51 annonçant une taille hors de la plage machine",
+     "test_TB51_reste_dans_la_plage_de_la_machine",
+     tb51_non_bride,
+     lambda: setattr(arms, "BRANCHE_MAX_DECLAREE", _vraies["branche_max"])),
 
     ("profil dont la force sort des bornes machine",
      "test_profils_coherents",

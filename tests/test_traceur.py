@@ -319,6 +319,44 @@ def test_des_reperes_rallonges_restent_des_reperes():
             f"sur 4 — les autres partiraient à la découpe")
 
 
+def test_TB51_reste_dans_la_plage_de_la_machine():
+    """Le papier peut porter plus long ; la COMMANDE, non.
+
+    Rendre la longueur réglable a ouvert un piège le jour même : à 30 mm,
+    la séquence annonçait `TB51,1200` alors que le manuel borne la taille
+    des repères à 20 mm — soit 800 unités. Lui demander une taille qu'elle
+    ne sait pas représenter n'a aucune raison d'aboutir, et une commande
+    hors bornes ne se signale pas forcément par un refus propre.
+
+    Tout l'essai des repères rallongés tient dans cette dissymétrie : la
+    feuille en offre plus, la machine continue d'en chercher 20.
+    """
+    assert arms.BRANCHE_MAX_DECLAREE == 20.0, (
+        f"le code annonce {arms.BRANCHE_MAX_DECLAREE:g} mm là où le manuel "
+        f"dit 20 — l'un des deux a vieilli")
+
+    for branche in (10.0, 20.0, 30.0, 40.0):
+        sequence = arms.sequence_scan(170.0, 122.0, branche=branche,
+                                      epaisseur=1.0)
+        tb51 = [c for c in sequence if c.startswith("TB51,")]
+        assert len(tb51) == 1, f"TB51 absent ou en double : {tb51}"
+        valeur = int(tb51[0].split(",")[1])
+        # 800 = 20 mm x 40, LU DANS LE MANUEL et écrit ici en toutes
+        # lettres. Une première version comparait à
+        # `arms.BRANCHE_MAX_DECLAREE` — c'est-à-dire à la constante qu'elle
+        # prétendait surveiller : monter la constante montait la borne, et
+        # le test passait avec la faute. Il faut tenir le chiffre de la
+        # SOURCE, pas celui du code.
+        assert valeur <= 800, (
+            f"branches de {branche:g} mm : TB51 vaut {valeur}, au-delà des "
+            f"800 unités (20 mm) que le manuel autorise")
+        # En deçà du maximum, la vraie longueur doit passer telle quelle :
+        # brider en toutes circonstances rendrait le réglage inopérant.
+        if branche <= 20.0:
+            assert valeur == round(branche * arms.UNITES_PAR_MM), (
+                f"branches de {branche:g} mm annoncées {valeur} unités")
+
+
 def test_une_branche_plus_longue_que_MARK_SIZE_nest_pas_une_faute():
     """Les deux sens du désaccord ne veulent pas dire la même chose.
 

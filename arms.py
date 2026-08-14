@@ -35,6 +35,15 @@ UNITES_PAR_MM = 40
 
 PAGE = (208.8, 296.3)     # mm — ce n'est PAS de l'A4, d'où le piège ci-dessous
 BRANCHE = 20.0            # longueur d'une branche de L
+
+# Le maximum que la machine sache DÉCLARER. Le manuel (f90bbf.pdf,
+# « Dimension des Repères », p. 5-12) donne 4 à 20 mm.
+#
+# Le papier, lui, peut porter plus long : c'est l'essai ouvert le
+# 14/08/2026. Mais `TB51` doit rester dans la plage, sinon on annonce à la
+# machine une taille qu'elle ne sait pas représenter — et une commande
+# hors bornes ne se signale pas forcément par un refus propre.
+BRANCHE_MAX_DECLAREE = 20.0
 CROIX = 40.0              # la croix témoin au centre des quatre repères
 
 # Boîte englobante des quatre repères, identique pour les deux types.
@@ -613,7 +622,11 @@ def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
     fin = ["TB123", "TB23"] if queue else []
     return (["TB99"] + tete + [
         f"TB57,{tb57[0]},{tb57[1]}", "TB59,0,0", "TB52,1",
-        f"TB51,{round(branche * u)}",
+        # Bridé à ce que la machine sait déclarer. Des branches plus
+        # longues se justifient SUR LE PAPIER — elle en trouve alors plus
+        # que prévu là où elle regarde — mais lui annoncer 30 mm quand sa
+        # plage s'arrête à 20 revient à lui demander l'impossible.
+        f"TB51,{round(min(branche, BRANCHE_MAX_DECLAREE) * u)}",
         f"TB53,{round(epaisseur * u)}",
         f"TB55,{type_repere}",
         "TB54,0,0",

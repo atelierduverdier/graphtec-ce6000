@@ -545,6 +545,32 @@ def test_la_feuille_a_imprimer_a_toujours_le_meme_format():
             f"hors de la feuille")
 
 
+def test_l_a4_est_dans_les_axes_de_la_machine():
+    """L'avance court sur les 297 mm, pas sur les 210.
+
+    La feuille entre par le petit côté. Écrire A4 = (210, 297) — l'ordre
+    d'un format de papier — plaçait l'écart d'avance dans la largeur : le
+    premier repère d'un dessin de 175,9 mm avec 25 mm de marge tombait à
+    MOINS 8 mm du bord, c'est-à-dire hors de la feuille.
+
+    Trouvé le 14/08/2026 parce que Christophe s'est demandé s'il ne
+    fallait pas plus de marge en bas — la question était juste, la réponse
+    était que le calcul était faux.
+    """
+    assert arms.A4 == (297.0, 210.0), (
+        "A4 doit être écrit dans les axes de la machine : avance d'abord")
+
+    # Un dessin long dans l'avance doit tenir sur la feuille.
+    dessin = [([(0.0, 0.0), (175.9, 0.0), (175.9, 98.8), (0.0, 0.0)], True)]
+    _svg, infos = arms.composer(dessin, marge=20.0)
+    bx, by = infos["bords"]
+    assert bx > 0 and by > 0, (
+        f"repère à {bx:.1f} ; {by:.1f} du bord — hors de la feuille")
+    ax, ay = infos["ecart"]
+    assert bx + ax <= arms.A4[0] and by + ay <= arms.A4[1], (
+        "le repère opposé sort de la feuille")
+
+
 def test_quatre_marges_independantes():
     """Comme le panneau de Graphtec Studio : gauche, droite, bas, haut.
 
@@ -977,6 +1003,32 @@ def test_la_feuille_a_imprimer_a_toujours_le_meme_format():
         assert mx > 0 and my > 0, (
             f"le premier repère tombe à {mx:.1f} ; {my:.1f} du bord — "
             f"hors de la feuille")
+
+
+def test_l_a4_est_dans_les_axes_de_la_machine():
+    """L'avance court sur les 297 mm, pas sur les 210.
+
+    La feuille entre par le petit côté. Écrire A4 = (210, 297) — l'ordre
+    d'un format de papier — plaçait l'écart d'avance dans la largeur : le
+    premier repère d'un dessin de 175,9 mm avec 25 mm de marge tombait à
+    MOINS 8 mm du bord, c'est-à-dire hors de la feuille.
+
+    Trouvé le 14/08/2026 parce que Christophe s'est demandé s'il ne
+    fallait pas plus de marge en bas — la question était juste, la réponse
+    était que le calcul était faux.
+    """
+    assert arms.A4 == (297.0, 210.0), (
+        "A4 doit être écrit dans les axes de la machine : avance d'abord")
+
+    # Un dessin long dans l'avance doit tenir sur la feuille.
+    dessin = [([(0.0, 0.0), (175.9, 0.0), (175.9, 98.8), (0.0, 0.0)], True)]
+    _svg, infos = arms.composer(dessin, marge=20.0)
+    bx, by = infos["bords"]
+    assert bx > 0 and by > 0, (
+        f"repère à {bx:.1f} ; {by:.1f} du bord — hors de la feuille")
+    ax, ay = infos["ecart"]
+    assert bx + ax <= arms.A4[0] and by + ay <= arms.A4[1], (
+        "le repère opposé sort de la feuille")
 
 
 def test_quatre_marges_independantes():

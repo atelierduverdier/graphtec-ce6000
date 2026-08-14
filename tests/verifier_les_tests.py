@@ -83,6 +83,7 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "MATERIAUX": dict(materiaux.MATERIAUX),
           "desaccords": arms.desaccords,
           "PAGE": arms.PAGE,
+          "A4": arms.A4,
           "composer": arms.composer,
           "contour": contour.contour,
           "sequence_scan": arms.sequence_scan,
@@ -219,6 +220,16 @@ def arms_qui_ne_compare_pas_les_types():
     arms.desaccords = lambda lus, type_gabarit=2, branche=arms.BRANCHE: []
 
 
+def a4_dans_l_ordre_du_papier():
+    """La faute : écrire A4 = (210, 297) parce qu'un A4 « fait 210×297 ».
+
+    L'avance court sur les 297. Avec l'ordre du papier, un dessin un peu
+    long met ses repères hors de la feuille — et l'impression paraît
+    normale, c'est la détection qui échoue ensuite.
+    """
+    arms.A4 = (210.0, 297.0)
+
+
 def gabarit_officiel_arrondi_a_l_a4():
     """La faute : « corriger » 208,8 x 296,3 en 210 x 297, ça y ressemble."""
     arms.PAGE = (210.0, 297.0)
@@ -274,6 +285,11 @@ CAS = [
      "test_arms_voit_un_type_de_repere_qui_ne_correspond_pas",
      arms_qui_ne_compare_pas_les_types,
      lambda: setattr(arms, "desaccords", _VRAIS["desaccords"])),
+
+    ("A4 écrit dans l'ordre du papier, pas des axes machine",
+     "test_l_a4_est_dans_les_axes_de_la_machine",
+     a4_dans_l_ordre_du_papier,
+     lambda: setattr(arms, "A4", _VRAIS["A4"])),
 
     ("page du gabarit officiel arrondie à l'A4",
      "test_gabarit_officiel_garde_ses_cotes_relevees",

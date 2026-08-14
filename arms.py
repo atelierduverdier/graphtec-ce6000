@@ -158,7 +158,14 @@ def _coin(x, y, sx, sy, branche, epaisseur):
             (x + sx*e, y + sy*b), (x, y + sy*b)]
 
 
-A4 = (210.0, 297.0)       # mm, portrait — le sens où la feuille est chargée
+# A4 dans les AXES DE LA MACHINE : avance d'abord, chariot ensuite. La
+# feuille entre par le petit côté, donc l'avance court sur les 297 mm et
+# le chariot sur les 210. L'écrire (210, 297) — l'ordre d'un format de
+# papier — plaçait l'écart d'avance dans la largeur : pour un dessin de
+# 175,9 mm et 25 mm de marge, le premier repère tombait à MOINS 8 mm du
+# bord, c'est-à-dire hors de la feuille. Trouvé le 14/08/2026 parce que
+# Christophe s'est demandé s'il ne fallait pas plus de marge en bas.
+A4 = (297.0, 210.0)
 
 
 def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,

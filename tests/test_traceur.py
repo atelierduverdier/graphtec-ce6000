@@ -319,6 +319,54 @@ def test_des_reperes_rallonges_restent_des_reperes():
             f"sur 4 — les autres partiraient à la découpe")
 
 
+def test_la_vitesse_de_detection_est_lue_et_signalee():
+    """Un réglage qui décide de tout et que personne ne regarde.
+
+    `SENSING SPEED` figure dans le vidage de la machine depuis le
+    11/08/2026 et n'avait jamais été lu — exactement comme `MARK TYPE=2`,
+    resté invisible des heures pendant qu'on cherchait ailleurs. C'est la
+    raison d'être de ce module.
+
+    Le manuel (p. 5-26) est explicite : « la détection peut échouer si la
+    vitesse de détection est trop grande […] la détection peut être
+    améliorée si la vitesse de détection est sur LENTE ». Le message doit
+    donc porter le CHEMIN du panneau, pas seulement le constat : un
+    réglage qu'on ne sait pas atteindre n'est pas un réglage.
+    """
+    lente = {"ARMS": {"MARK TYPE": "2", "MARK SIZE": "20.0",
+                      "SENSING SPEED": "SLOW"}}
+    rapide = {"ARMS": {"MARK TYPE": "2", "MARK SIZE": "20.0",
+                       "SENSING SPEED": "NORMAL"}}
+
+    # Lue et affichée dans les deux cas : c'est ce qui la rend visible.
+    for machine in (lente, rapide):
+        libelles = [cle for _l, cle, _v in arms.reglages(machine)]
+        assert "SENSING SPEED" in libelles, (
+            "la vitesse de détection n'est pas lue du vidage")
+
+    dit = " ".join(arms.desaccords(arms.reglages(rapide), type_gabarit=2,
+                                   branche=20.0))
+    assert "LENTE" in dit, "NORMAL : la piste du manuel n'est pas donnée"
+    assert "VITESSE DETECTION" in dit, (
+        "le chemin du panneau manque — un réglage qu'on ne sait pas "
+        "atteindre n'est pas un réglage")
+
+    tait = " ".join(arms.desaccords(arms.reglages(lente), type_gabarit=2,
+                                    branche=20.0))
+    assert "LENTE" not in tait, (
+        "déjà en LENTE et on le réclame encore : une alerte qui crie pour "
+        "rien finit par ne plus être lue")
+
+    # Clé ABSENTE du vidage : `reglages` la remplit d'un « ? ». Réclamer
+    # LENTE alors reviendrait à signaler un réglage qu'on n'a pas lu.
+    # C'est ce que faisait le premier jet, et un test existant l'a vu.
+    muet = {"ARMS": {"MARK TYPE": "2", "MARK SIZE": "20.0"}}
+    rien = " ".join(arms.desaccords(arms.reglages(muet), type_gabarit=2,
+                                    branche=20.0))
+    assert "LENTE" not in rien, (
+        f"vitesse inconnue et pourtant réclamée : {rien}")
+
+
 def test_TB51_reste_dans_la_plage_de_la_machine():
     """Le papier peut porter plus long ; la COMMANDE, non.
 

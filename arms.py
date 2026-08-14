@@ -79,6 +79,7 @@ UTILES = [
     ("MARK DISTANCE x,y", "distance entre repères"),
     ("MARK OFFSET x,y", "offset origine / repère"),
     ("MARK SCAN MODE", "mode de balayage"),
+    ("SENSING SPEED", "vitesse de détection"),
     ("RM SENSOR LEVEL ADJ SELECT", "calibration employée"),
 ]
 
@@ -138,6 +139,33 @@ def desaccords(reglages_lus, type_gabarit=2, branche=BRANCHE):
             f"le gabarit porte du TYPE {int(type_gabarit)} — elle balaiera "
             f"en cherchant une forme absente du papier, et s'arrêtera sur "
             f"le bord de la feuille, qui offre le même contraste.")
+
+    # La vitesse de balayage. Elle figure dans le vidage depuis le
+    # 11/08/2026 et n'avait jamais été lue — comme `MARK TYPE=2`, qui est
+    # resté invisible des heures pendant qu'on cherchait ailleurs. Le
+    # manuel est explicite (f90bbf.pdf, « Régler la vitesse de
+    # détection », p. 5-26) :
+    #
+    #     La détection peut échouer si la vitesse de détection est trop
+    #     grande […] Le paramètre par défaut est réglé sur « NORMAL »,
+    #     mais la détection peut être améliorée si la vitesse de détection
+    #     est sur « LENTE ».
+    #
+    # Ce n'est pas une contradiction avec le gabarit, donc pas une faute
+    # au sens des autres lignes — mais c'est le remède que la notice donne
+    # elle-même pour une détection qui rate, et le taire reviendrait à le
+    # laisser invisible une fois de plus.
+    #
+    # « ? » est ce que `reglages` met pour une clé ABSENTE du vidage.
+    # Réclamer LENTE dans ce cas reviendrait à signaler un réglage qu'on
+    # n'a pas lu — inventer un ennui vaut moins que se taire.
+    vitesse = (lu.get("SENSING SPEED") or "").strip().upper()
+    if vitesse not in ("", "?", "SLOW"):
+        ennuis.append(
+            f"vitesse de détection sur {vitesse}. Le manuel (p. 5-26) dit "
+            f"qu'une détection qui échoue s'améliore en LENTE : "
+            f"PAUSE/MENU > 2 (ARMS) > POSITION jusqu'à PARAM ARMS (4/4) > "
+            f"1 (VITESSE DETECTION) > 1 (LENTE). Jamais essayé.")
 
     taille = _nombre(lu.get("MARK SIZE"))
     if taille is not None and abs(taille - branche) > 0.05:

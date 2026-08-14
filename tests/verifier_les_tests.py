@@ -400,6 +400,12 @@ def tb51_non_bride():
     arms.BRANCHE_MAX_DECLAREE = 1e9
 
 
+def vitesse_de_detection_ignoree():
+    """La faute d'origine : ne pas lire SENSING SPEED du tout."""
+    _vraies["utiles"] = list(arms.UTILES)
+    arms.UTILES = [c for c in arms.UTILES if c[0] != "SENSING SPEED"]
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
@@ -548,6 +554,11 @@ CAS = [
      "test_TB51_reste_dans_la_plage_de_la_machine",
      tb51_non_bride,
      lambda: setattr(arms, "BRANCHE_MAX_DECLAREE", _vraies["branche_max"])),
+
+    ("vitesse de détection jamais lue du vidage",
+     "test_la_vitesse_de_detection_est_lue_et_signalee",
+     vitesse_de_detection_ignoree,
+     lambda: setattr(arms, "UTILES", _vraies["utiles"])),
 
     ("profil dont la force sort des bornes machine",
      "test_profils_coherents",

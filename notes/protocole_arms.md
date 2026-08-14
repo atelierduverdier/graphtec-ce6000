@@ -594,3 +594,43 @@ feuille tranchera.
 
 Augmenter les marges d'autant en type 2, sans quoi les branches rentrent
 dans le motif.
+
+
+## « MARQUE SCAN ERREUR » — ce que le manuel en dit
+
+Christophe, le 14/08/2026, sur la feuille aux repères rallongés :
+
+    MARQUE SCAN ERREUR
+    1 RECOMMENCEZ   2 ANNUL
+
+C'est un message NOUVEAU. Jusque-là la machine annonçait « HORS SURFACE »
+ou « NIVEAU DE DETECTION INSUFFISANT ». Celui-ci s'affiche, dit le manuel
+(p. 5-25), « si les repères ne sont pas détectés correctement » — la tête
+a donc bien cherché à l'endroit voulu et échoué sur la LECTURE, pas sur la
+géométrie ni sur le déplacement.
+
+Le manuel renvoie à deux réglages, plus un troisième que la page suivante
+introduit et qu'on n'avait jamais vu :
+
+| | |
+|---|---|
+| position de détection | p. 5-27 — corrige un décalage, pas un échec |
+| niveau du capteur | p. 5-20 — déjà recalibré, sans effet |
+| **vitesse de détection** | **p. 5-26 — jamais touchée** |
+
+> La détection peut échouer si la vitesse de détection est trop grande […]
+> Le paramètre par défaut est réglé sur « NORMAL », mais la détection peut
+> être améliorée si la vitesse de détection est sur « LENTE ».
+
+### Le réglage dormait dans le vidage depuis le premier jour
+
+    SENSING SPEED=NORMAL
+
+Présent dans `etat_2026-08-11.txt`, jamais lu par `arms.py`. Exactement
+la même histoire que `MARK TYPE=2`, resté invisible des heures pendant
+qu'on cherchait ailleurs — et c'est pour ça que ce module existe.
+
+Il est désormais lu, affiché, et signalé tant qu'il n'est pas sur LENTE.
+
+    PAUSE/MENU > 2 (ARMS) > POSITION jusqu'à PARAM ARMS (4/4)
+              > 1 (VITESSE DETECTION) > 1 (LENTE) > ENTER

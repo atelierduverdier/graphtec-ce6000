@@ -6,3 +6,7 @@ etat_avant_sondage.txt
 # Le manuel Graphtec : sous copyright, on ne le redistribue pas.
 f90bbf.pdf
 *.pdf
+
+# Le firmware Graphtec : binaire sous copyright, jamais dans le dépôt.
+CE6000_FU*.zip
+CE6000_V*.x

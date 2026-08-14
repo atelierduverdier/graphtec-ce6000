@@ -609,6 +609,14 @@ ou « NIVEAU DE DETECTION INSUFFISANT ». Celui-ci s'affiche, dit le manuel
 a donc bien cherché à l'endroit voulu et échoué sur la LECTURE, pas sur la
 géométrie ni sur le déplacement.
 
+**Le firmware confirme mot pour mot.** Décorticage du 14/08/2026
+([firmware_ce6000.md]) : ce message existe en DEUX variantes de deux
+chemins de code, et Christophe a eu celle dont le portugais dit
+« ERRO LEITURA DAS MARCAS » — erreur de LECTURE, distincte de
+« ERREUR SCAN REPER! » (erreur de mesure). La tête a trouvé où lire ; le
+signal du capteur n'a pas suffi. Le remède du manuel — vitesse LENTE —
+vise précisément ce défaut.
+
 Le manuel renvoie à deux réglages, plus un troisième que la page suivante
 introduit et qu'on n'avait jamais vu :
 

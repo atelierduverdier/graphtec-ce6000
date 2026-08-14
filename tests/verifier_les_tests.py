@@ -281,6 +281,13 @@ def echelles_non_accordees():
     pupitre.Pupitre._accorder_echelles = lambda self, echelles=None: None
 
 
+def molette_non_protegee():
+    """La faute : ne protéger que les widgets NÉS AVANT le balayage."""
+    import pupitre
+    _vraies["molette"] = pupitre.Pupitre._proteger_de_la_molette
+    pupitre.Pupitre._proteger_de_la_molette = lambda self, *a: None
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
@@ -396,6 +403,12 @@ CAS = [
      echelles_non_accordees,
      lambda: setattr(__import__("pupitre").Pupitre,
                      "_accorder_echelles", _vraies["accorder"])),
+
+    ("molette protégée seulement sur les widgets du constructeur",
+     "test_la_molette_epargne_aussi_les_listes_nees_plus_tard",
+     molette_non_protegee,
+     lambda: setattr(__import__("pupitre").Pupitre,
+                     "_proteger_de_la_molette", _vraies["molette"])),
 
     ("profil dont la force sort des bornes machine",
      "test_profils_coherents",

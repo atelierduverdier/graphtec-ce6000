@@ -271,6 +271,88 @@ def test_rien_nest_rogne_en_silence(fenetre):
             f"horizontale : ce qui déborde disparaît sans un mot")
 
 
+def test_la_molette_epargne_aussi_les_listes_nees_plus_tard(fenetre):
+    """Le balayage du constructeur est un INSTANTANÉ.
+
+    Les champs numériques avaient été protégés le 14/08/2026 en balayant
+    la fenêtre une fois, à la construction. Les listes de rôle, elles,
+    naissent à l'ouverture d'un dessin — donc APRÈS le balayage. Elles y
+    échappaient, et Christophe a vu le rôle du rouge passer de
+    « découper » à « perforer » au simple passage de la souris.
+
+    Le même défaut, corrigé une fois, revenu par une autre porte : c'est
+    la protection qui doit suivre le widget, pas le widget qui doit
+    exister au bon moment.
+    """
+    from PySide6.QtCore import Qt, QPointF, QPoint
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QApplication
+
+    fenetre.brut = [([(0.0, 0.0), (50.0, 0.0), (50.0, 50.0), (0.0, 0.0)],
+                     True)]
+    fenetre.couleurs = [(1.0, 0.0, 0.0)]
+    fenetre.correspondance = {}
+    fenetre.reperes = set()
+    fenetre._refaire_liste_couleurs()
+    assert fenetre._combos_couleur, "aucune liste de rôle construite"
+
+    cmb = list(fenetre._combos_couleur.values())[0]
+    avant = cmb.currentText()
+    QApplication.sendEvent(cmb, QWheelEvent(
+        QPointF(5, 5), QPointF(5, 5), QPoint(0, 0), QPoint(0, -120),
+        Qt.NoButton, Qt.NoModifier, Qt.NoScrollPhase, False))
+    assert cmb.currentText() == avant, (
+        f"la molette a changé le rôle sans le focus : {avant} -> "
+        f"{cmb.currentText()}")
+
+
+def test_le_contour_se_coupe_en_pointille(fenetre):
+    """Des ponts de matière doivent retenir la pièce dans sa feuille.
+
+    Demandé par Christophe le 14/08/2026 : choisir la méthode de découpe
+    du contour, avec la longueur des pointillés.
+
+    Le test mesure la GÉOMÉTRIE envoyée, pas l'état des cases : un
+    pointillé qui ne serait pas appliqué à l'envoi laisserait toutes les
+    cases justes et la pièce tomberait quand même. Deux propriétés :
+    le tour est bien haché en morceaux, et la matière ÉPARGNÉE correspond
+    aux ponts demandés — un pointillé qui coupe tout de même la totalité
+    ne retient rien.
+    """
+    import contour as module_contour
+    import svg2hpgl as noyau
+
+    fenetre.brut = [([(0.0, 0.0), (60.0, 0.0), (60.0, 40.0), (0.0, 40.0),
+                      (0.0, 0.0)], True)]
+    fenetre.couleurs = [(0.0, 0.0, 0.0)]
+    fenetre.correspondance = {}
+    fenetre.reperes = set()
+    fenetre.ech_x = fenetre.ech_y = 1.0
+    fenetre.chk_contour.setChecked(True)
+    fenetre.spn_retrait.setValue(3.0)
+    fenetre._recalculer()
+    assert fenetre.contour, "aucun contour construit"
+    plein = module_contour.longueur(fenetre.contour)
+
+    coupe, saut = 10.0, 0.5
+    haches = noyau.perforer(fenetre.contour, coupe, saut)
+    assert len(haches) > len(fenetre.contour) * 5, (
+        f"{len(haches)} morceaux pour {len(fenetre.contour)} contour(s) : "
+        f"le tour n'a pas été haché")
+    epargne = plein - module_contour.longueur(haches)
+    attendu = plein / (coupe + saut) * saut
+    assert abs(epargne - attendu) < attendu * 0.35, (
+        f"{epargne:.1f} mm de ponts au lieu de {attendu:.1f} attendus")
+
+    # Les longueurs ne doivent pas être réglables quand elles ne servent
+    # à rien : deux champs actifs sans effet font croire qu'ils agissent.
+    fenetre.cmb_contour_methode.setCurrentText("en pointillé")
+    assert fenetre.spn_ctr_coupe.isEnabled()
+    fenetre.cmb_contour_methode.setCurrentText("d'un trait")
+    assert not fenetre.spn_ctr_coupe.isEnabled()
+    fenetre.chk_contour.setChecked(False)
+
+
 def test_la_molette_ne_change_pas_les_valeurs(fenetre):
     """Passer la molette sur un champ ne doit pas modifier sa valeur.
 

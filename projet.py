@@ -50,7 +50,8 @@ REGLAGES = [
     ("cmb_travail", "texte"),
     # contour de découpe
     ("chk_contour", "bool"), ("spn_retrait", "reel"), ("chk_trous", "bool"),
-    ("cmb_lissage", "texte"),
+    ("cmb_lissage", "texte"), ("cmb_contour_methode", "texte"),
+    ("spn_ctr_coupe", "reel"), ("spn_ctr_saut", "reel"),
     # print & cut
     ("chk_arms", "bool"), ("spn_ecart_av", "reel"), ("spn_ecart_ch", "reel"),
     ("spn_marge_arms", "reel"), ("spn_trait_arms", "reel"),

@@ -50,6 +50,18 @@ from PySide6.QtWidgets import (                              # noqa: E402
 # A. L'APERÇU
 # ======================================================================
 
+# Comment le tour est coupé. Une troisième méthode « au stylo » a été
+# écrite puis retirée : elle imposait l'outil à la place de l'utilisateur,
+# alors que la liste « outil » est sa déclaration de ce qui est
+# PHYSIQUEMENT dans le porte-outil. Une machine ne change pas d'outil
+# toute seule, et surcharger ce choix en silence aurait fait descendre une
+# lame réglée comme une plume.
+METHODES_CONTOUR = {
+    "d'un trait": dict(pointille=False),
+    "en pointillé": dict(pointille=True),
+}
+
+
 class Apercu(QWidget):
     """Média, zone utile et dessin, à l'échelle, Y vers le haut."""
 
@@ -219,12 +231,16 @@ class Apercu(QWidget):
                         "decouper": QColor(pal.alerte),
                         "rainer": QColor("#7ac74f"),
                         "perforer": QColor("#c77ade"),
-                        "contour": QColor(pal.accent)}
+                        "contour": QColor(pal.accent),
+                        "contour pointillé": QColor(pal.accent)}
             for i, poly in enumerate(self.polygones):
                 role = self.roles[i] if i < len(self.roles) else None
                 teinte = defaut if self.deborde else couleurs.get(role, defaut)
-                epaisseur = 2 if role in ("decouper", "contour") else 1
-                style = Qt.DashLine if role == "perforer" else Qt.SolidLine
+                epaisseur = 2 if role in ("decouper", "contour",
+                                          "contour pointillé") else 1
+                style = (Qt.DashLine
+                         if role in ("perforer", "contour pointillé")
+                         else Qt.SolidLine)
                 p.setPen(QPen(teinte, epaisseur, style))
                 p.drawPolyline(QPolygonF([pt(q.x(), q.y()) for q in poly]))
 
@@ -365,11 +381,7 @@ class Pupitre(QWidget):
                 champ.setMaximumWidth(120)
 
         # La molette ne doit pas changer un réglage en passant dessus.
-        self._molette = _MoletteNonVoleuse(self)
-        for classe in (QSpinBox, QDoubleSpinBox, QComboBox):
-            for champ in self.findChildren(classe):
-                champ.setFocusPolicy(Qt.StrongFocus)
-                champ.installEventFilter(self._molette)
+        self._proteger_de_la_molette()
 
         self._habiller()
         # RIEN qui parle à la machine ici. Le constructeur interrogeait le
@@ -475,11 +487,7 @@ class Pupitre(QWidget):
                 champ.setMaximumWidth(120)
 
         # La molette ne doit pas changer un réglage en passant dessus.
-        self._molette = _MoletteNonVoleuse(self)
-        for classe in (QSpinBox, QDoubleSpinBox, QComboBox):
-            for champ in self.findChildren(classe):
-                champ.setFocusPolicy(Qt.StrongFocus)
-                champ.installEventFilter(self._molette)
+        self._proteger_de_la_molette()
 
         self._habiller()
 
@@ -974,6 +982,47 @@ class Pupitre(QWidget):
         self.cmb_lissage.currentIndexChanged.connect(self._redetourer)
         gl.addWidget(QLabel("lissage du détourage"), 4, 0)
         gl.addWidget(self.cmb_lissage, 4, 1)
+
+        # Le contour a ses propres longueurs de pointillé, séparées de la
+        # perforation générale : un autocollant veut de longues coupes et
+        # de tout petits ponts pour se détacher sans se déchirer, là où un
+        # trait de pli en veut de bien plus courtes. Partager les deux
+        # champs obligerait à les régler à chaque changement de travail.
+        self.cmb_contour_methode = QComboBox()
+        self.cmb_contour_methode.addItems(list(METHODES_CONTOUR))
+        self.cmb_contour_methode.setToolTip(
+            "Comment le tour est coupé.\n\n"
+            "« d'un trait » : la pièce se détache entièrement.\n\n"
+            "« en pointillé » : des ponts de matière la retiennent dans sa\n"
+            "feuille — elle reste en place jusqu'à ce qu'on la détache à\n"
+            "la main. C'est ce qui distingue une planche d'autocollants\n"
+            "d'un tas de pièces tombées.\n\n"
+            "Les longueurs sont propres au contour : un autocollant veut\n"
+            "de longues coupes et de tout petits ponts, un trait de pli en\n"
+            "veut de bien plus courts.")
+        self.cmb_contour_methode.currentIndexChanged.connect(
+            self._methode_contour_changee)
+        self.spn_ctr_coupe = self._reel(0.5, 100.0, 10.0)
+        self.spn_ctr_saut = self._reel(0.05, 20.0, 0.5)
+        self.spn_ctr_saut.setDecimals(2)
+        for w in (self.spn_ctr_coupe, self.spn_ctr_saut):
+            w.setSuffix(" mm")
+            w.valueChanged.connect(self._recalculer)
+        gl.addWidget(QLabel("méthode"), 5, 0)
+        gl.addWidget(self.cmb_contour_methode, 5, 1)
+        self.lbl_ctr_coupe = QLabel("coupé")
+        self.lbl_ctr_saut = QLabel("laissé")
+        gl.addWidget(self.lbl_ctr_coupe, 6, 0)
+        gl.addWidget(self.spn_ctr_coupe, 6, 1)
+        gl.addWidget(self.lbl_ctr_saut, 7, 0)
+        gl.addWidget(self.spn_ctr_saut, 7, 1)
+        # Grisés d'emblée : la méthode par défaut est le trait plein, et
+        # deux champs actifs sans effet feraient croire qu'ils agissent.
+        # Posé ici plutôt que par `_methode_contour_changee`, qui
+        # recalcule — le constructeur n'a pas encore de dessin.
+        for w in (self.spn_ctr_coupe, self.spn_ctr_saut,
+                  self.lbl_ctr_coupe, self.lbl_ctr_saut):
+            w.setEnabled(False)
         g_contour = g
 
         # --- copies
@@ -1679,6 +1728,26 @@ class Pupitre(QWidget):
         return {"contenu": contenu, "boite": noyau.cadre(polylignes),
                 "hauteur": hauteur}
 
+    def _proteger_de_la_molette(self, *widgets):
+        """Empêche la molette de changer un réglage sans le focus.
+
+        Sans argument, balaie toute la fenêtre ; avec, ne protège que les
+        widgets donnés. Les deux formes sont nécessaires : le balayage du
+        constructeur est un INSTANTANÉ, et les listes de rôle naissent
+        plus tard, à l'ouverture d'un dessin. Elles y échappaient donc, et
+        c'est précisément sur l'une d'elles que Christophe a vu le réglage
+        changer au passage de la souris le 14/08/2026 — après que le même
+        défaut eut été corrigé sur les champs numériques.
+        """
+        if not hasattr(self, "_molette"):
+            self._molette = _MoletteNonVoleuse(self)
+        if not widgets:
+            widgets = [w for classe in (QSpinBox, QDoubleSpinBox, QComboBox)
+                       for w in self.findChildren(classe)]
+        for w in widgets:
+            w.setFocusPolicy(Qt.StrongFocus)
+            w.installEventFilter(self._molette)
+
     def _refaire_liste_couleurs(self):
         """Une ligne par couleur du fichier, avec son rôle.
 
@@ -1706,12 +1775,21 @@ class Pupitre(QWidget):
                 or roles_couleur.role_par_defaut(rgb)
             cmb.setCurrentText(roles_couleur.LIBELLES[choisi])
             cmb.currentIndexChanged.connect(self._roles_changes)
+            self._proteger_de_la_molette(cmb)
             self._combos_couleur[rgb] = cmb
             self.grille_couleurs.addWidget(pastille, rang, 0)
             self.grille_couleurs.addWidget(
                 QLabel(f"{roles_couleur.nom_couleur(rgb)} ({nombre})"), rang, 1)
             self.grille_couleurs.addWidget(cmb, rang, 2)
         self._roles_changes()
+
+    def _methode_contour_changee(self):
+        """Grise les longueurs quand elles ne servent à rien."""
+        pointille = self.cmb_contour_methode.currentText() == "en pointillé"
+        for w in (self.spn_ctr_coupe, self.spn_ctr_saut,
+                  self.lbl_ctr_coupe, self.lbl_ctr_saut):
+            w.setEnabled(pointille)
+        self._recalculer()
 
     def _roles_changes(self):
         """Relit les listes déroulantes et recalcule."""
@@ -2464,11 +2542,19 @@ class Pupitre(QWidget):
                 self.contour = contour.contour(
                     self.calcule, self.spn_retrait.value(),
                     trous=self.chk_trous.isChecked())
-                self.lbl_contour.setText(
-                    f"{len(self.contour)} contour(s), "
-                    f"{contour.longueur(self.contour):.0f} mm de coupe à "
-                    f"{self.spn_retrait.value():g} mm du dessin. "
-                    f"C'est LUI qui part au traceur, pas le motif.")
+                longueur = contour.longueur(self.contour)
+                texte = (f"{len(self.contour)} contour(s), "
+                         f"{longueur:.0f} mm de coupe à "
+                         f"{self.spn_retrait.value():g} mm du dessin. "
+                         f"C'est LUI qui part au traceur, pas le motif.")
+                if METHODES_CONTOUR[
+                        self.cmb_contour_methode.currentText()]["pointille"]:
+                    c = self.spn_ctr_coupe.value()
+                    sa = self.spn_ctr_saut.value()
+                    ponts = int(longueur / (c + sa)) if c + sa else 0
+                    texte += (f" En pointillé : environ {ponts} pont(s) de "
+                              f"{sa:g} mm retiendront la pièce.")
+                self.lbl_contour.setText(texte)
             except Exception as e:
                 self.lbl_contour.setText(f"contour impossible : {e}")
         else:
@@ -2527,7 +2613,12 @@ class Pupitre(QWidget):
         roles_traces = base * copies
         if len(roles_traces) != len(self.calcule):
             roles_traces = ["tracer"] * len(self.calcule)
-        roles_traces = roles_traces + ["contour"] * len(self.contour)
+        # Le contour hachuré se voit dans l'aperçu, contrairement à la
+        # perforation générale : le tour d'une pièce est fait de quelques
+        # tracés, pas de milliers, et c'est là qu'on veut juger des ponts.
+        role_contour = "contour pointillé" if METHODES_CONTOUR[
+            self.cmb_contour_methode.currentText()]["pointille"] else "contour"
+        roles_traces = roles_traces + [role_contour] * len(self.contour)
         # Gardé pour l'envoi : c'est lui qui dira quels tracés perforer.
         self.roles_traces = roles_traces
 
@@ -2621,7 +2712,15 @@ class Pupitre(QWidget):
             # APRÈS le réordonnancement : le pointillé multiplie par
             # vingt le nombre de chemins, et l'ordonnancement est en n².
             coupe, saut = self.spn_coupe.value(), self.spn_saut.value()
-            if self.chk_perfo.isChecked():
+            if self.contour and METHODES_CONTOUR[
+                    self.cmb_contour_methode.currentText()]["pointille"]:
+                # Le contour a ses propres longueurs. Elles l'emportent :
+                # quand un contour est demandé, c'est LUI qu'on envoie, et
+                # appliquer en plus la perforation générale hacherait deux
+                # fois le même tracé.
+                retenu = noyau.perforer(retenu, self.spn_ctr_coupe.value(),
+                                        self.spn_ctr_saut.value())
+            elif self.chk_perfo.isChecked():
                 retenu = noyau.perforer(retenu, coupe, saut)
             elif "perforer" in roles_envoi and len(roles_envoi) == len(retenu):
                 # Perforer les SEULS tracés dont la couleur le demande, en

@@ -718,6 +718,34 @@ def test_une_image_se_detoure_trous_bouches():
         f"le bord intérieur")
 
 
+def test_le_suivi_de_bord_se_referme_sur_une_forme_tordue():
+    """Une forme SIMPLE ne prouve rien d'un algorithme de suivi.
+
+    Ma première version reprenait l'exploration dans le sens du dernier
+    pas. Elle marchait parfaitement sur un anneau — ce qui m'a trompé —
+    et se perdait sur un contour dentelé : quatre cent mille pixels
+    parcourus sans jamais refermer la boucle, et le programme figé
+    ensuite dans la simplification.
+
+    D'où cette forme volontairement tordue : un peigne, avec des dents
+    étroites et des vallées profondes, qui met la reprise en défaut si
+    elle est mauvaise.
+    """
+    import numpy as np
+    plein = np.zeros((40, 60), dtype=bool)
+    plein[25:35, 5:55] = True                 # le dos du peigne
+    for x in range(6, 54, 6):                 # les dents
+        plein[8:25, x:x + 3] = True
+
+    bord = silhouette._suivre_le_bord(plein)   # ne doit pas lever
+    assert 100 < len(bord) < 4000, (
+        f"{len(bord)} points : la boucle ne s'est pas refermée proprement")
+    # Le contour doit toucher le sommet des dents ET le bas du dos.
+    ys = [y for y, _ in bord]
+    assert min(ys) <= 9, "le sommet des dents n'est pas atteint"
+    assert max(ys) >= 33, "le bas du peigne n'est pas atteint"
+
+
 def test_le_detourage_simplifie_sans_deformer():
     """Un contour suivi pixel par pixel en compte des dizaines de milliers.
 
@@ -1264,6 +1292,34 @@ def test_une_image_se_detoure_trous_bouches():
     assert min(rayons) > 18, (
         f"le contour passe à {min(rayons):.0f} px du centre : il a suivi "
         f"le bord intérieur")
+
+
+def test_le_suivi_de_bord_se_referme_sur_une_forme_tordue():
+    """Une forme SIMPLE ne prouve rien d'un algorithme de suivi.
+
+    Ma première version reprenait l'exploration dans le sens du dernier
+    pas. Elle marchait parfaitement sur un anneau — ce qui m'a trompé —
+    et se perdait sur un contour dentelé : quatre cent mille pixels
+    parcourus sans jamais refermer la boucle, et le programme figé
+    ensuite dans la simplification.
+
+    D'où cette forme volontairement tordue : un peigne, avec des dents
+    étroites et des vallées profondes, qui met la reprise en défaut si
+    elle est mauvaise.
+    """
+    import numpy as np
+    plein = np.zeros((40, 60), dtype=bool)
+    plein[25:35, 5:55] = True                 # le dos du peigne
+    for x in range(6, 54, 6):                 # les dents
+        plein[8:25, x:x + 3] = True
+
+    bord = silhouette._suivre_le_bord(plein)   # ne doit pas lever
+    assert 100 < len(bord) < 4000, (
+        f"{len(bord)} points : la boucle ne s'est pas refermée proprement")
+    # Le contour doit toucher le sommet des dents ET le bas du dos.
+    ys = [y for y, _ in bord]
+    assert min(ys) <= 9, "le sommet des dents n'est pas atteint"
+    assert max(ys) >= 33, "le bas du peigne n'est pas atteint"
 
 
 def test_le_detourage_simplifie_sans_deformer():

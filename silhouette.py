@@ -38,7 +38,13 @@ def masque(chemin, seuil=SEUIL, largeur=LARGEUR_TRAVAIL):
         im = im.resize((largeur, round(im.height * largeur / im.width)),
                        Image.LANCZOS)
     a = np.asarray(im, dtype=np.int16)
-    return a.min(axis=2) < seuil, im.size
+    encre = a.min(axis=2) < seuil
+    # UNE BORDURE DE FOND tout autour. Sans elle, un motif qui touche le
+    # bord de l'image n'a pas de contour fermé : le suivi longe l'arête,
+    # ne revient jamais à son départ, et rend autant de points que le
+    # plafond d'itérations l'autorise. Constaté le 14/08/2026 sur un logo
+    # recadré au plus juste — 1 422 001 points, et le programme figé.
+    return np.pad(encre, 1, constant_values=False), im.size
 
 
 def _boucher_les_trous(encre):
@@ -78,9 +84,18 @@ def _boucher_les_trous(encre):
 def _suivre_le_bord(plein):
     """Le contour extérieur, par suivi de Moore, en pixels.
 
-    On part du premier pixel plein rencontré de haut en bas, qui est
-    forcément sur le bord extérieur, et on longe en gardant le fond à sa
-    gauche. Rend une boucle fermée.
+    On part du premier pixel plein rencontré de haut en bas et de gauche
+    à droite, qui est forcément sur le bord extérieur. À chaque pas on
+    explore les huit voisins EN REPARTANT DE CELUI D'OÙ L'ON VIENT, dans
+    le sens horaire : c'est cette reprise en arrière qui fait longer le
+    bord au lieu de couper à travers.
+
+    Ma première version reprenait dans le sens du dernier pas. Elle
+    marchait sur un anneau — ce qui m'a trompé — et se perdait sur une
+    forme complexe : sur un logo recadré au plus juste, elle parcourait
+    quatre cent mille pixels sans jamais refermer la boucle, et figeait
+    tout ce qui venait ensuite. Une forme simple ne prouve rien d'un
+    algorithme de suivi.
     """
     h, w = plein.shape
     depart = None
@@ -92,62 +107,85 @@ def _suivre_le_bord(plein):
     if depart is None:
         return []
 
+    # Sens horaire, en partant du nord.
     voisins = [(-1, 0), (-1, 1), (0, 1), (1, 1),
                (1, 0), (1, -1), (0, -1), (-1, -1)]
+
+    def index_de(depuis, vers):
+        d = (vers[0] - depuis[0], vers[1] - depuis[1])
+        return voisins.index(d)
+
     contour = [depart]
-    courant, direction = depart, 6          # on vient de la gauche
-    for _ in range(4 * h * w):
-        trouve = False
-        for k in range(8):
-            # La reprise se fait DANS LE SENS DU DERNIER PAS. Les sept
-            # autres conventions ont été essayées sur un anneau : elles
-            # rendent trois à huit points au lieu de cent huit, en
-            # repartant aussitôt vers le point de départ. Mesuré, pas
-            # deviné — la convention de Moore se décrit de plusieurs
-            # façons et je m'étais trompé de description.
-            d = (direction + k) % 8
-            dy, dx = voisins[d]
+    courant = depart
+    arriere = (depart[0], depart[1] - 1)      # l'ouest, forcément du fond
+    plafond = min(8 * h * w, 400_000)
+
+    for _ in range(plafond):
+        base = index_de(courant, arriere)
+        suivant = None
+        for k in range(1, 9):
+            dy, dx = voisins[(base + k) % 8]
             y, x = courant[0] + dy, courant[1] + dx
             if 0 <= y < h and 0 <= x < w and plein[y, x]:
-                courant, direction, trouve = (y, x), d, True
+                suivant = (y, x)
+                # Le pixel EXPLORÉ JUSTE AVANT devient le nouvel arrière.
+                ady, adx = voisins[(base + k - 1) % 8]
+                arriere = (courant[0] + ady, courant[1] + adx)
                 break
-        if not trouve:
-            break
-        if courant == depart and len(contour) > 2:
-            break
+        if suivant is None:
+            break                              # pixel isolé
+        courant = suivant
+        if courant == depart:
+            return contour
         contour.append(courant)
-    return contour
+
+    raise ValueError(
+        f"le contour ne se referme pas ({len(contour)} points parcourus). "
+        f"Le seuil est-il bien choisi ?")
 
 
 def _simplifier(points, tolerance):
-    """Douglas–Peucker : jeter les points qui ne disent rien.
+    """Douglas–Peucker, ITÉRATIF : jeter les points qui ne disent rien.
 
     Un contour suivi pixel par pixel en compte des dizaines de milliers,
     tous à un pixel l'un de l'autre. Les garder ferait un fichier énorme
     et un tracé qui vibre, pour une précision que la machine ne rend pas.
+
+    Écrit sans récursion À DESSEIN : la version récursive descendait d'un
+    niveau par point sur un contour dégénéré, et faisait tomber le
+    programme avant même de rendre la main. Une pile explicite ne connaît
+    pas cette limite.
     """
-    if len(points) < 3:
+    n = len(points)
+    if n < 3:
         return list(points)
-    debut, fin = points[0], points[-1]
-    dx, dy = fin[0] - debut[0], fin[1] - debut[1]
-    long2 = dx * dx + dy * dy
-    pire, imax = -1.0, 0
-    for i in range(1, len(points) - 1):
-        px, py = points[i]
-        if long2 == 0:
-            d = ((px - debut[0]) ** 2 + (py - debut[1]) ** 2) ** 0.5
-        else:
-            t = max(0.0, min(1.0, ((px - debut[0]) * dx
-                                   + (py - debut[1]) * dy) / long2))
-            d = ((px - debut[0] - t * dx) ** 2
-                 + (py - debut[1] - t * dy) ** 2) ** 0.5
-        if d > pire:
-            pire, imax = d, i
-    if pire <= tolerance:
-        return [debut, fin]
-    gauche = _simplifier(points[:imax + 1], tolerance)
-    droite = _simplifier(points[imax:], tolerance)
-    return gauche[:-1] + droite
+    garder = np.zeros(n, dtype=bool)
+    garder[0] = garder[-1] = True
+    pile = [(0, n - 1)]
+    while pile:
+        i0, i1 = pile.pop()
+        if i1 <= i0 + 1:
+            continue
+        x0, y0 = points[i0]
+        x1, y1 = points[i1]
+        dx, dy = x1 - x0, y1 - y0
+        long2 = dx * dx + dy * dy
+        pire, imax = -1.0, i0
+        for i in range(i0 + 1, i1):
+            px, py = points[i]
+            if long2 == 0:
+                d = ((px - x0) ** 2 + (py - y0) ** 2) ** 0.5
+            else:
+                t = max(0.0, min(1.0,
+                                 ((px - x0) * dx + (py - y0) * dy) / long2))
+                d = ((px - x0 - t * dx) ** 2 + (py - y0 - t * dy) ** 2) ** 0.5
+            if d > pire:
+                pire, imax = d, i
+        if pire > tolerance:
+            garder[imax] = True
+            pile.append((i0, imax))
+            pile.append((imax, i1))
+    return [points[i] for i in range(n) if garder[i]]
 
 
 def detourer(chemin, largeur_mm=None, hauteur_mm=None, seuil=SEUIL,
@@ -176,7 +214,10 @@ def detourer(chemin, largeur_mm=None, hauteur_mm=None, seuil=SEUIL,
         echelle = 25.4 / 96.0
 
     # (y, x) en pixels, Y vers le BAS -> (x, y) en mm, Y vers le HAUT.
-    points = [(x * echelle, (h_px - y) * echelle) for y, x in pixels]
+    # Le masque porte une bordure d'un pixel : la retirer ici, sinon tout
+    # le contour serait décalé d'un pixel vers le bas et la droite.
+    points = [((x - 1) * echelle, (h_px - (y - 1)) * echelle)
+              for y, x in pixels]
     points = _simplifier(points, tolerance_mm)
     if points[0] != points[-1]:
         points.append(points[0])

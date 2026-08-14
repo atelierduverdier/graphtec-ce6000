@@ -559,77 +559,44 @@ class Pupitre(QWidget):
         gl.addWidget(self.lbl_perfo, 3, 0, 1, 2)
         g_perfo = g
 
-        # --- print & cut
-        g = QGroupBox("Print && cut (ARMS)")
-        gl = QGridLayout(g)
+        # --- print & cut, en TROIS cadres
+        #
+        # Ils étaient un seul, qui a grandi de quatre lignes à vingt-cinq
+        # en une nuit. Christophe a fini par demander si les marges
+        # servaient à la détection : elles n'ont rien à y voir, elles
+        # disent où poser les repères sur la feuille à imprimer. L'ordre
+        # d'apparition ne disait plus ce qui allait avec quoi.
 
-        # LES RANGS SE COMPTENT TOUT SEULS. Ce cadre a grandi de quatre
-        # lignes à vingt-cinq en une nuit, et les numéros écrits à la main
-        # ont fini par se chevaucher : deux widgets dans la même case,
-        # dont un invisible. C'est exactement la faute qui avait fait
-        # disparaître la liste « outil », et un test la voit — mais autant
-        # supprimer la cause.
-        _rang = [0]
+        def grille(titre):
+            cadre = QGroupBox(titre)
+            disposition = QGridLayout(cadre)
+            rang = [0]
 
-        def pose(gauche, droite=None):
-            if droite is None:
-                gl.addWidget(gauche, _rang[0], 0, 1, 2)
-            else:
-                gl.addWidget(gauche, _rang[0], 0)
-                gl.addWidget(droite, _rang[0], 1)
-            _rang[0] += 1
+            def pose(gauche, droite=None):
+                if droite is None:
+                    disposition.addWidget(gauche, rang[0], 0, 1, 2)
+                else:
+                    disposition.addWidget(gauche, rang[0], 0)
+                    disposition.addWidget(droite, rang[0], 1)
+                rang[0] += 1
+            return cadre, pose
 
-        self.chk_arms = QCheckBox("après une détection de repères")
-        self.chk_arms.setToolTip(
-            "À cocher quand la machine vient de détecter les repères d'une\n"
-            "feuille imprimée. Le travail part alors SANS IN;, qui\n"
-            "réinitialiserait le traceur et effacerait l'origine que la\n"
-            "détection vient de poser — la découpe repartirait du coin de\n"
-            "la feuille au lieu du dessin, sans aucun message.\n\n"
-            "La détection elle-même se fait au panneau :\n"
-            "[PAUSE/MENU] > [2] ARMS > [1] LECT. AUTO REPERES.")
-        self.chk_arms.stateChanged.connect(self._recalculer)
+        # ============ 1. LA FEUILLE À IMPRIMER ============
+        g_feuille, pose = grille("Feuille à imprimer")
         rappel_arms = QLabel(
-            "imprimer à l'échelle 1, jamais « ajuster à la page »")
+            "à l'échelle 1, jamais « ajuster à la page » : 4 % déplacent "
+            "un repère de 8 mm")
         rappel_arms.setObjectName("faible")
         rappel_arms.setWordWrap(True)
-        b_arms = QPushButton("Lire les réglages ARMS")
-        b_arms.setToolTip(
-            "Interroge la machine et signale ce qui contredit le gabarit.\n"
-            "Le 13/08/2026, un MARK TYPE mal réglé est resté invisible des\n"
-            "heures dans un vidage de configuration.\n\n"
-            "À ne PAS faire juste avant un envoi : une grosse lecture\n"
-            "laisse la machine muette si l'on referme derrière.")
-        b_arms.clicked.connect(self._lire_arms)
-        self.lbl_arms = QLabel("réglages non lus")
-        self.lbl_arms.setObjectName("faible")
-        self.lbl_arms.setWordWrap(True)
-        pose(self.chk_arms)
         pose(rappel_arms)
-        pose(b_arms)
-        pose(self.lbl_arms)
-        # Écart entre repères, dans l'ordre de TB124 : l'avance d'abord.
-        # Défauts = les cotes relevées sur le gabarit officiel de Graphtec.
-        self.spn_ecart_av = self._reel(20, 900, 160.0)
-        self.spn_ecart_ch = self._reel(20, 600, 150.0)
-        pose(QLabel("écart avance"), self.spn_ecart_av)
-        pose(QLabel("écart chariot"), self.spn_ecart_ch)
-        b_scan = QPushButton("Lancer une détection  (à éprouver)")
-        b_scan.setToolTip(
-            "Déclenche le balayage depuis le PC, au lieu du panneau.\n\n"
-            "CE CHEMIN N'A JAMAIS ABOUTI : la machine cherche bien, mais\n"
-            "aucune détection pilotée par le PC n'a été menée à son terme.\n"
-            "Toutes celles qui ont réussi le 13/08/2026 sont passées par\n"
-            "le panneau. À employer pour reprendre l'enquête, pas pour\n"
-            "travailler.")
-        b_scan.clicked.connect(self._scanner_arms)
-        pose(b_scan)
+
         self.spn_marge_arms = self._reel(5, 200, 25.0)
         self.spn_marge_arms.setToolTip(
             "distance entre le dessin et l'ANGLE des repères.\n"
             "En dessous de la longueur des branches (20 mm), les repères\n"
             "mordent sur le dessin.")
         pose(QLabel("marge repères"), self.spn_marge_arms)
+
         self.chk_marges4 = QCheckBox("quatre marges séparées")
         self.chk_marges4.setToolTip(
             "Comme le panneau de Graphtec Studio.\n\n"
@@ -637,40 +604,17 @@ class Pupitre(QWidget):
             "CHARIOT, bas et haut l'AVANCE du média. Ce sont les axes de\n"
             "la machine, pas ceux d'une feuille posée sur une table.")
         self.chk_marges4.stateChanged.connect(self._recalculer)
+        pose(self.chk_marges4)
         self.spn_mg = self._reel(1, 200, 25.0)
         self.spn_md = self._reel(1, 200, 25.0)
         self.spn_mb = self._reel(1, 200, 25.0)
         self.spn_mh = self._reel(1, 200, 25.0)
-        pose(self.chk_marges4)
         for nom, w in (("gauche (chariot)", self.spn_mg),
                        ("droite (chariot)", self.spn_md),
                        ("bas (avance)", self.spn_mb),
                        ("haut (avance)", self.spn_mh)):
             pose(QLabel(nom), w)
-        b_feuille = QPushButton("Exporter la feuille à imprimer…")
-        b_feuille.setToolTip(
-            "Écrit le dessin ENTOURÉ de ses quatre repères, à imprimer\n"
-            "tel quel à l'échelle 1. Règle ensuite le placement pour que\n"
-            "la découpe retombe sur l'impression.")
-        b_feuille.clicked.connect(self._exporter_feuille)
-        pose(b_feuille)
-        self.cmb_imprimante = QComboBox()
-        self.cmb_imprimante.addItems(impression.imprimantes() or ["(aucune)"])
-        self.chk_gris = QCheckBox("noir seul")
-        b_imprimer = QPushButton("Imprimer la feuille")
-        b_imprimer.setToolTip(
-            "Compose la feuille et l'envoie à l'imprimante À L'ÉCHELLE 1.\n\n"
-            "Les options qui interdisent la mise à l'échelle sont posées\n"
-            "par le logiciel : un « ajuster à la page » de 4 % déplace un\n"
-            "repère de huit millimètres, et la feuille sort belle.")
-        b_imprimer.clicked.connect(self._imprimer_feuille)
-        ligne_imp = QHBoxLayout()
-        ligne_imp.addWidget(self.cmb_imprimante, 1)
-        ligne_imp.addWidget(self.chk_gris)
-        boite_imp = QWidget()
-        boite_imp.setLayout(ligne_imp)
-        pose(boite_imp)
-        pose(b_imprimer)
+
         self.spn_trait_arms = self._reel(0.3, 3.0, 1.0)
         self.spn_trait_arms.setDecimals(1)
         self.spn_trait_arms.setToolTip(
@@ -679,20 +623,73 @@ class Pupitre(QWidget):
             "annoncée, mais un trait plus gros donne plus de signal au\n"
             "capteur. C'est la feuille qui tranche, pas la notice.")
         pose(QLabel("trait repères"), self.spn_trait_arms)
+
         self.cmb_type_arms = QComboBox()
-        # Décrits par le SENS DES BRANCHES, ce qui se voit sur la feuille.
-        # « Angles vers l'extérieur » parlait du sommet du L ; Christophe
-        # lisait les branches et comprenait l'inverse. Même figure, deux
-        # lectures — donc un libellé qui ne laisse pas le choix.
         self.cmb_type_arms.addItems(["type 2 — branches vers le dessin",
                                      "type 1 — branches vers le bord"])
         self.cmb_type_arms.setToolTip(
             "Doit correspondre au MARK TYPE réglé dans la machine.\n"
             "Un désaccord la fait balayer après une forme absente du\n"
-            "papier, puis s'arrêter sur le bord de la feuille.\n\n"
-            "Type 2 : repères DANS la zone de découpe, plus de surface\n"
-            "utile. Type 1 : repères autour, feuille plus grande.")
+            "papier, puis s'arrêter sur le bord de la feuille.")
         pose(QLabel("type de repère"), self.cmb_type_arms)
+
+        b_feuille = QPushButton("Exporter la feuille…")
+        b_feuille.setToolTip(
+            "Écrit le dessin ENTOURÉ de ses quatre repères, à imprimer\n"
+            "tel quel à l'échelle 1. Règle ensuite le placement pour que\n"
+            "la découpe retombe sur l'impression.")
+        b_feuille.clicked.connect(self._exporter_feuille)
+        pose(b_feuille)
+
+        self.cmb_imprimante = QComboBox()
+        self.cmb_imprimante.addItems(impression.imprimantes() or ["(aucune)"])
+        self.chk_gris = QCheckBox("noir seul")
+        ligne_imp = QHBoxLayout()
+        ligne_imp.addWidget(self.cmb_imprimante, 1)
+        ligne_imp.addWidget(self.chk_gris)
+        boite_imp = QWidget()
+        boite_imp.setLayout(ligne_imp)
+        pose(boite_imp)
+        b_imprimer = QPushButton("Imprimer la feuille")
+        b_imprimer.setToolTip(
+            "Compose la feuille et l'envoie à l'imprimante À L'ÉCHELLE 1.\n"
+            "Les options qui l'interdisent sont posées par le logiciel,\n"
+            "pas laissées à ce qu'on pense à cocher.")
+        b_imprimer.clicked.connect(self._imprimer_feuille)
+        pose(b_imprimer)
+
+        b_arms = QPushButton("Lire les réglages ARMS")
+        b_arms.setToolTip(
+            "Interroge la machine et signale ce qui contredit le gabarit.\n"
+            "Le 13/08/2026, un MARK TYPE mal réglé est resté invisible des\n"
+            "heures dans un vidage de configuration.\n\n"
+            "À ne PAS faire juste avant un envoi : une grosse lecture\n"
+            "laisse la machine muette si l'on referme derrière.")
+        b_arms.clicked.connect(self._lire_arms)
+        pose(b_arms)
+        self.lbl_arms = QLabel("réglages non lus")
+        self.lbl_arms.setObjectName("faible")
+        self.lbl_arms.setWordWrap(True)
+        pose(self.lbl_arms)
+
+        # ============ 2. LA DÉCOUPE QUI SUIT ============
+        g_decoupe, pose = grille("Découpe après détection")
+        self.chk_arms = QCheckBox("après une détection de repères")
+        self.chk_arms.setToolTip(
+            "À cocher quand la machine vient de détecter les repères d'une\n"
+            "feuille imprimée. Le travail part alors SANS IN;, qui\n"
+            "réinitialiserait le traceur et effacerait l'origine que la\n"
+            "détection vient de poser — la découpe repartirait du coin de\n"
+            "la feuille au lieu du dessin, sans aucun message.")
+        self.chk_arms.stateChanged.connect(self._recalculer)
+        pose(self.chk_arms)
+        rappel_dec = QLabel("détecter au panneau : [PAUSE/MENU] > [2] ARMS "
+                            "> [1] LECT. AUTO REPERES, pointe sur le 1er "
+                            "repère")
+        rappel_dec.setObjectName("faible")
+        rappel_dec.setWordWrap(True)
+        pose(rappel_dec)
+
         self.spn_corr_av = self._reel(-20.0, 20.0, 0.0)
         self.spn_corr_ch = self._reel(-20.0, 20.0, 0.0)
         for w in (self.spn_corr_av, self.spn_corr_ch):
@@ -700,59 +697,59 @@ class Pupitre(QWidget):
             w.setToolTip(
                 "Écart MESURÉ entre la découpe et l'impression, à "
                 "retrancher.\n\n"
-                "Le manuel (p. 5-5) dit de le relever plutôt que de le "
-                "calculer :\n« Mesurez la distance entre le point "
-                "d'origine des données\nde découpe et le point d'origine "
-                "des repères. »\n\n"
-                "Positif = la découpe se déplace dans le sens où le média\n"
-                "avance, ou dans celui où le chariot va. Un essai au stylo\n"
-                "dit tout de suite si le signe est le bon.\n\n"
-                "N'agit que sur la DÉCOUPE, jamais sur la feuille à "
-                "imprimer.")
+                "Se lit sur la pièce : l'espace entre le dessin et le\n"
+                "contour d'un côté, puis de l'autre. La MOITIÉ de leur\n"
+                "différence est le décalage.\n\n"
+                "N'agit que sur la DÉCOUPE, jamais sur la feuille à\n"
+                "imprimer : l'appliquer au dessin déplacerait aussi les\n"
+                "repères, donc recréerait l'écart qu'on corrige.")
         pose(QLabel("correction avance"), self.spn_corr_av)
         pose(QLabel("correction chariot"), self.spn_corr_ch)
-        # Deux paramètres du protocole, ouverts pour l'ESSAI. TB57 est le
-        # seul dont un binaire officiel dise qu'il porte un mode
-        # (AccumPCode_TB57_MODE dans Cutting Master 3), et le seul qu'on
-        # n'ait jamais fait varier — on envoie TB57,1,1 depuis le début.
-        essais = QLabel("essais de protocole")
-        essais.setObjectName("faible")
-        pose(essais)
+
+        # ============ 3. LES ESSAIS DE PROTOCOLE ============
+        g_essais, pose = grille("Essais de protocole")
+        avert = QLabel(
+            "AUCUN scan piloté depuis le PC n'a jamais abouti — neuf "
+            "variantes. La détection se fait au panneau. Ceci sert à "
+            "reprendre l'enquête, pas à travailler.")
+        avert.setObjectName("faible")
+        avert.setWordWrap(True)
+        pose(avert)
+
+        self.spn_ecart_av = self._reel(20, 900, 160.0)
+        self.spn_ecart_ch = self._reel(20, 600, 150.0)
+        pose(QLabel("écart avance"), self.spn_ecart_av)
+        pose(QLabel("écart chariot"), self.spn_ecart_ch)
+
         self.spn_tb57a = self._entier(0, 9, 1)
         self.spn_tb57b = self._entier(0, 9, 1)
         self.spn_tb55 = self._entier(0, 9, 1)
         for w in (self.spn_tb57a, self.spn_tb57b):
             w.setToolTip(
                 "TB57 porte un MODE — Cutting Master 3 nomme une routine\n"
-                "AccumPCode_TB57_MODE, et ne garde pas TB57 en constante,\n"
-                "donc ses valeurs changent selon ce qu'on demande.\n\n"
-                "On envoie TB57,1,1 depuis le début sans savoir ce que ça\n"
-                "réclame. C'est le paramètre qu'il reste à éprouver.")
+                "AccumPCode_TB57_MODE, et ne garde pas TB57 en constante.\n"
+                "C'est le paramètre qu'il reste à éprouver.")
         self.spn_tb55.setToolTip(
             "TB55 ne porte PAS le type de repère : c'est une constante\n"
-            "valant 1 dans Cutting Master 3 comme dans Graphtec Studio,\n"
-            "quel que soit le type du travail.\n\n"
-            "Laissé réglable parce qu'un essai coûte moins qu'une\n"
-            "certitude empruntée — mais ne pas en attendre grand-chose.")
-        rang = QHBoxLayout()
-        rang.addWidget(QLabel("TB57"))
-        rang.addWidget(self.spn_tb57a)
-        rang.addWidget(self.spn_tb57b)
-        rang.addWidget(QLabel("TB55"))
-        rang.addWidget(self.spn_tb55)
-        cadre_essais = QWidget()
-        cadre_essais.setLayout(rang)
-        pose(cadre_essais)
+            "valant 1 dans Cutting Master 3 comme dans Graphtec Studio.")
+        rang_tb = QHBoxLayout()
+        rang_tb.addWidget(QLabel("TB57"))
+        rang_tb.addWidget(self.spn_tb57a)
+        rang_tb.addWidget(self.spn_tb57b)
+        rang_tb.addWidget(QLabel("TB55"))
+        rang_tb.addWidget(self.spn_tb55)
+        cadre_tb = QWidget()
+        cadre_tb.setLayout(rang_tb)
+        pose(cadre_tb)
+
         self.chk_depart = QCheckBox("amener la tête avant de chercher")
         self.chk_depart.setToolTip(
             "Le manuel demande de « positionner le chariot dans la zone\n"
             "de détection du 1er repère » — pour la détection AUTOMATIQUE\n"
-            "comme pour la manuelle.\n\n"
-            "Toutes les détections abouties ont eu ce geste ; aucun de nos\n"
-            "scans pilotés depuis le PC ne l'a jamais fait.")
+            "comme pour la manuelle.")
+        pose(self.chk_depart)
         self.spn_dep_av = self._reel(0, 600, 35.0)
         self.spn_dep_ch = self._reel(0, 600, 30.0)
-        pose(self.chk_depart)
         for w in (self.spn_dep_av, self.spn_dep_ch):
             w.setToolTip(
                 "Position de l'angle du PREMIER REPÈRE dans le repère de\n"
@@ -762,7 +759,13 @@ class Pupitre(QWidget):
                 "zone que la machine peut atteindre.")
         pose(QLabel("1er repère, avance"), self.spn_dep_av)
         pose(QLabel("1er repère, chariot"), self.spn_dep_ch)
-        g_arms = g
+
+        b_scan = QPushButton("Lancer une détection  (à éprouver)")
+        b_scan.setToolTip(
+            "Déclenche le balayage depuis le PC, au lieu du panneau.\n"
+            "CE CHEMIN N'A JAMAIS ABOUTI.")
+        b_scan.clicked.connect(self._scanner_arms)
+        pose(b_scan)
 
         # --- rôles des couleurs
         g = QGroupBox("Rôles des couleurs")
@@ -986,7 +989,7 @@ class Pupitre(QWidget):
                                    b_enregistrer, self.lbl_fichier, g_media,
                                    g_placement, g_mosaique,
                                    g_perfo, g_roles, g_contour,
-                                   g_arms), "Dessin")
+                                   g_feuille, g_decoupe, g_essais), "Dessin")
         self.onglets.addTab(onglet(g_outil, g_nuancier, g_copies), "Outil")
         self.onglets.addTab(onglet(self._groupe_machine()), "Machine")
         v.addWidget(self.onglets, 1)

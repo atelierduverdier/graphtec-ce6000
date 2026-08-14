@@ -162,7 +162,7 @@ A4 = (210.0, 297.0)       # mm, portrait — le sens où la feuille est chargée
 
 
 def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
-             bord=10.0, type_repere=2, page=A4):
+             bord=10.0, type_repere=2, page=A4, marges=None):
     """Le dessin et ses quatre repères sur une même feuille, en SVG.
 
     C'est la pièce qui manquait : un motif imprimé AVEC ses repères, pour
@@ -172,6 +172,13 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
 
     `polylignes` sont en convention machine : millimètres, Y vers le
     haut. `marge` est la distance entre le dessin et l'ANGLE des repères.
+
+    `marges` permet quatre valeurs différentes, comme le panneau de
+    Graphtec Studio : `(gauche, droite, bas, haut)`. Attention aux axes —
+    gauche et droite sont sur la course du CHARIOT, bas et haut sur
+    l'AVANCE du média. C'est la convention de la machine, pas celle d'une
+    feuille posée sur une table, et les confondre a déjà coûté deux
+    essais. `marge` reste le raccourci quand les quatre sont égales.
 
     `type_repere` change le SENS des angles, pas leur position :
 
@@ -209,8 +216,12 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
     ys = [y for pts, _ in polylignes for _, y in pts]
     x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
 
-    # Angles des quatre repères, autour de l'emprise du dessin.
-    ax0, ay0, ax1, ay1 = x0 - marge, y0 - marge, x1 + marge, y1 + marge
+    gauche, droite, bas, haut = marges or (marge, marge, marge, marge)
+
+    # Angles des quatre repères, autour de l'emprise du dessin. `bas` et
+    # `haut` bornent l'AVANCE (X machine), `gauche` et `droite` la course
+    # du chariot (Y machine).
+    ax0, ay0, ax1, ay1 = x0 - bas, y0 - gauche, x1 + haut, y1 + droite
     ecart_x, ecart_y = ax1 - ax0, ay1 - ay0
 
     if type_repere not in (1, 2):
@@ -218,10 +229,15 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
     sortant = (type_repere == 1)
 
     avertissements = []
-    if marge < branche and not sortant:
-        avertissements.append(
-            f"marge de {marge:g} mm plus courte que les branches "
-            f"({branche:g} mm) : les repères vont mordre sur le dessin.")
+    if not sortant:
+        courtes = [(nom, v) for nom, v in
+                   (("gauche", gauche), ("droite", droite),
+                    ("bas", bas), ("haut", haut)) if v < branche]
+        if courtes:
+            detail = ", ".join(f"{nom} {v:g}" for nom, v in courtes)
+            avertissements.append(
+                f"marge(s) plus courte(s) que les branches ({branche:g} mm) "
+                f"— {detail} : les repères vont mordre sur le dessin.")
     if ecart_x < 3 * branche or ecart_y < 3 * branche:
         avertissements.append(
             "dessin très petit devant les repères : la machine peut "
@@ -280,13 +296,16 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
     return "\n".join(svg) + "\n", {
         "ecart": (ecart_x, ecart_y),          # avance, chariot — ordre de TB124
         "page": (page_l, page_h),
-        "origine_dessin": (marge, marge),     # depuis l'angle du repère 1
+        # Position du dessin depuis l'angle du repère 1, dans l'ordre
+        # machine : avance d'abord, chariot ensuite.
+        "origine_dessin": (bas, gauche),
+        "marges": (gauche, droite, bas, haut),
         "emprise": (x1 - x0, y1 - y0),
         "type_repere": type_repere,
         # Où l'angle du premier repère tombe sur la FEUILLE. C'est ce qui
         # décide si la tête le trouve : trop près du bord, elle rencontre
         # le bord avant lui.
-        "marges": (ax0 + dx, ay0 + dy),
+        "bords": (ax0 + dx, ay0 + dy),
         "avertissements": avertissements,
     }
 
@@ -468,10 +487,17 @@ def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
 
 def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
             type_repere=1, periph=None, patience=90.0, journal=None,
-            tb57=(1, 1)):
+            tb57=(1, 1), depart=None):
     # `type_repere` part dans `TB55`. Sa numérotation n'est PAS établie :
     # voir TB55_DOUTEUX. C'est pour ça qu'il est réglable et non deviné.
     """Lance une détection depuis le PC. NON ÉPROUVÉ — voir l'en-tête.
+
+    `depart` amène la POINTE de l'outil en (x, y) millimètres avant de
+    lancer la séquence. C'est ce que le panneau fait faire à la main —
+    « positionnez le chariot dans la zone de détection du 1er repère » —
+    et c'est la seule chose que notre code n'ait jamais faite, en
+    automatique comme en manuel. Sans elle la machine cherche depuis là
+    où elle dort, et rencontre le bord de la feuille avant le repère.
 
     Rend `(annonces, journal)`. Une annonce est `(instant, texte)`. La
     seule forme connue à ce jour est `1,254`, laissée par un scan qui a
@@ -479,18 +505,27 @@ def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
     """
     journal = journal if journal is not None else []
     fd = os.open(periph or conditions.PERIPH, os.O_RDWR | os.O_NONBLOCK)
-    depart = time.monotonic()
+    depart_t = time.monotonic()
     ecoute = Ecoute(fd, journal)
     try:
         # Ce qui dort dans le tampon vient du coup précédent : un scan
         # lancé au panneau y laisse parfois son annonce, qui attend un
         # lecteur. On la ramasse au lieu de la jeter.
-        ecoute.guetter(depart, 0.5)
+        ecoute.guetter(depart_t, 0.5)
 
-        libre = ecoute.demander(ETAT_SIMPLE, depart)
+        libre = ecoute.demander(ETAT_SIMPLE, depart_t)
         if libre not in ("0", ""):
             journal.append(f"la machine n'est pas libre (C1 = {libre}) — "
                            f"le scan risque de ne pas partir")
+
+        if depart:
+            # Le déplacement passe par HP-GL, sur le MÊME descripteur :
+            # rouvrir le périphérique rendrait la machine muette.
+            dx, dy = round(depart[0] * UNITES_PAR_MM), \
+                round(depart[1] * UNITES_PAR_MM)
+            conditions._ecrire(fd, f"SP1;PU{dx},{dy};")
+            journal.append(f"tête amenée à {depart[0]:g} ; {depart[1]:g} mm")
+            ecoute.guetter(depart_t, 1.5)      # la laisser arriver
 
         conditions._ecrire(fd, PREAMBULE)
         conditions._ecrire(fd, PREAMBULE)
@@ -501,10 +536,10 @@ def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
         sens = {"0": "au repos", "1": "elle cherche",
                 "6": "terminé", "10": "terminé"}
         precedent, cherche = None, False
-        while time.monotonic() - depart < patience:
-            valeur = ecoute.demander(ETAT_RICHE, depart, delai=0.6)
+        while time.monotonic() - depart_t < patience:
+            valeur = ecoute.demander(ETAT_RICHE, depart_t, delai=0.6)
             if valeur != precedent:
-                t = time.monotonic() - depart
+                t = time.monotonic() - depart_t
                 journal.append(f"{t:5.1f} s  C11 = {valeur or '?'}  "
                                f"{sens.get(valeur, '')}")
                 precedent = valeur
@@ -513,9 +548,9 @@ def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
             if cherche and valeur in ("6", "10"):
                 # L'annonce précède l'état terminal de quelques dizaines de
                 # millisecondes — mais rien ne dit qu'il n'en vient qu'une.
-                ecoute.guetter(depart, 2.0)
+                ecoute.guetter(depart_t, 2.0)
                 break
-            ecoute.guetter(depart, 0.3)
+            ecoute.guetter(depart_t, 0.3)
 
         if not cherche:
             journal.append("elle n'a jamais cherché : machine occupée, ou "

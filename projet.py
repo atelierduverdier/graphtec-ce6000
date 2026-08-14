@@ -55,6 +55,9 @@ REGLAGES = [
     ("cmb_type_arms", "texte"),
     ("spn_corr_av", "reel"), ("spn_corr_ch", "reel"),
     ("spn_tb57a", "entier"), ("spn_tb57b", "entier"), ("spn_tb55", "entier"),
+    ("chk_marges4", "bool"), ("spn_mg", "reel"), ("spn_md", "reel"),
+    ("spn_mb", "reel"), ("spn_mh", "reel"),
+    ("chk_depart", "bool"), ("spn_dep_av", "reel"), ("spn_dep_ch", "reel"),
     # outil
     ("cmb_profil", "texte"), ("cmb_cond", "entier_liste"),
     ("cmb_outil", "texte"), ("spn_offset", "entier"), ("spn_debord", "reel"),
@@ -68,7 +71,8 @@ REGLAGES = [
 # change après l'export, la feuille imprimée ne vaut plus.
 PLACEMENT = ["spn_x", "spn_y", "cmb_rot", "chk_mx", "chk_my", "spn_ech",
              "spn_rang", "spn_col", "spn_ex", "spn_ey",
-             "spn_marge_arms", "chk_contour", "spn_retrait", "chk_trous"]
+             "spn_marge_arms", "chk_contour", "spn_retrait", "chk_trous",
+             "chk_marges4", "spn_mg", "spn_md", "spn_mb", "spn_mh"]
 
 
 def empreinte(reglages):

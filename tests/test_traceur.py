@@ -539,10 +539,59 @@ def test_la_feuille_a_imprimer_a_toujours_le_meme_format():
 
     # Et le bloc doit rester DANS la page, sinon les repères sont rognés.
     for infos in (i1, i2):
-        mx, my = infos["marges"]
+        mx, my = infos["bords"]
         assert mx > 0 and my > 0, (
             f"le premier repère tombe à {mx:.1f} ; {my:.1f} du bord — "
             f"hors de la feuille")
+
+
+def test_quatre_marges_independantes():
+    """Comme le panneau de Graphtec Studio : gauche, droite, bas, haut.
+
+    Les axes sont ceux de la MACHINE et non d'une feuille posée sur une
+    table : gauche et droite bornent la course du chariot, bas et haut
+    l'avance du média. Les confondre a déjà coûté deux essais le
+    13/08/2026.
+    """
+    dessin = [([(0.0, 0.0), (60.0, 0.0), (60.0, 40.0), (0.0, 0.0)], True)]
+
+    egales = arms.composer(dessin, marge=25.0)[1]
+    quatre = arms.composer(dessin, marges=(30.0, 20.0, 40.0, 10.0))[1]
+
+    assert egales["origine_dessin"] == (25.0, 25.0)
+    assert quatre["origine_dessin"] == (40.0, 30.0), (
+        "le dessin doit être à (bas ; gauche) de l'angle du repère 1")
+
+    # bas + emprise + haut sur l'avance, gauche + emprise + droite sur le
+    # chariot : c'est ça, quatre marges indépendantes.
+    ax, ay = quatre["ecart"]
+    assert ax == 40.0 + 60.0 + 10.0
+    assert ay == 30.0 + 40.0 + 20.0
+
+    # Une marge plus courte que les branches doit être signalée, en la
+    # NOMMANT — sinon on cherche laquelle.
+    assert any("haut" in a for a in quatre["avertissements"]), (
+        "la marge fautive n'est pas nommée dans l'avertissement")
+
+
+def test_le_scan_peut_amener_la_tete_avant_de_chercher():
+    """Le panneau fait poser la pointe sur le premier repère ; pas nous.
+
+    « Positionnez le chariot dans la zone de détection du 1er repère »,
+    dit le manuel pour la détection AUTOMATIQUE comme pour la manuelle
+    (p. 5-37 et 5-39). Toutes les détections abouties du 13/08/2026 ont eu
+    ce geste ; aucun de nos scans pilotés depuis le PC ne l'a fait.
+
+    Le test ne peut pas vérifier que la tête bouge — il vérifie que le
+    paramètre existe et qu'il est converti en unités machine.
+    """
+    import inspect
+    src = inspect.getsource(arms.scanner)
+    assert "depart" in inspect.signature(arms.scanner).parameters, (
+        "le scan ne sait pas amener la tête avant de chercher")
+    assert "UNITES_PAR_MM" in src, (
+        "le déplacement n'est pas converti en unités machine")
+    assert "PU" in src, "aucun ordre de déplacement dans le scan"
 
 
 def test_unites_accordees():
@@ -891,10 +940,59 @@ def test_la_feuille_a_imprimer_a_toujours_le_meme_format():
 
     # Et le bloc doit rester DANS la page, sinon les repères sont rognés.
     for infos in (i1, i2):
-        mx, my = infos["marges"]
+        mx, my = infos["bords"]
         assert mx > 0 and my > 0, (
             f"le premier repère tombe à {mx:.1f} ; {my:.1f} du bord — "
             f"hors de la feuille")
+
+
+def test_quatre_marges_independantes():
+    """Comme le panneau de Graphtec Studio : gauche, droite, bas, haut.
+
+    Les axes sont ceux de la MACHINE et non d'une feuille posée sur une
+    table : gauche et droite bornent la course du chariot, bas et haut
+    l'avance du média. Les confondre a déjà coûté deux essais le
+    13/08/2026.
+    """
+    dessin = [([(0.0, 0.0), (60.0, 0.0), (60.0, 40.0), (0.0, 0.0)], True)]
+
+    egales = arms.composer(dessin, marge=25.0)[1]
+    quatre = arms.composer(dessin, marges=(30.0, 20.0, 40.0, 10.0))[1]
+
+    assert egales["origine_dessin"] == (25.0, 25.0)
+    assert quatre["origine_dessin"] == (40.0, 30.0), (
+        "le dessin doit être à (bas ; gauche) de l'angle du repère 1")
+
+    # bas + emprise + haut sur l'avance, gauche + emprise + droite sur le
+    # chariot : c'est ça, quatre marges indépendantes.
+    ax, ay = quatre["ecart"]
+    assert ax == 40.0 + 60.0 + 10.0
+    assert ay == 30.0 + 40.0 + 20.0
+
+    # Une marge plus courte que les branches doit être signalée, en la
+    # NOMMANT — sinon on cherche laquelle.
+    assert any("haut" in a for a in quatre["avertissements"]), (
+        "la marge fautive n'est pas nommée dans l'avertissement")
+
+
+def test_le_scan_peut_amener_la_tete_avant_de_chercher():
+    """Le panneau fait poser la pointe sur le premier repère ; pas nous.
+
+    « Positionnez le chariot dans la zone de détection du 1er repère »,
+    dit le manuel pour la détection AUTOMATIQUE comme pour la manuelle
+    (p. 5-37 et 5-39). Toutes les détections abouties du 13/08/2026 ont eu
+    ce geste ; aucun de nos scans pilotés depuis le PC ne l'a fait.
+
+    Le test ne peut pas vérifier que la tête bouge — il vérifie que le
+    paramètre existe et qu'il est converti en unités machine.
+    """
+    import inspect
+    src = inspect.getsource(arms.scanner)
+    assert "depart" in inspect.signature(arms.scanner).parameters, (
+        "le scan ne sait pas amener la tête avant de chercher")
+    assert "UNITES_PAR_MM" in src, (
+        "le déplacement n'est pas converti en unités machine")
+    assert "PU" in src, "aucun ordre de déplacement dans le scan"
 
 
 def test_unites_accordees():

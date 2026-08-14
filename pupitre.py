@@ -554,6 +554,24 @@ class Pupitre(QWidget):
             "mordent sur le dessin.")
         gl.addWidget(QLabel("marge repères"), 7, 0)
         gl.addWidget(self.spn_marge_arms, 7, 1)
+        self.chk_marges4 = QCheckBox("quatre marges séparées")
+        self.chk_marges4.setToolTip(
+            "Comme le panneau de Graphtec Studio.\n\n"
+            "ATTENTION aux axes : gauche et droite bornent la course du\n"
+            "CHARIOT, bas et haut l'AVANCE du média. Ce sont les axes de\n"
+            "la machine, pas ceux d'une feuille posée sur une table.")
+        self.chk_marges4.stateChanged.connect(self._recalculer)
+        self.spn_mg = self._reel(1, 200, 25.0)
+        self.spn_md = self._reel(1, 200, 25.0)
+        self.spn_mb = self._reel(1, 200, 25.0)
+        self.spn_mh = self._reel(1, 200, 25.0)
+        gl.addWidget(self.chk_marges4, 15, 0, 1, 2)
+        for rang, (nom, w) in enumerate((("gauche (chariot)", self.spn_mg),
+                                         ("droite (chariot)", self.spn_md),
+                                         ("bas (avance)", self.spn_mb),
+                                         ("haut (avance)", self.spn_mh)), 16):
+            gl.addWidget(QLabel(nom), rang, 0)
+            gl.addWidget(w, rang, 1)
         b_feuille = QPushButton("Exporter la feuille à imprimer…")
         b_feuille.setToolTip(
             "Écrit le dessin ENTOURÉ de ses quatre repères, à imprimer\n"
@@ -633,6 +651,20 @@ class Pupitre(QWidget):
         cadre_essais = QWidget()
         cadre_essais.setLayout(rang)
         gl.addWidget(cadre_essais, 14, 0, 1, 2)
+        self.chk_depart = QCheckBox("amener la tête avant de chercher")
+        self.chk_depart.setToolTip(
+            "Le manuel demande de « positionner le chariot dans la zone\n"
+            "de détection du 1er repère » — pour la détection AUTOMATIQUE\n"
+            "comme pour la manuelle.\n\n"
+            "Toutes les détections abouties ont eu ce geste ; aucun de nos\n"
+            "scans pilotés depuis le PC ne l'a jamais fait.")
+        self.spn_dep_av = self._reel(0, 600, 35.0)
+        self.spn_dep_ch = self._reel(0, 600, 30.0)
+        gl.addWidget(self.chk_depart, 20, 0, 1, 2)
+        gl.addWidget(QLabel("départ avance"), 21, 0)
+        gl.addWidget(self.spn_dep_av, 21, 1)
+        gl.addWidget(QLabel("départ chariot"), 22, 0)
+        gl.addWidget(self.spn_dep_ch, 22, 1)
         g_arms = g
 
         # --- rôles des couleurs
@@ -1337,8 +1369,12 @@ class Pupitre(QWidget):
             return
         marge = self.spn_marge_arms.value()
         try:
+            quatre = None
+            if self.chk_marges4.isChecked():
+                quatre = (self.spn_mg.value(), self.spn_md.value(),
+                          self.spn_mb.value(), self.spn_mh.value())
             svg, infos = arms.composer(
-                self.calcule, marge=marge,
+                self.calcule, marge=marge, marges=quatre,
                 epaisseur=self.spn_trait_arms.value(),
                 type_repere=self._type_arms())
         except ValueError as e:
@@ -1364,10 +1400,11 @@ class Pupitre(QWidget):
         except Exception:
             pdf = None
 
-        # Caler la découpe : le dessin doit repartir à `marge` de l'origine
-        # que la détection posera sur le premier repère.
-        self.spn_x.setValue(marge)
-        self.spn_y.setValue(marge)
+        # Caler la découpe : le dessin doit repartir à la distance connue
+        # de l'origine que la détection posera sur le premier repère.
+        ox, oy = infos["origine_dessin"]
+        self.spn_x.setValue(ox)
+        self.spn_y.setValue(oy)
         self.chk_arms.setChecked(True)
         ax, ay = infos["ecart"]
         self.spn_ecart_av.setValue(ax)
@@ -1426,7 +1463,9 @@ class Pupitre(QWidget):
             annonces, journal = arms.scanner(
                 av, ch, epaisseur=self.spn_trait_arms.value(),
                 type_repere=self.spn_tb55.value(),
-                tb57=(self.spn_tb57a.value(), self.spn_tb57b.value()))
+                tb57=(self.spn_tb57a.value(), self.spn_tb57b.value()),
+                depart=((self.spn_dep_av.value(), self.spn_dep_ch.value())
+                        if self.chk_depart.isChecked() else None))
         except Exception as e:
             QMessageBox.warning(self, "Traceur", str(e))
             return

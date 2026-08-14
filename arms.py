@@ -307,11 +307,15 @@ PREAMBULE = "\x1b.v:\x1b.C10:"
 ETAT_RICHE = "\x1b.v:\x1b.C11:"      # 0 repos, 1 CHERCHE, 6 et 10 terminaux
 ETAT_SIMPLE = "\x1b.v:\x1b.C1:"      # 8 occupée, 0 libre — trop pauvre ici
 
-# `TB55` reste incertain : Studio envoie 1 tout en dessinant des repères
-# de TYPE 2 dans son propre PDF. Soit la famille compte à partir de zéro,
-# soit ce champ ne désigne pas le type. Dit plutôt que deviné — et laissé
-# réglable, parce que c'est le dernier désaccord connu entre ce qu'on
-# envoie et ce que la machine annonce dans son vidage (`MARK TYPE=2`).
+# `TB55` n'est PAS le numéro du type affiché : c'est un CODE. Le binaire
+# de Cutting Master 3 porte une méthode `RegMarkType_Studio_to_PCode`,
+# une table de conversion entre le type montré à l'utilisateur et la
+# valeur envoyée — relevée le 14/08/2026, voir notes/cutting_master_3.md.
+#
+# Ça explique que Studio dessine des repères de TYPE 2 dans son propre
+# PDF tout en envoyant `TB55,1`, ce qu'on prenait pour une incohérence.
+# La correspondance exacte reste à établir ; l'essai de `TB55,2` du
+# 13/08/2026 n'avait donc aucune raison d'aboutir, et n'a rien changé.
 TB55_DOUTEUX = ("TB55 vaut 1 chez Studio alors que son gabarit est de "
                 "type 2 : le sens de ce champ n'est pas établi.")
 

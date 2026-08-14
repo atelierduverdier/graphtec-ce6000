@@ -451,7 +451,7 @@ class Ecoute:
 
 
 def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
-                  type_repere=1, tb57=(1, 1)):
+                  type_repere=1, tb57=(1, 1), tb50=None, queue=False):
     """Les commandes `TB` d'une détection, dans l'ordre de la capture.
 
     Les valeurs qui portent une cote sont CALCULÉES à partir des
@@ -476,18 +476,21 @@ def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
     certitude empruntée.
     """
     u = UNITES_PAR_MM
-    return ["TB99", f"TB57,{tb57[0]},{tb57[1]}", "TB59,0,0", "TB52,1",
-            f"TB51,{round(branche * u)}",
-            f"TB53,{round(epaisseur * u)}",
-            f"TB55,{type_repere}",
-            "TB54,0,0",
-            f"TB124,{round(ecart_x * u)},{round(ecart_y * u)}",
-            "TB99"]
+    tete = [f"TB50,{tb50}", "TB50,0"] if tb50 is not None else []
+    fin = ["TB123", "TB23"] if queue else []
+    return (["TB99"] + tete + [
+        f"TB57,{tb57[0]},{tb57[1]}", "TB59,0,0", "TB52,1",
+        f"TB51,{round(branche * u)}",
+        f"TB53,{round(epaisseur * u)}",
+        f"TB55,{type_repere}",
+        "TB54,0,0",
+        f"TB124,{round(ecart_x * u)},{round(ecart_y * u)}",
+    ] + fin + ["TB99"])
 
 
 def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
             type_repere=1, periph=None, patience=90.0, journal=None,
-            tb57=(1, 1), depart=None):
+            tb57=(1, 1), depart=None, tb50=None, queue=False):
     # `type_repere` part dans `TB55`. Sa numérotation n'est PAS établie :
     # voir TB55_DOUTEUX. C'est pour ça qu'il est réglable et non deviné.
     """Lance une détection depuis le PC. NON ÉPROUVÉ — voir l'en-tête.
@@ -530,7 +533,8 @@ def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
         conditions._ecrire(fd, PREAMBULE)
         conditions._ecrire(fd, PREAMBULE)
         for commande in sequence_scan(ecart_x, ecart_y, branche,
-                                      epaisseur, type_repere, tb57):
+                                      epaisseur, type_repere, tb57,
+                                      tb50, queue):
             conditions._ecrire(fd, f"\x1b.v:{commande}\x03")
 
         sens = {"0": "au repos", "1": "elle cherche",

@@ -462,3 +462,48 @@ entre ce qu'on envoie et ce que la machine dit d'elle-même.
 Rendu réglable plutôt que tranché : `arms.scanner(type_repere=...)`, câblé
 sur le choix du pupitre. **Reste à essayer les deux sur la même feuille**,
 et à comparer. C'est un essai, pas une conclusion.
+
+## Le scan piloté depuis le PC : ce qui a été éliminé — 14/08/2026
+
+L'erreur exacte, lue sur une vidéo du panneau :
+
+    E04024  ARMS
+    ERREUR SCAN REPER !
+    NIVEAU DE DETECTION INSUFFISANT
+
+Ce n'est donc PAS une affaire de géométrie : la tête va où on la met, elle
+balaie, et le capteur ne tire pas assez de signal. Or la détection
+**manuelle au panneau réussit** sur la même feuille, avec la même
+calibration. Quelque chose diffère entre les deux chemins.
+
+Essayé, sans le moindre effet :
+
+| essai | durée de recherche | issue |
+|---|---|---|
+| `TB55,2` au lieu de `TB55,1` | 9,5 s | identique |
+| `TB57,2,1` au lieu de `TB57,1,1` | 8,8 s | identique |
+| sans déplacement de tête | 8,8 s | identique |
+| tête amenée à 35 ; 30 | 4,5 s | identique |
+| tête amenée à 30 ; 35 | 6,4 s | identique |
+| `TB50,1` + `TB50,0` + queue `TB123 TB23` | 4,9 s | identique |
+
+La durée de recherche **change avec la position de départ** : la machine
+tient donc compte du déplacement, le mécanisme répond. Mais l'issue est
+toujours `C11 = 6`, sans annonce.
+
+`TB50` n'écrit rien dans la calibration : les huit valeurs du vidage sont
+intactes après l'avoir envoyé, gain et seuils compris. Vérifié plutôt que
+supposé — et vérifié APRÈS l'avoir envoyé, ce qui était l'ordre inverse
+du bon.
+
+### Ce qui explique peut-être tout
+
+**On n'a jamais capturé une détection RÉUSSIE.** Les six captures de
+Studio du 13/08/2026 sont toutes des échecs, et c'est de l'une d'elles
+qu'on a tiré notre séquence. On rejoue donc fidèlement une session qui
+ratait déjà.
+
+Le renseignement qui manque n'est pas dans un binaire — il est dans une
+capture USB d'un scan qui aboutit, sous Windows, avec Cutting Master 3 ou
+Studio. C'est la seule mesure qui reste à faire, et elle est à portée
+maintenant que le print & cut fonctionne au panneau.

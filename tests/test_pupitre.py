@@ -321,6 +321,88 @@ def test_la_colonne_na_pas_de_largeur_figee(fenetre):
         f"contenu en réclame {besoin}")
 
 
+def test_le_contour_ne_declenche_pas_lalerte_de_deplacement(fenetre):
+    """Cocher « découper autour du dessin » ne déplace pas le dessin.
+
+    Le contour ajoute un tracé AUTOUR du motif ; la feuille imprimée
+    reste valable, et la découpe retombera juste. L'alerte criait pourtant
+    dès qu'on cochait la case — c'est-à-dire au moment le plus normal du
+    travail, celui où l'on prépare un autocollant.
+
+    Un garde-fou qui crie pour rien finit par ne plus être lu, et c'est
+    alors qu'il manque le vrai déplacement. Signalé par Christophe le
+    14/08/2026, capture d'écran à l'appui.
+    """
+    import projet
+
+    fenetre.brut = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)],
+                     True)]
+    fenetre.couleurs = [(0.0, 0.0, 0.0)]
+    fenetre.chk_contour.setChecked(False)
+    fenetre.spn_x.setValue(20.0)
+    reference = projet.empreinte(fenetre._lire_reglages())
+
+    fenetre.chk_contour.setChecked(True)
+    assert not projet.a_bouge_depuis_export(
+        fenetre._lire_reglages(), reference), (
+        "cocher le contour déclenche l'alerte de déplacement")
+
+    fenetre.spn_retrait.setValue(5.0)
+    assert not projet.a_bouge_depuis_export(
+        fenetre._lire_reglages(), reference), (
+        "changer le retrait déclenche l'alerte de déplacement")
+
+    # Mais un vrai déplacement doit toujours être vu.
+    fenetre.spn_x.setValue(24.0)
+    assert projet.a_bouge_depuis_export(
+        fenetre._lire_reglages(), reference), (
+        "déplacer le dessin de 4 mm ne déclenche plus rien")
+
+
+def test_un_export_ne_se_denonce_pas_lui_meme(fenetre):
+    """Après un export, l'alerte de déplacement doit rester muette.
+
+    L'export RÈGLE lui-même le placement — il pose le dessin à la
+    distance connue du premier repère. Sceller l'empreinte AVANT de le
+    faire revenait à figer un état que l'export allait aussitôt changer :
+    l'alerte criait dès l'envoi suivant, sans que personne n'ait rien
+    touché.
+
+    C'est le « je n'ai rien touché » de Christophe, le 14/08/2026, qui a
+    tranché contre mon premier diagnostic — j'accusais la case du contour.
+
+    Le test appelle le VRAI geste, `_caler_sur_la_feuille`, et non une
+    imitation de sa séquence : une première version rejouait les étapes à
+    la main et ne voyait donc pas la faute quand on la remettait dans le
+    code. Un test qui n'appelle pas ce qu'il surveille ne surveille rien.
+    """
+    import arms
+    import projet
+
+    fenetre.brut = [([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)],
+                     True)]
+    fenetre.couleurs = [(0.0, 0.0, 0.0)]
+    fenetre.spn_marge_arms.setValue(20.0)
+    fenetre.spn_x.setValue(5.0)
+    fenetre.spn_y.setValue(5.0)
+    fenetre._recalculer()
+
+    _svg, infos = arms.composer(fenetre.calcule, marge=20.0)
+    fenetre._caler_sur_la_feuille(infos)
+
+    assert not projet.a_bouge_depuis_export(
+        fenetre._lire_reglages(), fenetre.empreinte_export), (
+        "l'export se dénonce lui-même : l'alerte crierait à l'envoi "
+        "suivant sans que personne n'ait rien touché")
+
+    # Et le placement doit bien avoir été posé, sinon on scellerait le
+    # néant sans que rien ne proteste.
+    ox, oy = infos["origine_dessin"]
+    assert fenetre.spn_x.value() == ox and fenetre.spn_y.value() == oy, (
+        "le placement n'a pas été posé sur la feuille")
+    assert fenetre.chk_arms.isChecked()
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

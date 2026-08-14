@@ -1461,6 +1461,30 @@ class Pupitre(QWidget):
         machine de l'atelier attend."""
         return 2 if self.cmb_type_arms.currentIndex() == 0 else 1
 
+    def _caler_sur_la_feuille(self, infos):
+        """Pose le placement d'après la feuille, PUIS scelle l'empreinte.
+
+        Un seul geste, appelé par l'export comme par l'impression, parce
+        que l'ordre importe et qu'un ordre qui importe ne doit pas être
+        laissé à la mémoire de celui qui écrit le second appel.
+
+        L'export DÉPLACE lui-même le dessin — il le pose à la distance
+        connue du premier repère. Sceller avant revenait à figer un état
+        que l'export allait aussitôt changer : l'alerte « le dessin a
+        bougé » criait dès l'envoi suivant, sans que personne n'ait rien
+        touché. C'est le « je n'ai rien touché » de Christophe, le
+        14/08/2026, qui l'a trouvée — mon premier diagnostic accusait la
+        case du contour.
+        """
+        ox, oy = infos["origine_dessin"]
+        self.spn_x.setValue(ox)
+        self.spn_y.setValue(oy)
+        self.chk_arms.setChecked(True)
+        ax, ay = infos["ecart"]
+        self.spn_ecart_av.setValue(ax)
+        self.spn_ecart_ch.setValue(ay)
+        self.empreinte_export = fichier_projet.empreinte(self._lire_reglages())
+
     def _exporter_feuille(self):
         """Écrit le dessin entouré de ses repères, et cale la découpe.
 
@@ -1508,19 +1532,8 @@ class Pupitre(QWidget):
         except Exception:
             pdf = None
 
-        # Caler la découpe : le dessin doit repartir à la distance connue
-        # de l'origine que la détection posera sur le premier repère.
-        ox, oy = infos["origine_dessin"]
-        self.spn_x.setValue(ox)
-        self.spn_y.setValue(oy)
-        self.chk_arms.setChecked(True)
+        self._caler_sur_la_feuille(infos)
         ax, ay = infos["ecart"]
-        self.spn_ecart_av.setValue(ax)
-        self.spn_ecart_ch.setValue(ay)
-
-        # Sceller le placement : c'est cette empreinte qui dira, à
-        # l'envoi, si le dessin a bougé depuis que la feuille est sortie.
-        self.empreinte_export = fichier_projet.empreinte(self._lire_reglages())
 
         # Le jeu de repères est-il ATTEIGNABLE ? La zone utile est plus
         # petite que la feuille, et elle rétrécit quand on rapproche les
@@ -1618,15 +1631,7 @@ class Pupitre(QWidget):
                 QMessageBox.warning(self, "Imprimer", str(e))
                 return
 
-        # Sceller le placement, comme le fait l'export : c'est cette
-        # feuille-là qui part sur la machine.
-        self.empreinte_export = fichier_projet.empreinte(self._lire_reglages())
-        ox, oy = infos["origine_dessin"]
-        self.spn_x.setValue(ox)
-        self.spn_y.setValue(oy)
-        self.chk_arms.setChecked(True)
-        self.spn_ecart_av.setValue(ax)
-        self.spn_ecart_ch.setValue(ay)
+        self._caler_sur_la_feuille(infos)
         self.lbl_arms.setText(f"feuille envoyée à {nom} — {travail}")
 
     def _scanner_arms(self):

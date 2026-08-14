@@ -68,11 +68,18 @@ REGLAGES = [
     ("spn_nu_min", "entier"), ("spn_nu_max", "entier"), ("spn_nu_pas", "entier"),
 ]
 
-# Ce qui décide de l'endroit où le dessin se pose. Si l'un de ces réglages
-# change après l'export, la feuille imprimée ne vaut plus.
+# Ce qui décide de l'endroit où le DESSIN se pose sur la feuille. Si l'un
+# de ces réglages change après l'export, la feuille imprimée ne vaut plus.
+#
+# N'Y FIGURENT PAS le contour, son retrait ni les trous : ils ajoutent un
+# tracé AUTOUR du dessin sans le déplacer, et la feuille imprimée reste
+# valable. Les y avoir mis faisait crier l'alerte dès qu'on cochait
+# « découper autour du dessin » — c'est-à-dire au moment le plus normal du
+# travail. Un garde-fou qui crie pour rien finit par ne plus être lu, et
+# c'est alors qu'il manque le vrai déplacement.
 PLACEMENT = ["spn_x", "spn_y", "cmb_rot", "chk_mx", "chk_my", "spn_ech",
              "spn_rang", "spn_col", "spn_ex", "spn_ey",
-             "spn_marge_arms", "chk_contour", "spn_retrait", "chk_trous",
+             "spn_marge_arms",
              "chk_marges4", "spn_mg", "spn_md", "spn_mb", "spn_mh"]
 
 

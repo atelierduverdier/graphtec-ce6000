@@ -421,7 +421,14 @@ class Pupitre(QWidget):
         la place que six cadres lui volaient.
         """
         boite = QWidget()
-        boite.setFixedWidth(360)
+        # PAS de largeur figée. Elle valait 360 px, décidée quand la
+        # colonne portait six cadres ; elle en porte neuf, dont un de
+        # vingt-cinq lignes. Tout ce qui dépassait était rogné, et aucune
+        # correction en aval ne pouvait rien y faire — c'est ici que ça se
+        # décidait. `_ajuster_largeurs` pose maintenant le minimum d'après
+        # ce que le contenu réclame vraiment, une fois la mise en page
+        # faite.
+        self.colonne = boite
         v = QVBoxLayout(boite)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(10)
@@ -1957,6 +1964,10 @@ class Pupitre(QWidget):
                          + 2 * zone.frameWidth() + 4)
         if besoin:
             self.onglets.setMinimumWidth(besoin + 6)
+            # La contrainte doit remonter jusqu'à la colonne, sinon elle
+            # reste large comme le veut la fenêtre et le contenu se rogne.
+            self.colonne.setMinimumWidth(besoin + 6)
+            self.colonne.setMaximumWidth(besoin + 60)
 
     def _onglet_change(self, index):
         """Lit les conditions à la PREMIÈRE ouverture de l'onglet Outil.

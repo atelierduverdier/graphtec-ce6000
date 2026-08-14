@@ -291,6 +291,36 @@ def test_la_molette_ne_change_pas_les_valeurs(fenetre):
             f"{avant} à {champ.value()} sans qu'on l'ait touché")
 
 
+def test_la_colonne_na_pas_de_largeur_figee(fenetre):
+    """La colonne doit suivre son contenu, pas un nombre écrit un jour.
+
+    Elle valait 360 px, décidée quand elle portait six cadres. Elle en
+    porte neuf, dont un de vingt-cinq lignes, et tout ce qui dépassait
+    était rogné. Aucune correction en aval — barre de défilement, largeur
+    des champs, minimum sur l'onglet — ne pouvait rien y faire : la
+    contrainte était ici, et je l'ai cherchée ailleurs pendant trois
+    tours.
+
+    Le nombre figé est le piège de la ligne VERSION restée quarante-quatre
+    versions en retard, sous une autre forme.
+    """
+    # La largeur est posée par un minuteur, une fois la mise en page
+    # faite. Hors boucle d'événements il ne se déclenche pas : on appelle
+    # donc la méthode qu'on éprouve, plutôt que d'attendre en vain.
+    fenetre._ajuster_largeurs()
+
+    colonne = getattr(fenetre, "colonne", None)
+    assert colonne is not None, "la colonne de réglages n'est pas nommée"
+    assert colonne.minimumWidth() != colonne.maximumWidth(), (
+        f"largeur figée à {colonne.minimumWidth()} px : le contenu qui "
+        f"dépasse sera rogné, quoi qu'on règle par ailleurs")
+    besoin = max(fenetre.onglets.widget(i).widget().sizeHint().width()
+                 for i in range(fenetre.onglets.count()))
+    assert colonne.minimumWidth() >= besoin, (
+        f"la colonne accepte {colonne.minimumWidth()} px alors que son "
+        f"contenu en réclame {besoin}")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

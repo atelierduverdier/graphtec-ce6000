@@ -298,6 +298,7 @@ class Pupitre(QWidget):
         # Le contenu du SVG, gardé pour être recopié dans un projet : un
         # chemin absolu vieillit dès qu'on range ses dossiers.
         self.svg_source = None
+        self.image_source = None          # base64, quand le dessin est une image
         # Couleur de chaque tracé, en parallèle de `brut`. Sert à donner
         # un RÔLE à chacun : le motif qu'on imprime, le contour qu'on
         # découpe, les plis qu'on raine.
@@ -1452,8 +1453,10 @@ class Pupitre(QWidget):
         if not chemin:
             return
         try:
+            extension = os.path.splitext(self.chemin or "")[1].lower()
             ecrit = fichier_projet.enregistrer(
                 chemin, self._lire_reglages(), svg=self.svg_source,
+                image=self.image_source, extension=extension,
                 source=self.chemin, empreinte_export=self.empreinte_export,
                 correspondance={",".join(f"{c:.3f}" for c in rgb): role
                                 for rgb, role in self.correspondance.items()})
@@ -1474,22 +1477,33 @@ class Pupitre(QWidget):
             QMessageBox.warning(self, "Ouvrir un projet", str(e))
             return
 
+        import base64 as _b64
+        import tempfile
         svg = projet.get("svg")
-        if not svg:
+        image = projet.get("image")
+        if not svg and not image:
             QMessageBox.warning(self, "Ouvrir un projet",
                                 "Ce projet ne porte pas de dessin.")
             return
-        # Le SVG est recopié dans un fichier temporaire parce que le
-        # parseur lit un chemin, pas une chaîne. Le projet reste la source.
-        import tempfile
-        with tempfile.NamedTemporaryFile("w", suffix=".svg", delete=False,
-                                         encoding="utf-8") as f:
-            f.write(svg)
-            provisoire = f.name
+
+        # Le contenu est recopié dans un fichier temporaire : le parseur
+        # comme le détourage lisent un chemin, pas une chaîne. Le projet
+        # reste la source.
+        suffixe = projet.get("extension") or (".svg" if svg else ".png")
+        avertissements = []
         couleurs_relues = []
+        with tempfile.NamedTemporaryFile("wb", suffix=suffixe,
+                                         delete=False) as f:
+            f.write(svg.encode("utf-8") if svg else _b64.b64decode(image))
+            provisoire = f.name
         try:
-            self.brut, avertissements = noyau.charger(
-                provisoire, couleurs=couleurs_relues)
+            if image:
+                self.brut, couleurs_relues, avertissements = \
+                    self._ouvrir_image(provisoire)
+            else:
+                self.brut, avertissements = noyau.charger(
+                    provisoire, couleurs=couleurs_relues)
+                self.visuel = self._visuel_svg(provisoire, self.brut)
         except Exception as e:
             QMessageBox.warning(self, "Ouvrir un projet", str(e))
             return
@@ -1501,6 +1515,7 @@ class Pupitre(QWidget):
             return
 
         self.svg_source = svg
+        self.image_source = image
         self.couleurs = couleurs_relues
         self.correspondance = {
             tuple(float(x) for x in cle.split(",")): role
@@ -2129,7 +2144,19 @@ class Pupitre(QWidget):
         # posé le dessin, mais avant de l'afficher. Christophe voyait donc
         # « rien n'apparaît », sans le moindre message.
         self.svg_source = None
-        if not chemin.lower().endswith((".png", ".jpg", ".jpeg")):
+        self.image_source = None
+        if chemin.lower().endswith((".png", ".jpg", ".jpeg")):
+            # Les OCTETS, pour que le projet puisse les reprendre. Les
+            # lire comme du texte levait une UnicodeDecodeError ; ne rien
+            # garder du tout donnait un projet vide, qui refusait de se
+            # rouvrir. Les deux fautes se suivaient.
+            import base64 as _b64
+            try:
+                self.image_source = _b64.b64encode(
+                    open(chemin, "rb").read()).decode()
+            except OSError:
+                self.image_source = None
+        else:
             try:
                 self.svg_source = open(chemin, encoding="utf-8").read()
             except (OSError, UnicodeDecodeError):

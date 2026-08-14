@@ -22,7 +22,7 @@ import hashlib
 import json
 import os
 
-VERSION = 1
+VERSION = 2
 EXTENSION = ".traceur"
 
 # Les réglages enregistrés, avec le widget qui les porte. Une TABLE plutôt
@@ -96,12 +96,18 @@ def empreinte(reglages):
 
 
 def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None,
-                correspondance=None):
+                correspondance=None, image=None, extension=None):
     """Écrit un projet. `svg` est le CONTENU du fichier, pas son chemin.
 
     `correspondance` associe une couleur à un rôle. Elle est enregistrée
     à part des réglages parce qu'elle n'a pas de widget fixe : ses lignes
     naissent du fichier ouvert.
+
+    `image` porte les OCTETS d'un fichier matriciel, encodés en base64,
+    quand le dessin vient d'un PNG ou d'un JPG. Un tel fichier ne se lit
+    pas comme du texte, et le ranger dans `svg` donnait un projet sans
+    dessin — qui refusait de se rouvrir en annonçant qu'il était vide.
+    `extension` dit de quel format il s'agit, pour le relire pareil.
     """
     if not chemin.endswith(EXTENSION):
         chemin += EXTENSION
@@ -113,6 +119,8 @@ def enregistrer(chemin, reglages, svg=None, source=None, empreinte_export=None,
         "empreinte": empreinte(reglages),
         "empreinte_export": empreinte_export,
         "correspondance": correspondance or {},
+        "image": image,                   # base64, pour un PNG ou un JPG
+        "extension": extension,           # ".png", ".jpg"…
     }
     with open(chemin, "w", encoding="utf-8") as f:
         json.dump(projet, f, ensure_ascii=False, indent=1)
@@ -125,6 +133,11 @@ def charger(chemin):
         projet = json.load(f)
     if not isinstance(projet, dict) or "reglages" not in projet:
         raise ValueError(f"{os.path.basename(chemin)} n'est pas un projet")
+    if not projet.get("svg") and not projet.get("image"):
+        raise ValueError(
+            f"{os.path.basename(chemin)} ne porte aucun dessin — il a "
+            f"probablement été écrit par une version qui ne savait pas "
+            f"enregistrer les images.")
     if projet.get("version", 0) > VERSION:
         raise ValueError(
             f"projet en version {projet['version']}, ce logiciel lit "

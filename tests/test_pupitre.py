@@ -589,6 +589,63 @@ def test_traîner_le_dessin_ecrit_dans_les_champs(fenetre):
         f"origine Y à {fenetre.spn_y.value()} au lieu de 10")
 
 
+def test_un_projet_garde_une_image(fenetre):
+    """Enregistrer un travail fait à partir d'un JPG doit le rendre.
+
+    `svg_source` avait été mis à None pour les images — c'était la
+    correction de l'UnicodeDecodeError — et le projet enregistrait donc
+    un dessin VIDE. À la réouverture : « ce projet ne porte pas de
+    dessin ». Une correction qui en crée une autre, et Christophe a perdu
+    son travail.
+
+    Le projet garde maintenant les OCTETS de l'image, en base64, avec son
+    extension pour la relire pareil.
+    """
+    import base64
+    import tempfile
+    import numpy as np
+    from PIL import Image
+    import projet
+
+    with tempfile.TemporaryDirectory() as dossier:
+        source = os.path.join(dossier, "motif.jpg")
+        a = np.full((200, 300, 3), 255, dtype=np.uint8)
+        yy, xx = np.mgrid[0:200, 0:300]
+        a[((yy - 100) ** 2 + (xx - 150) ** 2) ** 0.5 < 60] = 0
+        Image.fromarray(a).save(source, quality=95)
+
+        octets = base64.b64encode(open(source, "rb").read()).decode()
+        chemin = projet.enregistrer(
+            os.path.join(dossier, "essai"), fenetre._lire_reglages(),
+            svg=None, image=octets, extension=".jpg", source=source)
+
+        relu = projet.charger(chemin)
+        assert relu["image"] == octets, "l'image n'a pas été gardée"
+        assert relu["extension"] == ".jpg"
+
+        # Et elle doit se relire : c'est ce qui manquait.
+        with tempfile.NamedTemporaryFile("wb", suffix=relu["extension"],
+                                         delete=False) as f:
+            f.write(base64.b64decode(relu["image"]))
+            provisoire = f.name
+        try:
+            trace, couleurs, _ = fenetre._ouvrir_image(provisoire)
+        finally:
+            os.unlink(provisoire)
+        assert trace and couleurs, "l'image relue n'a rien donné"
+
+    # Un projet SANS dessin doit se plaindre clairement, pas se charger.
+    with tempfile.TemporaryDirectory() as dossier:
+        vide = projet.enregistrer(os.path.join(dossier, "vide"),
+                                  fenetre._lire_reglages())
+        try:
+            projet.charger(vide)
+        except ValueError as e:
+            assert "aucun dessin" in str(e)
+        else:
+            raise AssertionError("un projet vide s'est chargé sans un mot")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

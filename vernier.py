@@ -16,56 +16,59 @@ C'est le principe du pied à coulisse, appliqué au papier.
 
 import sys
 
-PAS = 0.2                 # entre deux traits du vernier, mm
-PORTEE = 1.0              # de −PORTEE à +PORTEE
-LONGUEUR = 3.0            # longueur d'un trait du vernier, mm
-REPERE = 5.0              # longueur du trait de ZÉRO, plus long
-
-
-def _echelle():
-    n = int(round(PORTEE / PAS))
-    return [i * PAS for i in range(-n, n + 1)]
+PENTE = 20.0              # 1 mm d'écart déplace le croisement de 20 mm
+PORTEE = 1.0              # l'oblique va de -PORTEE à +PORTEE, mm
+GRAD = 2.0                # une graduation tous les 2 mm = 0,1 mm d'écart
+TIC = 1.2                 # longueur d'une graduation, mm
+TIC_ZERO = 3.0            # celle du milieu, plus longue
 
 
 def vernier(centre, bras=20.0, axe="chariot"):
-    """Les traits du vernier, en polylignes machine.
+    """L'oblique et ses graduations, en polylignes machine.
 
-    `centre` est le centre de la croix imprimée, en millimètres depuis
-    l'origine posée par la détection. `axe` dit lequel on mesure :
+    UNE SEULE LIGNE, légèrement oblique, qui traverse le trait imprimé.
+    Elle s'écarte de `PORTEE` de part et d'autre sur la longueur du bras,
+    soit une pente de 1 pour 20 : **un dixième de millimètre d'écart
+    déplace le croisement de deux millimètres**.
 
-        "chariot"  les traits sont parallèles à l'AVANCE, décalés en
-                   travers — on lit l'écart sous le chariot
-        "avance"   l'inverse
+    C'est là tout le principe, et c'est ce que ma première version ratait :
+    elle proposait onze traits décalés de deux dixièmes, invisibles à
+    l'œil parce que l'écart à lire y restait de la taille de l'écart à
+    mesurer. Un vernier ne compare pas, il AMPLIFIE.
 
-    Le trait de zéro est plus long : sans lui on compte les crans, et on
-    se trompe d'un.
+    Lecture : là où l'oblique croise le trait imprimé, compter les
+    graduations depuis la longue, au milieu. Chacune vaut 0,1 mm. Le côté
+    donne le signe.
     """
     cx, cy = centre
-    valeurs = _echelle()
-    # Répartis le long du trait imprimé, sans le recouvrir tout à fait.
-    etendue = 2 * bras - 6.0
-    pas_long = etendue / (len(valeurs) - 1)
-    debut = -bras + 3.0
-
+    demi = bras - 2.0
     traces = []
-    for i, v in enumerate(valeurs):
-        long = REPERE if abs(v) < 1e-9 else LONGUEUR
-        d = debut + i * pas_long
+
+    def poser(le_long, en_travers):
+        """(le_long, en_travers) -> (x, y) selon l'axe mesuré."""
         if axe == "chariot":
-            # parallèle à l'avance (X), décalé sous le chariot (Y)
-            traces.append(([(cx + d, cy + v),
-                            (cx + d + long, cy + v)], False))
-        else:
-            traces.append(([(cx + v, cy + d),
-                            (cx + v, cy + d + long)], False))
+            return (cx + le_long, cy + en_travers)
+        return (cx + en_travers, cy + le_long)
+
+    # L'oblique elle-même.
+    traces.append(([poser(-demi, -PORTEE), poser(demi, PORTEE)], False))
+
+    # Les graduations, perpendiculaires à l'oblique — donc en travers.
+    n = int(demi // GRAD)
+    for i in range(-n, n + 1):
+        le_long = i * GRAD
+        en_travers = PORTEE * le_long / demi
+        long_tic = TIC_ZERO if i == 0 else TIC
+        traces.append(([poser(le_long, en_travers),
+                        poser(le_long, en_travers + long_tic)], False))
     return traces
 
 
 def legende(axe="chariot"):
-    valeurs = _echelle()
-    return (f"vernier {axe} : {len(valeurs)} traits de "
-            f"{valeurs[0]:+.1f} à {valeurs[-1]:+.1f} mm par {PAS:g} — "
-            f"le trait LONG est le zéro, il est au milieu")
+    return (f"vernier {axe} : oblique de {-PORTEE:+.1f} à {PORTEE:+.1f} mm "
+            f"sur {2*(20.0-2.0):g} mm — pente 1 pour {PENTE:g}. "
+            f"Une graduation ({GRAD:g} mm) vaut {GRAD/PENTE:.1f} mm d'écart. "
+            f"La graduation LONGUE est le zéro.")
 
 
 if __name__ == "__main__":

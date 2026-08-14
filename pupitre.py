@@ -960,6 +960,20 @@ class Pupitre(QWidget):
         gl.addWidget(self.spn_retrait, 1, 1)
         gl.addWidget(self.chk_trous, 2, 0, 1, 2)
         gl.addWidget(self.lbl_contour, 3, 0, 1, 2)
+        self.cmb_lissage = QComboBox()
+        self.cmb_lissage.addItems(list(silhouette.NIVEAUX))
+        self.cmb_lissage.setCurrentText("doux")
+        self.cmb_lissage.setToolTip(
+            "Ne concerne que les dessins venus d'une IMAGE.\n\n"
+            "Une silhouette suit la grille de pixels : à un point tous les\n"
+            "neuf dixièmes de millimètre, la lame réagit à chaque\n"
+            "changement d'angle et le tour ondule.\n\n"
+            "« doux » ramène le changement d'angle moyen de 33° à 11°.\n"
+            "« fidèle » garde les angles vifs — pour un gabarit, pas pour\n"
+            "un autocollant.")
+        self.cmb_lissage.currentIndexChanged.connect(self._redetourer)
+        gl.addWidget(QLabel("lissage du détourage"), 4, 0)
+        gl.addWidget(self.cmb_lissage, 4, 1)
         g_contour = g
 
         # --- copies
@@ -1557,7 +1571,9 @@ class Pupitre(QWidget):
         import base64
         from PIL import Image
 
-        trace = silhouette.detourer(chemin)
+        tol, adouc = silhouette.NIVEAUX[self.cmb_lissage.currentText()]
+        trace = silhouette.detourer(chemin, tolerance_mm=tol,
+                                    adoucissement=adouc)
         with Image.open(chemin) as im:
             largeur_px, hauteur_px = im.size
         echelle = 25.4 / 96.0
@@ -1582,6 +1598,43 @@ class Pupitre(QWidget):
         # DÉCOUPER — c'est ce qu'on attend d'un motif détouré.
         couleurs = [(1.0, 0.0, 0.0)] * len(trace)
         return trace, couleurs, avert
+
+    def _redetourer(self):
+        """Refaire la silhouette après un changement de lissage.
+
+        Le détourage se fait à l'ouverture ; changer le lissage doit donc
+        relire l'image. On repasse par le fichier d'origine s'il existe
+        encore, sinon par les octets gardés — un projet rouvert n'a plus
+        de chemin valide, et il serait absurde de lui refuser le réglage.
+        """
+        if not self.image_source and not (
+                self.chemin and self.chemin.lower().endswith(
+                    (".png", ".jpg", ".jpeg"))):
+            return
+        import base64 as _b64
+        import tempfile
+        suffixe = os.path.splitext(self.chemin or ".png")[1] or ".png"
+        provisoire = None
+        try:
+            if self.image_source:
+                with tempfile.NamedTemporaryFile("wb", suffix=suffixe,
+                                                 delete=False) as f:
+                    f.write(_b64.b64decode(self.image_source))
+                    provisoire = f.name
+                source = provisoire
+            else:
+                source = self.chemin
+            self.brut, self.couleurs, _ = self._ouvrir_image(source)
+        except Exception as e:
+            QMessageBox.warning(self, "Détourage", str(e))
+            return
+        finally:
+            if provisoire:
+                os.unlink(provisoire)
+        self.reperes = set()
+        self._refaire_liste_couleurs()
+        self._rafraichir_cotes()
+        self._recalculer()
 
     def _visuel_svg(self, chemin, polylignes):
         """Le SVG d'origine, pour l'imprimer avec ses aplats."""

@@ -746,6 +746,50 @@ def test_le_suivi_de_bord_se_referme_sur_une_forme_tordue():
     assert max(ys) >= 33, "le bas du peigne n'est pas atteint"
 
 
+def test_le_lissage_adoucit_sans_deplacer():
+    """Chaikin doit réduire les angles SANS déformer la pièce.
+
+    Christophe a vu « plein de petites vagues » sur une découpe pourtant
+    juste. Ce n'était ni le bruit JPEG ni le contour : à un point tous les
+    neuf dixièmes de millimètre, la lame réagit à chaque changement
+    d'angle. Le remède est de réduire ces changements — mesuré, le
+    changement moyen passe de 33° à 11° sur le logo PrintNC.
+
+    Mais adoucir ne doit pas rétrécir la pièce au point que ça se voie :
+    Chaikin coupe les angles, donc rogne un peu. On borne cette perte.
+    """
+    import math
+    carre = [(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0), (0.0, 0.0)]
+
+    def angle_moyen(points):
+        total, n = 0.0, 0
+        for i in range(1, len(points) - 1):
+            a = (points[i][0] - points[i-1][0], points[i][1] - points[i-1][1])
+            b = (points[i+1][0] - points[i][0], points[i+1][1] - points[i][1])
+            na, nb = math.hypot(*a), math.hypot(*b)
+            if na > 1e-9 and nb > 1e-9:
+                c = max(-1.0, min(1.0, (a[0]*b[0] + a[1]*b[1]) / (na * nb)))
+                total += abs(math.degrees(math.acos(c)))
+                n += 1
+        return total / max(1, n)
+
+    doux = silhouette.adoucir(carre, 2)
+    assert angle_moyen(doux) < angle_moyen(carre) / 2, (
+        f"{angle_moyen(doux):.0f}° contre {angle_moyen(carre):.0f}° : "
+        f"le lissage n'adoucit pas")
+    assert doux[0] == doux[-1], "la boucle ne se referme plus"
+
+    xs = [p[0] for p in doux]
+    ys = [p[1] for p in doux]
+    perte = 20.0 - max(max(xs) - min(xs), max(ys) - min(ys))
+    assert 0 <= perte < 2.0, (
+        f"la pièce a rétréci de {perte:.1f} mm — Chaikin coupe trop")
+
+    # Zéro passe ne doit RIEN changer : le réglage « fidèle » existe pour
+    # les gabarits à angles vifs.
+    assert silhouette.adoucir(carre, 0) == carre
+
+
 def test_le_detourage_simplifie_sans_deformer():
     """Un contour suivi pixel par pixel en compte des dizaines de milliers.
 
@@ -1320,6 +1364,50 @@ def test_le_suivi_de_bord_se_referme_sur_une_forme_tordue():
     ys = [y for y, _ in bord]
     assert min(ys) <= 9, "le sommet des dents n'est pas atteint"
     assert max(ys) >= 33, "le bas du peigne n'est pas atteint"
+
+
+def test_le_lissage_adoucit_sans_deplacer():
+    """Chaikin doit réduire les angles SANS déformer la pièce.
+
+    Christophe a vu « plein de petites vagues » sur une découpe pourtant
+    juste. Ce n'était ni le bruit JPEG ni le contour : à un point tous les
+    neuf dixièmes de millimètre, la lame réagit à chaque changement
+    d'angle. Le remède est de réduire ces changements — mesuré, le
+    changement moyen passe de 33° à 11° sur le logo PrintNC.
+
+    Mais adoucir ne doit pas rétrécir la pièce au point que ça se voie :
+    Chaikin coupe les angles, donc rogne un peu. On borne cette perte.
+    """
+    import math
+    carre = [(0.0, 0.0), (20.0, 0.0), (20.0, 20.0), (0.0, 20.0), (0.0, 0.0)]
+
+    def angle_moyen(points):
+        total, n = 0.0, 0
+        for i in range(1, len(points) - 1):
+            a = (points[i][0] - points[i-1][0], points[i][1] - points[i-1][1])
+            b = (points[i+1][0] - points[i][0], points[i+1][1] - points[i][1])
+            na, nb = math.hypot(*a), math.hypot(*b)
+            if na > 1e-9 and nb > 1e-9:
+                c = max(-1.0, min(1.0, (a[0]*b[0] + a[1]*b[1]) / (na * nb)))
+                total += abs(math.degrees(math.acos(c)))
+                n += 1
+        return total / max(1, n)
+
+    doux = silhouette.adoucir(carre, 2)
+    assert angle_moyen(doux) < angle_moyen(carre) / 2, (
+        f"{angle_moyen(doux):.0f}° contre {angle_moyen(carre):.0f}° : "
+        f"le lissage n'adoucit pas")
+    assert doux[0] == doux[-1], "la boucle ne se referme plus"
+
+    xs = [p[0] for p in doux]
+    ys = [p[1] for p in doux]
+    perte = 20.0 - max(max(xs) - min(xs), max(ys) - min(ys))
+    assert 0 <= perte < 2.0, (
+        f"la pièce a rétréci de {perte:.1f} mm — Chaikin coupe trop")
+
+    # Zéro passe ne doit RIEN changer : le réglage « fidèle » existe pour
+    # les gabarits à angles vifs.
+    assert silhouette.adoucir(carre, 0) == carre
 
 
 def test_le_detourage_simplifie_sans_deformer():

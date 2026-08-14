@@ -23,11 +23,50 @@ import numpy as np
 from PIL import Image
 
 SEUIL = 240               # au-dessus, c'est du fond ; mesuré sur du blanc JPEG
+LISSAGE = 2               # passes de vote majoritaire sur le masque
+
+# Les niveaux offerts à l'utilisateur : (tolérance mm, passes de Chaikin).
+# Mesuré le 14/08/2026 sur le logo PrintNC, à 120 mm de large — le
+# changement d'angle MOYEN entre deux segments est ce qui fait facetter
+# la lame, et c'est lui qu'on cherche à réduire :
+#
+#     fidèle    172 points, 33° de moyenne
+#     moyen     191 points, 22°
+#     doux      381 points, 11°
+NIVEAUX = {
+    "fidèle": (0.15, 0),
+    "moyen": (0.30, 1),
+    "doux": (0.40, 2),
+    "très doux": (0.60, 3),
+}
 LARGEUR_TRAVAIL = 900     # l'image est réduite avant analyse : au-delà, on
                           # paie du temps pour du bruit de compression
 
 
-def masque(chemin, seuil=SEUIL, largeur=LARGEUR_TRAVAIL):
+def _lisser(encre, passes=LISSAGE):
+    """Vote majoritaire : un pixel prend l'avis de ses huit voisins.
+
+    Le JPEG laisse des pixels isolés au bord des aplats — son bruit de
+    compression — et le suivi de bord les longe fidèlement. Le tracé sort
+    alors couvert de petites vagues, signalées par Christophe le
+    14/08/2026 sur une découpe pourtant réussie.
+
+    Lisser le MASQUE plutôt que le tracé enlève le bruit à sa source. Une
+    passe suffit d'ordinaire ; deux effacent aussi les escaliers d'un
+    contour incliné, sans ronger les angles vifs — un angle a cinq voisins
+    du bon côté, il survit au vote.
+    """
+    for _ in range(max(0, passes)):
+        m = encre.astype(np.uint8)
+        somme = np.zeros_like(m, dtype=np.int16)
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                somme += np.roll(np.roll(m, dy, axis=0), dx, axis=1)
+        encre = somme >= 5
+    return encre
+
+
+def masque(chemin, seuil=SEUIL, largeur=LARGEUR_TRAVAIL, lissage=LISSAGE):
     """Vrai là où il y a de l'encre, faux sur le fond.
 
     Rend `(masque, taille_du_masque, taille_du_fichier)`.
@@ -41,7 +80,7 @@ def masque(chemin, seuil=SEUIL, largeur=LARGEUR_TRAVAIL):
         im = im.resize((largeur, round(im.height * largeur / im.width)),
                        Image.LANCZOS)
     a = np.asarray(im, dtype=np.int16)
-    encre = a.min(axis=2) < seuil
+    encre = _lisser(a.min(axis=2) < seuil, lissage)
     # UNE BORDURE DE FOND tout autour. Sans elle, un motif qui touche le
     # bord de l'image n'a pas de contour fermé : le suivi longe l'arête,
     # ne revient jamais à son départ, et rend autant de points que le
@@ -196,8 +235,40 @@ def _simplifier(points, tolerance):
     return [points[i] for i in range(n) if garder[i]]
 
 
+def adoucir(points, passes=1):
+    """Chaikin : couper les angles, deux fois par passe.
+
+    Chaque segment est remplacé par ses points au quart et aux trois
+    quarts. Les angles s'arrondissent, la courbe se rapproche d'une
+    spline, et la lame cesse de facetter — c'est ce que Christophe voyait
+    en « petites vagues » sur une découpe pourtant juste : à un point
+    tous les neuf dixièmes de millimètre, la machine réagit à chaque
+    changement d'angle.
+
+    Sur un tour d'autocollant c'est ce qu'on veut. Sur un gabarit à angles
+    vifs, non — d'où le réglage plutôt qu'un lissage d'office.
+    """
+    boucle = points[0] == points[-1]
+    for _ in range(max(0, passes)):
+        base = points[:-1] if boucle else points
+        n = len(base)
+        if n < 3:
+            break
+        sortie = []
+        for i in range(n if boucle else n - 1):
+            (x0, y0), (x1, y1) = base[i], base[(i + 1) % n]
+            sortie.append((0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1))
+            sortie.append((0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1))
+        if boucle:
+            sortie.append(sortie[0])
+        else:
+            sortie = [points[0]] + sortie + [points[-1]]
+        points = sortie
+    return points
+
+
 def detourer(chemin, largeur_mm=None, hauteur_mm=None, seuil=SEUIL,
-             tolerance_mm=0.15):
+             tolerance_mm=0.15, lissage=LISSAGE, adoucissement=0):
     """Image -> [(points_mm, True)], le tour du motif.
 
     Donner `largeur_mm` OU `hauteur_mm` fixe l'échelle ; l'autre suit les
@@ -206,7 +277,8 @@ def detourer(chemin, largeur_mm=None, hauteur_mm=None, seuil=SEUIL,
     Les points sont en convention machine — Y vers le haut — comme tout le
     reste du logiciel.
     """
-    encre, (w_px, h_px), (w_reel, h_reel) = masque(chemin, seuil)
+    encre, (w_px, h_px), (w_reel, h_reel) = masque(chemin, seuil,
+                                                  lissage=lissage)
     if not encre.any():
         raise ValueError("aucune encre trouvée : le seuil est-il trop bas ?")
     plein = _boucher_les_trous(encre)
@@ -231,6 +303,8 @@ def detourer(chemin, largeur_mm=None, hauteur_mm=None, seuil=SEUIL,
     points = _simplifier(points, tolerance_mm)
     if points[0] != points[-1]:
         points.append(points[0])
+    if adoucissement:
+        points = adoucir(points, adoucissement)
     return [(points, True)]
 
 

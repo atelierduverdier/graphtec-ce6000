@@ -680,8 +680,12 @@ class Pupitre(QWidget):
             "capteur. C'est la feuille qui tranche, pas la notice.")
         pose(QLabel("trait repères"), self.spn_trait_arms)
         self.cmb_type_arms = QComboBox()
-        self.cmb_type_arms.addItems(["type 2 — angles vers l'extérieur",
-                                     "type 1 — angles vers l'intérieur"])
+        # Décrits par le SENS DES BRANCHES, ce qui se voit sur la feuille.
+        # « Angles vers l'extérieur » parlait du sommet du L ; Christophe
+        # lisait les branches et comprenait l'inverse. Même figure, deux
+        # lectures — donc un libellé qui ne laisse pas le choix.
+        self.cmb_type_arms.addItems(["type 2 — branches vers le dessin",
+                                     "type 1 — branches vers le bord"])
         self.cmb_type_arms.setToolTip(
             "Doit correspondre au MARK TYPE réglé dans la machine.\n"
             "Un désaccord la fait balayer après une forme absente du\n"

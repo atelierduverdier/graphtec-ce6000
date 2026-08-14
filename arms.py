@@ -42,14 +42,14 @@ BOITE = (150.0, 160.0)
 
 GABARITS = {
     1: dict(fichier="ARMStest_type1.pdf",
-            angles="vers l'intérieur — repères HORS de la zone de découpe",
+            angles="branches vers le BORD — repères hors de la zone de découpe",
             # L'angle du L est au coin INTÉRIEUR de la boîte : la distance
             # d'angle à angle vaut donc 110 x 120, pas 150 x 160. NON VÉRIFIÉ
             # sur la machine — ne pas s'en servir comme d'un fait.
             ecarts=None,
             chute=None),
     2: dict(fichier="ARMStest_type2.pdf",
-            angles="vers l'extérieur — repères DANS la zone de découpe",
+            angles="branches vers le DESSIN — repères dans la zone de découpe",
             ecarts=(150.0, 160.0),
             # MESURÉ le 13/08/2026 en trois croix : le centre des quatre
             # repères tombe à 75 ; 75 mm de l'origine posée par la détection.
@@ -189,11 +189,15 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
 
     `type_repere` change le SENS des angles, pas leur position :
 
-        type 2   angles vers l'extérieur, branches qui rentrent — les
-                 repères sont DANS la zone de découpe, ce qui laisse la
-                 plus grande surface utile
-        type 1   angles vers l'intérieur, branches qui sortent — les
-                 repères entourent la zone de découpe
+        type 2   les branches vont vers le DESSIN — les repères sont dans
+                 la zone de découpe, ce qui laisse la plus grande surface
+                 utile
+        type 1   les branches vont vers le BORD — les repères entourent la
+                 zone de découpe
+
+    Décrits par le sens des branches, et non par la position de l'angle :
+    « angles vers l'extérieur » parlait du sommet du L, et se lisait aussi
+    bien à l'envers.
 
     Ce n'est pas un détail d'aspect : la machine cherche la forme réglée
     dans `MARK TYPE`, et un désaccord la fait balayer après une forme

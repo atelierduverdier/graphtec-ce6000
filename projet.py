@@ -37,6 +37,7 @@ REGLAGES = [
     # placement
     ("spn_x", "reel"), ("spn_y", "reel"), ("cmb_rot", "texte"),
     ("chk_mx", "bool"), ("chk_my", "bool"), ("spn_ech", "reel"),
+    ("spn_larg", "reel"), ("spn_haut", "reel"), ("chk_prop", "bool"),
     # copies
     ("spn_rang", "entier"), ("spn_col", "entier"),
     ("spn_ex", "reel"), ("spn_ey", "reel"),
@@ -78,6 +79,7 @@ REGLAGES = [
 # travail. Un garde-fou qui crie pour rien finit par ne plus être lu, et
 # c'est alors qu'il manque le vrai déplacement.
 PLACEMENT = ["spn_x", "spn_y", "cmb_rot", "chk_mx", "chk_my", "spn_ech",
+             "spn_larg", "spn_haut", "chk_prop",
              "spn_rang", "spn_col", "spn_ex", "spn_ey",
              "spn_marge_arms",
              "chk_marges4", "spn_mg", "spn_md", "spn_mb", "spn_mh"]

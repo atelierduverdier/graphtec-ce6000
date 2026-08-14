@@ -269,6 +269,9 @@ class Pupitre(QWidget):
         # une image enveloppée dans un SVG. Sans lui la feuille sortirait
         # en fil de fer, les aplats perdus.
         self.visuel = None
+        # Les facteurs d'échelle RÉELS. Deux, parce qu'on peut vouloir une
+        # largeur et une hauteur données ; le pour cent n'en pilote qu'un.
+        self.ech_x = self.ech_y = 1.0
         self.reperes = set()              # indices reconnus comme repères
         # Empreinte du placement au moment du dernier export de feuille.
         # Sert à prévenir quand le dessin a bougé depuis — c'est ce qui
@@ -504,6 +507,27 @@ class Pupitre(QWidget):
         for c in (self.chk_mx, self.chk_my):
             c.stateChanged.connect(self._recalculer)
         self.spn_ech = self._reel(1, 400, 100.0, suffixe=" %")
+        self.spn_ech.valueChanged.disconnect()
+        self.spn_ech.valueChanged.connect(self._pourcent_saisi)
+        # Des COTES en millimètres, parce qu'on pense en millimètres dans
+        # un atelier. Le pour cent oblige à calculer de tête à partir
+        # d'une taille d'origine qu'on ne connaît pas toujours.
+        self.spn_larg = self._reel(1, 2000, 100.0)
+        self.spn_haut = self._reel(1, 2000, 100.0)
+        self.chk_prop = QCheckBox("garder les proportions")
+        self.chk_prop.setChecked(True)
+        self.chk_prop.setToolTip(
+            "Décoché, la largeur et la hauteur se règlent séparément —\n"
+            "le dessin s'étire. Utile pour un gabarit, jamais pour un\n"
+            "logo.")
+        for w in (self.spn_larg, self.spn_haut):
+            w.setToolTip(
+                "Cote VOULUE de l'emprise du dessin, en millimètres.\n"
+                "La saisir met l'échelle à jour, et réciproquement.")
+        self.spn_larg.valueChanged.connect(
+            lambda v: self._cote_saisie("largeur", v))
+        self.spn_haut.valueChanged.connect(
+            lambda v: self._cote_saisie("hauteur", v))
         b_ajuster = QPushButton("Ajuster au média")
         b_ajuster.clicked.connect(self._ajuster)
         gl.addWidget(QLabel("origine X"), 0, 0); gl.addWidget(self.spn_x, 0, 1)
@@ -511,7 +535,10 @@ class Pupitre(QWidget):
         gl.addWidget(QLabel("rotation"), 2, 0); gl.addWidget(self.cmb_rot, 2, 1)
         gl.addWidget(self.chk_mx, 3, 0); gl.addWidget(self.chk_my, 3, 1)
         gl.addWidget(QLabel("échelle"), 4, 0); gl.addWidget(self.spn_ech, 4, 1)
-        gl.addWidget(b_ajuster, 5, 0, 1, 2)
+        gl.addWidget(QLabel("largeur"), 5, 0); gl.addWidget(self.spn_larg, 5, 1)
+        gl.addWidget(QLabel("hauteur"), 6, 0); gl.addWidget(self.spn_haut, 6, 1)
+        gl.addWidget(self.chk_prop, 7, 0, 1, 2)
+        gl.addWidget(b_ajuster, 8, 0, 1, 2)
         g_placement = g
 
         # --- nuancier
@@ -2073,10 +2100,72 @@ class Pupitre(QWidget):
                                  ("\n⚠ " + "\n⚠ ".join(avertissements)
                                   if avertissements else ""))
         self.b_envoyer.setEnabled(True)
+        self.ech_x = self.ech_y = self.spn_ech.value() / 100.0
         self._refaire_liste_couleurs()
+        self._rafraichir_cotes()
         # Un dessin neuf mérite un cadrage neuf ; un simple réglage, non.
         self.apercu.reinitialiser_vue()
         self._recalculer()
+
+    def _emprise_source(self):
+        """L'emprise du dessin AVANT toute mise à l'échelle, en mm.
+
+        Prise après rotation et miroir, qui échangent les axes : sans ça,
+        demander 100 mm de large sur un dessin tourné de 90° donnerait
+        100 mm de haut.
+        """
+        base = self._retenus()
+        if not base:
+            return None
+        p = noyau.tourner(base, int(self.cmb_rot.currentText().rstrip("°")))
+        p = noyau.refleter(p, self.chk_mx.isChecked(), self.chk_my.isChecked())
+        x0, y0, x1, y1 = noyau.cadre(p)
+        return (x1 - x0, y1 - y0)
+
+    def _cote_saisie(self, quoi, valeur):
+        """Une cote en millimètres a été saisie : en déduire les facteurs."""
+        if getattr(self, "_silence", False):
+            return
+        source = self._emprise_source()
+        if not source or min(source) <= 0:
+            return
+        lo, ho = source
+        if quoi == "largeur":
+            self.ech_x = valeur / lo
+            if self.chk_prop.isChecked():
+                self.ech_y = self.ech_x
+        else:
+            self.ech_y = valeur / ho
+            if self.chk_prop.isChecked():
+                self.ech_x = self.ech_y
+        self._silence = True
+        try:
+            self.spn_larg.setValue(lo * self.ech_x)
+            self.spn_haut.setValue(ho * self.ech_y)
+            self.spn_ech.setValue(self.ech_x * 100.0)
+        finally:
+            self._silence = False
+        self._recalculer()
+
+    def _pourcent_saisi(self):
+        """Le pour cent pilote les DEUX facteurs : il est uniforme."""
+        if getattr(self, "_silence", False):
+            return
+        self.ech_x = self.ech_y = self.spn_ech.value() / 100.0
+        self._rafraichir_cotes()
+        self._recalculer()
+
+    def _rafraichir_cotes(self):
+        """Réaffiche les cotes d'après les facteurs, sans boucler."""
+        source = self._emprise_source()
+        if not source:
+            return
+        self._silence = True
+        try:
+            self.spn_larg.setValue(source[0] * self.ech_x)
+            self.spn_haut.setValue(source[1] * self.ech_y)
+        finally:
+            self._silence = False
 
     def _ajuster_largeurs(self):
         """Donne à la colonne la largeur que son contenu réclame.
@@ -2142,7 +2231,7 @@ class Pupitre(QWidget):
         f = min(1.0,
                 dispo_x / max(x1 - x0, 1e-6),
                 dispo_y / max(y1 - y0, 1e-6)) * 0.995
-        self.spn_ech.setValue(f * 100.0)
+        self.spn_ech.setValue(f * 100.0)      # déclenche _pourcent_saisi
 
     def _pipeline(self):
         retenus = self._retenus()
@@ -2154,7 +2243,7 @@ class Pupitre(QWidget):
         p = noyau.tourner(retenus,
                           int(self.cmb_rot.currentText().rstrip("°")))
         p = noyau.refleter(p, self.chk_mx.isChecked(), self.chk_my.isChecked())
-        p = noyau.mettre_a_echelle(p, self.spn_ech.value() / 100.0)
+        p = noyau.mettre_a_echelle(p, self.ech_x, self.ech_y)
         p = noyau.dupliquer(p, self.spn_rang.value(), self.spn_col.value(),
                             self.spn_ex.value(), self.spn_ey.value())
         return noyau.recadrer(p, self.spn_x.value(), self.spn_y.value())

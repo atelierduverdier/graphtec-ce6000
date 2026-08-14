@@ -496,6 +496,48 @@ def test_ouvrir_une_image_ne_meurt_pas_en_silence(fenetre):
         "l'image d'origine n'a pas été gardée pour l'impression")
 
 
+def test_les_cotes_en_millimetres_pilotent_lechelle(fenetre):
+    """On pense en millimètres dans un atelier, pas en pourcentage.
+
+    Le pour cent obligeait à calculer de tête à partir d'une taille
+    d'origine qu'on ne connaît pas toujours — celle d'une image ouverte
+    à 96 points par pouce, par exemple.
+
+    Les cotes et le pour cent doivent rester d'accord dans les deux sens,
+    sans boucler : une saisie qui en met une autre à jour, laquelle
+    redéclenche la première, tourne indéfiniment.
+    """
+    import svg2hpgl as noyau
+
+    fenetre.brut = [([(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 0.0)],
+                     True)]
+    fenetre.couleurs = [(0.0, 0.0, 0.0)]
+    fenetre.reperes = set()
+    fenetre.ech_x = fenetre.ech_y = 1.0
+    fenetre.chk_prop.setChecked(True)
+    fenetre._rafraichir_cotes()
+    fenetre._recalculer()
+
+    assert fenetre.spn_larg.value() == 100.0
+    assert fenetre.spn_haut.value() == 50.0
+
+    fenetre.spn_larg.setValue(50.0)
+    assert fenetre.spn_haut.value() == 25.0, "les proportions n'ont pas suivi"
+    assert fenetre.spn_ech.value() == 50.0, "le pour cent n'a pas suivi"
+    x0, y0, x1, y1 = noyau.cadre(fenetre.calcule)
+    assert abs((x1 - x0) - 50.0) < 0.01, (
+        f"le dessin fait {x1-x0:.1f} mm alors qu'on a demandé 50")
+
+    # Proportions déverrouillées : les deux axes se règlent séparément.
+    fenetre.chk_prop.setChecked(False)
+    fenetre.spn_haut.setValue(40.0)
+    assert fenetre.spn_larg.value() == 50.0, (
+        "la largeur a bougé alors que les proportions sont déverrouillées")
+    x0, y0, x1, y1 = noyau.cadre(fenetre.calcule)
+    assert abs((y1 - y0) - 40.0) < 0.01 and abs((x1 - x0) - 50.0) < 0.01, (
+        f"emprise {x1-x0:.1f} × {y1-y0:.1f} au lieu de 50 × 40")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

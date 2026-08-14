@@ -130,10 +130,19 @@ def refleter(polylignes, selon_x=False, selon_y=False):
             for points, ferme in polylignes]
 
 
-def mettre_a_echelle(polylignes, facteur):
-    if facteur == 1.0:
+def mettre_a_echelle(polylignes, facteur, facteur_y=None):
+    """Mise à l'échelle, éventuellement DIFFÉRENTE sur les deux axes.
+
+    `facteur_y` à None garde les proportions. Les dissocier permet de
+    donner une largeur et une hauteur voulues, ce qu'un pour cent unique
+    ne sait pas faire — et c'est ce qu'on demande d'un logiciel de
+    découpe, où l'on pense en millimètres, pas en pourcentage.
+    """
+    fx = facteur
+    fy = facteur if facteur_y is None else facteur_y
+    if fx == 1.0 and fy == 1.0:
         return polylignes
-    return [([(x * facteur, y * facteur) for x, y in points], ferme)
+    return [([(x * fx, y * fy) for x, y in points], ferme)
             for points, ferme in polylignes]
 
 

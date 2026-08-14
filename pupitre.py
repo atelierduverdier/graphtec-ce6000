@@ -787,6 +787,19 @@ class Pupitre(QWidget):
         rappel_dec.setWordWrap(True)
         pose(rappel_dec)
 
+        # L'ÉCART À ENTRER AU PANNEAU, là où on en a besoin. Il vivait
+        # dans « Essais de protocole », le cadre dont j'avais dit à
+        # Christophe qu'il ne servait à rien — il l'y cherchait donc en
+        # vain pendant que la machine lui demandait ces deux nombres.
+        self.lbl_ecart = QLabel("aucune feuille composée")
+        self.lbl_ecart.setWordWrap(True)
+        self.lbl_ecart.setToolTip(
+            "La machine affiche ce qu'elle a MESURÉ entre les repères ;\n"
+            "on lui répond ce que le fichier dit vraiment. L'écart entre\n"
+            "les deux est le retrait de l'imprimante, et la machine\n"
+            "l'applique alors à toute la découpe.")
+        pose(self.lbl_ecart)
+
         self.spn_corr_av = self._reel(-20.0, 20.0, 0.0)
         self.spn_corr_ch = self._reel(-20.0, 20.0, 0.0)
         for w in (self.spn_corr_av, self.spn_corr_ch):
@@ -1680,6 +1693,11 @@ class Pupitre(QWidget):
         ax, ay = infos["ecart"]
         self.spn_ecart_av.setValue(ax)
         self.spn_ecart_ch.setValue(ay)
+        self.lbl_ecart.setText(
+            f"à entrer au panneau, quand elle demande la distance entre "
+            f"repères :\n<b>{ax:.1f}</b> dans l'avance, "
+            f"<b>{ay:.1f}</b> sous le chariot")
+        self.lbl_ecart.setTextFormat(Qt.RichText)
         self.empreinte_export = fichier_projet.empreinte(self._lire_reglages())
 
     def _exporter_feuille(self):

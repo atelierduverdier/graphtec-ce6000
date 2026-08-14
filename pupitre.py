@@ -285,6 +285,12 @@ class Pupitre(QWidget):
         else:
             self.resize(1120, 720)
 
+        # Un champ numérique n'a pas besoin de la moitié de la colonne :
+        # à 182 px il poussait les groupes hors de la zone visible.
+        for classe in (QSpinBox, QDoubleSpinBox):
+            for champ in self.findChildren(classe):
+                champ.setMaximumWidth(120)
+
         # La molette ne doit pas changer un réglage en passant dessus.
         self._molette = _MoletteNonVoleuse(self)
         for classe in (QSpinBox, QDoubleSpinBox, QComboBox):
@@ -389,6 +395,12 @@ class Pupitre(QWidget):
         self.pal = CLAIR if self.pal is SOMBRE else SOMBRE
         self.b_theme.setText("Thème clair" if self.pal is SOMBRE
                              else "Thème sombre")
+        # Un champ numérique n'a pas besoin de la moitié de la colonne :
+        # à 182 px il poussait les groupes hors de la zone visible.
+        for classe in (QSpinBox, QDoubleSpinBox):
+            for champ in self.findChildren(classe):
+                champ.setMaximumWidth(120)
+
         # La molette ne doit pas changer un réglage en passant dessus.
         self._molette = _MoletteNonVoleuse(self)
         for classe in (QSpinBox, QDoubleSpinBox, QComboBox):
@@ -942,9 +954,12 @@ class Pupitre(QWidget):
             zone.setWidget(w)
             zone.setWidgetResizable(True)
             zone.setFrameShape(QFrame.NoFrame)
-            # Défilement vertical seulement : la colonne a une largeur
-            # voulue, et une barre horizontale rognerait les libellés.
-            zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            # La barre horizontale reparaît AU BESOIN. Elle était
+            # interdite, ce qui paraissait plus propre : en réalité le
+            # contenu était rogné en SILENCE, et Christophe a perdu les
+            # flèches de ses champs sans qu'aucune barre ne le signale.
+            # Mieux vaut une barre visible qu'un champ invisible.
+            zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
             # Sans largeur minimale, la barre de défilement verticale mange
             # la place et la colonne se retrouve ROGNÉE : les libellés
             # perdent leur début, « largeur » devient « eur ». Vu sur une

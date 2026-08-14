@@ -243,6 +243,54 @@ def test_un_role_sans_trace_ne_fait_pas_tomber_la_fenetre(fenetre):
         "l'envoi reste possible alors qu'aucun tracé ne partirait")
 
 
+def test_rien_nest_rogne_en_silence(fenetre):
+    """Un champ hors de la zone visible doit se signaler par une barre.
+
+    La zone défilante interdisait la barre horizontale, ce qui paraissait
+    plus propre. En réalité le contenu était ROGNÉ sans rien dire :
+    Christophe a perdu les flèches de ses champs, et le libellé « noir
+    seul » s'affichait « noir ». Vu sur son écran, pas sur les nôtres —
+    les mesures de géométrie disaient que tout tenait.
+
+    Mieux vaut une barre visible qu'un champ invisible.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QScrollArea
+    for i in range(fenetre.onglets.count()):
+        zone = fenetre.onglets.widget(i)
+        if not isinstance(zone, QScrollArea):
+            continue
+        assert zone.horizontalScrollBarPolicy() != Qt.ScrollBarAlwaysOff, (
+            f"l'onglet « {fenetre.onglets.tabText(i)} » interdit la barre "
+            f"horizontale : ce qui déborde disparaît sans un mot")
+
+
+def test_la_molette_ne_change_pas_les_valeurs(fenetre):
+    """Passer la molette sur un champ ne doit pas modifier sa valeur.
+
+    Signalé par Christophe le 14/08/2026 : on fait défiler la colonne, le
+    curseur passe sur un champ, le défilement s'arrête net et le réglage
+    change. Sans message, et sans qu'on l'ait voulu — le pire genre de
+    faute sur un logiciel qui pilote une machine.
+    """
+    from PySide6.QtCore import Qt, QPoint
+    from PySide6.QtGui import QWheelEvent
+    from PySide6.QtWidgets import QApplication, QDoubleSpinBox, QSpinBox
+
+    champs = (fenetre.findChildren(QSpinBox)[:3]
+              + fenetre.findChildren(QDoubleSpinBox)[:3])
+    assert champs, "aucun champ numérique à éprouver"
+    for champ in champs:
+        avant = champ.value()
+        roue = QWheelEvent(QPoint(5, 5), champ.mapToGlobal(QPoint(5, 5)),
+                           QPoint(0, 0), QPoint(0, 120), Qt.NoButton,
+                           Qt.NoModifier, Qt.NoScrollPhase, False)
+        QApplication.sendEvent(champ, roue)
+        assert champ.value() == avant, (
+            f"la molette a changé « {champ.objectName() or champ} » de "
+            f"{avant} à {champ.value()} sans qu'on l'ait touché")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

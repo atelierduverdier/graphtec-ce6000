@@ -56,6 +56,7 @@ REGLAGES = [
     # print & cut
     ("chk_arms", "bool"), ("spn_ecart_av", "reel"), ("spn_ecart_ch", "reel"),
     ("spn_marge_arms", "reel"), ("spn_trait_arms", "reel"),
+    ("spn_branche_arms", "reel"),
     ("cmb_type_arms", "texte"),
     ("spn_corr_av", "reel"), ("spn_corr_ch", "reel"),
     ("spn_tb57a", "entier"), ("spn_tb57b", "entier"), ("spn_tb55", "entier"),

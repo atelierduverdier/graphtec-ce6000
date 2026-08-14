@@ -834,6 +834,31 @@ class Pupitre(QWidget):
                        ("haut (avance)", self.spn_mh)):
             pose(QLabel(nom), w)
 
+        # La longueur des branches. Le manuel donne 4 à 20 mm et le
+        # gabarit était figé à 20 — donc DÉJÀ au maximum : rallonger les
+        # repères était la seule chose qu'on n'avait pas éprouvée, et on
+        # ne pouvait pas la tenter. Le manuel dit lui-même pourquoi ça
+        # vaut le coup : « s'il y a une inclinaison de l'impression sur la
+        # matière, il sera plus facile de détecter des grands repères »,
+        # et « il est plus facile de détecter des grands repères sur une
+        # longue page ». Or c'est exactement le symptôme — la détection
+        # part du bord de la feuille et s'y arrête.
+        self.spn_branche_arms = self._reel(4.0, 40.0, 20.0)
+        self.spn_branche_arms.setDecimals(1)
+        self.spn_branche_arms.setToolTip(
+            "Longueur d'une branche du L.\n\n"
+            "Le manuel donne 4 à 20 mm — 20 est donc le MAXIMUM que la\n"
+            "machine sache déclarer, et le gabarit y était déjà.\n\n"
+            "Au-delà de 20 mm, la feuille porte des branches plus longues\n"
+            "que ce que la machine cherche. Elle trouve alors plus de\n"
+            "matière que prévu là où elle regarde, ce qui ne peut pas la\n"
+            "gêner — mais ce n'est pas écrit dans la notice, et seule une\n"
+            "feuille le dira.\n\n"
+            "Régler MARK SIZE à 20 au panneau et laisser le papier être\n"
+            "plus long : c'est le sens de l'essai.")
+        self.spn_branche_arms.valueChanged.connect(self._recalculer)
+        pose(QLabel("longueur repères"), self.spn_branche_arms)
+
         self.spn_trait_arms = self._reel(0.3, 3.0, 1.0)
         self.spn_trait_arms.setDecimals(1)
         self.spn_trait_arms.setToolTip(
@@ -1572,7 +1597,8 @@ class Pupitre(QWidget):
             return
         lignes = [f"{libelle} : {valeur}" for libelle, _, valeur in lus]
         self.lbl_arms.setText("   ·   ".join(lignes[:4]))
-        ennuis = arms.desaccords(lus, type_gabarit=self._type_arms())
+        ennuis = arms.desaccords(lus, type_gabarit=self._type_arms(),
+                                 branche=self.spn_branche_arms.value())
         texte = "\n".join(f"  {lib:<28} {val}" for lib, _, val in lus)
         if ennuis:
             texte += "\n\nÀ CORRIGER avant de scanner :\n"
@@ -1738,7 +1764,9 @@ class Pupitre(QWidget):
         self.correspondance = {
             tuple(float(x) for x in cle.split(",")): role
             for cle, role in (projet.get("correspondance") or {}).items()}
-        self.reperes = roles_couleur.reperes_arms(self.brut)
+        self.reperes = roles_couleur.reperes_arms(
+            self.brut, branche=self.spn_branche_arms.value(),
+            epaisseur=self.spn_trait_arms.value())
         self.chemin = projet.get("source")
         self.empreinte_export = projet.get("empreinte_export")
         self._poser_reglages(projet.get("reglages", {}),
@@ -2000,6 +2028,7 @@ class Pupitre(QWidget):
                           self.spn_mb.value(), self.spn_mh.value())
             svg, infos = arms.composer(
                 self.calcule, marge=marge, marges=quatre,
+                branche=self.spn_branche_arms.value(),
                 epaisseur=self.spn_trait_arms.value(),
                 type_repere=self._type_arms(), visuel=self.visuel)
         except ValueError as e:
@@ -2034,7 +2063,8 @@ class Pupitre(QWidget):
         # découvrir sur la machine, feuille déjà imprimée.
         hors = arms.tient_dans_la_zone(
             infos["ecart"], (self.spn_mx.value(), self.spn_my.value()),
-            premier=(self.spn_dep_av.value(), self.spn_dep_ch.value()))
+            premier=(self.spn_dep_av.value(), self.spn_dep_ch.value()),
+            branche=self.spn_branche_arms.value())
 
         pl, ph = infos["page"]
         texte = (f"Feuille écrite : {os.path.basename(chemin)}\n"
@@ -2082,6 +2112,7 @@ class Pupitre(QWidget):
         try:
             svg, infos = arms.composer(
                 self.calcule, marge=marge, marges=quatre,
+                branche=self.spn_branche_arms.value(),
                 epaisseur=self.spn_trait_arms.value(),
                 type_repere=self._type_arms(), visuel=self.visuel)
         except ValueError as e:
@@ -2090,7 +2121,8 @@ class Pupitre(QWidget):
 
         hors = arms.tient_dans_la_zone(
             infos["ecart"], (self.spn_mx.value(), self.spn_my.value()),
-            premier=(self.spn_dep_av.value(), self.spn_dep_ch.value()))
+            premier=(self.spn_dep_av.value(), self.spn_dep_ch.value()),
+            branche=self.spn_branche_arms.value())
         ax, ay = infos["ecart"]
         question = (f"Imprimer sur {nom} à l'échelle 1.\n\n"
                     f"écart entre repères {ax:.1f} × {ay:.1f} mm\n"
@@ -2157,7 +2189,8 @@ class Pupitre(QWidget):
             return
         try:
             annonces, journal = arms.scanner(
-                av, ch, epaisseur=self.spn_trait_arms.value(),
+                av, ch, branche=self.spn_branche_arms.value(),
+                epaisseur=self.spn_trait_arms.value(),
                 type_repere=self.spn_tb55.value(),
                 tb57=(self.spn_tb57a.value(), self.spn_tb57b.value()),
                 depart=((self.spn_dep_av.value(), self.spn_dep_ch.value())
@@ -2432,7 +2465,9 @@ class Pupitre(QWidget):
                                 + "\n".join(avertissements))
             return
         self.correspondance = {}
-        self.reperes = roles_couleur.reperes_arms(self.brut)
+        self.reperes = roles_couleur.reperes_arms(
+            self.brut, branche=self.spn_branche_arms.value(),
+            epaisseur=self.spn_trait_arms.value())
         self.chemin = chemin
         # Le SVG est gardé en TEXTE pour l'enregistrement du projet. Une
         # image ne se lit pas ainsi : le faire levait une UnicodeDecodeError

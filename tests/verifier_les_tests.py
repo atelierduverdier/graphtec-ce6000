@@ -331,6 +331,40 @@ def visuel_transforme_dans_l_ordre_du_pipeline():
     pupitre.Apercu._peindre_visuel = a_l_envers
 
 
+def reconnaissance_de_repere_figee_a_20():
+    """La faute : reconnaître les repères à une longueur figée."""
+    vrai = roles.reperes_arms
+    _vraies["reperes"] = vrai
+    roles.reperes_arms = (
+        lambda polylignes, branche=20.0, epaisseur=1.0, tolerance=0.5:
+        vrai(polylignes, 20.0, epaisseur, tolerance))
+
+
+def desaccord_de_taille_symetrique():
+    """La faute : dire la même chose des deux sens du désaccord.
+
+    La version d'avant comparait les deux tailles sans regarder LAQUELLE
+    est la plus grande, et annonçait dans les deux cas que la machine
+    s'arrêterait sur le bord de la feuille.
+    """
+    vrai = arms.desaccords
+    _vraies["desaccords"] = vrai
+
+    def symetrique(reglages_lus, type_gabarit=2, branche=arms.BRANCHE):
+        lu = {cle: valeur for _l, cle, valeur in reglages_lus}
+        ennuis = [e for e in vrai(reglages_lus, type_gabarit, branche)
+                  if "MARK SIZE" not in e and "branches de" not in e]
+        taille = arms._nombre(lu.get("MARK SIZE"))
+        if taille is not None and abs(taille - branche) > 0.05:
+            ennuis.append(
+                f"MARK SIZE vaut {taille:g} mm et les branches font "
+                f"{branche:g} mm : elle s'arrêtera sur le premier contraste "
+                f"venu — le bord de la feuille.")
+        return ennuis
+
+    arms.desaccords = symetrique
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
@@ -458,6 +492,16 @@ CAS = [
      visuel_transforme_dans_l_ordre_du_pipeline,
      lambda: setattr(__import__("pupitre").Apercu,
                      "_peindre_visuel", _vraies["visuel"])),
+
+    ("reconnaissance des repères figée à 20 mm",
+     "test_des_reperes_rallonges_restent_des_reperes",
+     reconnaissance_de_repere_figee_a_20,
+     lambda: setattr(roles, "reperes_arms", _vraies["reperes"])),
+
+    ("désaccord de taille dit pareil dans les deux sens",
+     "test_une_branche_plus_longue_que_MARK_SIZE_nest_pas_une_faute",
+     desaccord_de_taille_symetrique,
+     lambda: setattr(arms, "desaccords", _vraies["desaccords"])),
 
     ("profil dont la force sort des bornes machine",
      "test_profils_coherents",

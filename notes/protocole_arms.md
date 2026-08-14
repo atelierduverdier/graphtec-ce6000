@@ -551,3 +551,46 @@ faudrait capturer une détection **réussie** sous Windows.
 
 Mais ce n'est plus un besoin : la détection au panneau prend dix secondes
 et fonctionne.
+
+## Longueur des repères — la piste ouverte le 14/08/2026
+
+Christophe : « pour la détection automatique, une chose que l'on n'a pas
+testée, c'est des repères plus longs ».
+
+**Le manuel donne 4 à 20 mm** (f90bbf.pdf, « Dimension des Repères »,
+p. 5-12). Le gabarit était figé à 20 — donc DÉJÀ au maximum que la machine
+sache déclarer. L'essai était impossible à monter, ce qui explique qu'il
+n'ait jamais été fait.
+
+Le manuel dit lui-même pourquoi il vaut le coup :
+
+> S'il y a une inclinaison de l'impression sur la matière, il sera plus
+> facile de détecter des grands repères. […] Il est plus facile de
+> détecter des grands repères sur une longue page.
+
+Et il précise que **la détection commence au repère en bas à droite**,
+puis cherche les autres verticalement et horizontalement. Si l'impression
+est de travers, les petits repères tombent hors de la zone de détection.
+C'est très exactement le symptôme : la tête part, longe le bord et
+s'arrête « hors surface ».
+
+### Ce qui est mesuré
+
+| | |
+|---|---|
+| plage annoncée | 4 à 20 mm |
+| épaisseur annoncée | 0,3 à 1 mm |
+| écart entre repères | **inchangé** quelle que soit la longueur — la cote à saisir au panneau reste la même |
+| type 2, branches > marge | les repères **mordent sur le dessin** — signalé avant impression |
+| type 1 | jamais de chevauchement, les branches sortent |
+
+### Ce qui reste à éprouver sur papier
+
+Imprimer une feuille avec des branches de 30 mm en laissant **MARK SIZE à
+20 au panneau**, et lancer la détection automatique. La machine cherchera
+un repère de 20 mm et trouvera 30 mm de matière là où elle regarde. Rien
+dans la notice ne dit que ça la gêne, rien ne dit que ça l'aide : seule la
+feuille tranchera.
+
+Augmenter les marges d'autant en type 2, sans quoi les branches rentrent
+dans le motif.

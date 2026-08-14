@@ -132,9 +132,31 @@ def desaccords(reglages_lus, type_gabarit=2, branche=BRANCHE):
 
     taille = _nombre(lu.get("MARK SIZE"))
     if taille is not None and abs(taille - branche) > 0.05:
-        ennuis.append(
-            f"MARK SIZE vaut {taille:g} mm, les branches du gabarit font "
-            f"{branche:g} mm.")
+        # Les deux sens ne sont PAS symétriques, et les confondre faisait
+        # crier une alerte sur un essai délibéré.
+        #
+        # Branches plus COURTES que MARK SIZE : la machine cherche plus de
+        # matière qu'il n'y en a, et s'arrête sur le premier contraste
+        # venu — le bord de la feuille. C'est une faute.
+        #
+        # Branches plus LONGUES : elle en trouve plus que prévu là où elle
+        # regarde. Le manuel dit que de grands repères se détectent mieux
+        # sur une impression de travers, et 20 mm est le maximum qu'elle
+        # sache DÉCLARER — pas forcément ce qu'elle sait lire. C'est un
+        # essai, pas un désaccord.
+        if branche < taille:
+            ennuis.append(
+                f"MARK SIZE vaut {taille:g} mm et les branches du gabarit "
+                f"font {branche:g} mm : la machine cherchera plus de "
+                f"matière qu'il n'y en a, et s'arrêtera sur le premier "
+                f"contraste venu — le bord de la feuille.")
+        else:
+            ennuis.append(
+                f"branches de {branche:g} mm pour un MARK SIZE de "
+                f"{taille:g} mm — voulu, si c'est l'essai des repères "
+                f"rallongés. Le papier en offre plus que la machine n'en "
+                f"cherche, ce qui ne peut pas la gêner ; mais ce n'est pas "
+                f"écrit dans la notice, et seule la feuille le dira.")
 
     if lu.get("MARK AUTO SCAN") == "OFF":
         ennuis.append(

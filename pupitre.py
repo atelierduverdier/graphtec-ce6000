@@ -111,19 +111,57 @@ class Apercu(QWidget):
                                  e.position().y() - (oy2 - py * k2))
         self.update()
 
+    def _mm_sous_la_souris(self, position):
+        """Le point de la feuille, en millimètres, sous le curseur."""
+        k, ox, oy = self._cadrage()
+        return ((position.x() - ox) / k, (oy - position.y()) / k)
+
+    def _dans_le_dessin(self, position):
+        """Le curseur est-il sur l'emprise du dessin ?
+
+        Avec une tolérance de quelques pixels, sans quoi il faudrait viser
+        un trait — l'emprise d'un dessin est surtout du vide.
+        """
+        if not self.emprise:
+            return False
+        k, _, _ = self._cadrage()
+        jeu = 6.0 / max(k, 1e-6)
+        x, y = self._mm_sous_la_souris(position)
+        x0, y0, x1, y1 = self.emprise
+        return (x0 - jeu <= x <= x1 + jeu) and (y0 - jeu <= y <= y1 + jeu)
+
     def mousePressEvent(self, e):
-        if e.button() == Qt.LeftButton:
-            self._saisie = e.position()
-            self.setCursor(Qt.ClosedHandCursor)
+        if e.button() != Qt.LeftButton:
+            return
+        self._saisie = e.position()
+        # DANS le dessin, on déplace le DESSIN ; ailleurs, la VUE. C'est
+        # la convention de tous les logiciels de dessin, et elle évite un
+        # bouton de mode : la cible dit ce qu'on veut faire.
+        self._deplace_dessin = self._dans_le_dessin(e.position())
+        self._depart_mm = self._mm_sous_la_souris(e.position())
+        self.setCursor(Qt.SizeAllCursor if self._deplace_dessin
+                       else Qt.ClosedHandCursor)
 
     def mouseMoveEvent(self, e):
-        if self._saisie is not None:
+        if self._saisie is None:
+            # Sans bouton enfoncé, le curseur ANNONCE ce qui se passera.
+            self.setCursor(Qt.SizeAllCursor if self._dans_le_dessin(e.position())
+                           else Qt.OpenHandCursor)
+            return
+        if self._deplace_dessin:
+            x, y = self._mm_sous_la_souris(e.position())
+            dx, dy = x - self._depart_mm[0], y - self._depart_mm[1]
+            self._depart_mm = (x, y)
+            if self.deplacer:
+                self.deplacer(dx, dy)
+        else:
             self.decalage += e.position() - self._saisie
-            self._saisie = e.position()
             self.update()
+        self._saisie = e.position()
 
     def mouseReleaseEvent(self, e):
         self._saisie = None
+        self._deplace_dessin = False
         self.setCursor(Qt.OpenHandCursor)
 
     def mouseDoubleClickEvent(self, _e):
@@ -286,6 +324,7 @@ class Pupitre(QWidget):
         self.pal = SOMBRE                 # comme le visualiseur G-code
 
         self.apercu = Apercu(self.pal)
+        self.apercu.deplacer = self._traine
         self.info = QLabel("Aucun dessin chargé.")
         self.info.setObjectName("faible")
         self.info.setWordWrap(True)
@@ -2106,6 +2145,18 @@ class Pupitre(QWidget):
         # Un dessin neuf mérite un cadrage neuf ; un simple réglage, non.
         self.apercu.reinitialiser_vue()
         self._recalculer()
+
+    def _traine(self, dx, dy):
+        """Le dessin a été traîné de (dx, dy) millimètres dans l'aperçu.
+
+        On écrit dans les champs de placement plutôt que de garder un
+        décalage à part : les chiffres restent la vérité, la souris n'est
+        qu'une autre façon de les saisir. Sans ça on aurait deux sources
+        pour la même chose, et l'enregistrement d'un projet en oublierait
+        une.
+        """
+        self.spn_x.setValue(max(0.0, self.spn_x.value() + dx))
+        self.spn_y.setValue(max(0.0, self.spn_y.value() + dy))
 
     def _emprise_source(self):
         """L'emprise du dessin AVANT toute mise à l'échelle, en mm.

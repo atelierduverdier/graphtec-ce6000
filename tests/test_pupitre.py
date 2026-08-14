@@ -538,6 +538,57 @@ def test_les_cotes_en_millimetres_pilotent_lechelle(fenetre):
         f"emprise {x1-x0:.1f} × {y1-y0:.1f} au lieu de 50 × 40")
 
 
+def test_traîner_le_dessin_ecrit_dans_les_champs(fenetre):
+    """Traîner à la souris doit RÉGLER le placement, pas s'y superposer.
+
+    Christophe voulait bouger le dessin dans l'aperçu plutôt que de
+    saisir des marges. La tentation était de garder un décalage à part —
+    ce qui aurait donné DEUX sources pour la même chose, et un projet
+    enregistré en aurait oublié une.
+
+    La souris écrit donc dans les champs : les chiffres restent la
+    vérité, elle n'est qu'une autre façon de les saisir.
+    """
+    from PySide6.QtCore import Qt, QPointF
+    from PySide6.QtGui import QMouseEvent
+
+    fenetre.brut = [([(0.0, 0.0), (60.0, 0.0), (60.0, 40.0), (0.0, 0.0)],
+                     True)]
+    fenetre.couleurs = [(0.0, 0.0, 0.0)]
+    fenetre.reperes = set()
+    fenetre.ech_x = fenetre.ech_y = 1.0
+    fenetre.spn_x.setValue(5.0)
+    fenetre.spn_y.setValue(5.0)
+    fenetre._refaire_liste_couleurs()
+    fenetre._recalculer()
+    fenetre.apercu.resize(600, 400)
+
+    k, ox, oy = fenetre.apercu._cadrage()
+    x0, y0, x1, y1 = fenetre.apercu.emprise
+    milieu = QPointF(ox + (x0 + x1) / 2 * k, oy - (y0 + y1) / 2 * k)
+    assert fenetre.apercu._dans_le_dessin(milieu), (
+        "le centre du dessin n'est pas reconnu comme étant dans le dessin")
+
+    dehors = QPointF(ox + (x1 + 40) * k, oy - (y0 + 5) * k)
+    assert not fenetre.apercu._dans_le_dessin(dehors), (
+        "un point loin du dessin y est compté : traîner déplacerait le "
+        "dessin au lieu de la vue")
+
+    # Traîner de +10 mm en avance et +5 sous le chariot.
+    arrivee = QPointF(milieu.x() + 10 * k, milieu.y() - 5 * k)
+    fenetre.apercu._saisie = milieu
+    fenetre.apercu._deplace_dessin = True
+    fenetre.apercu._depart_mm = fenetre.apercu._mm_sous_la_souris(milieu)
+    fenetre.apercu.mouseMoveEvent(QMouseEvent(
+        QMouseEvent.MouseMove, arrivee, arrivee,
+        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
+
+    assert abs(fenetre.spn_x.value() - 15.0) < 0.2, (
+        f"origine X à {fenetre.spn_x.value()} au lieu de 15")
+    assert abs(fenetre.spn_y.value() - 10.0) < 0.2, (
+        f"origine Y à {fenetre.spn_y.value()} au lieu de 10")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

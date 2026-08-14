@@ -179,12 +179,14 @@ class Apercu(QWidget):
             couleurs = {"tracer": defaut,
                         "decouper": QColor(pal.alerte),
                         "rainer": QColor("#7ac74f"),
+                        "perforer": QColor("#c77ade"),
                         "contour": QColor(pal.accent)}
             for i, poly in enumerate(self.polygones):
                 role = self.roles[i] if i < len(self.roles) else None
                 teinte = defaut if self.deborde else couleurs.get(role, defaut)
                 epaisseur = 2 if role in ("decouper", "contour") else 1
-                p.setPen(QPen(teinte, epaisseur))
+                style = Qt.DashLine if role == "perforer" else Qt.SolidLine
+                p.setPen(QPen(teinte, epaisseur, style))
                 p.drawPolyline(QPolygonF([pt(q.x(), q.y()) for q in poly]))
 
         # l'emprise, pour lire le placement d'un coup d'oeil
@@ -795,7 +797,7 @@ class Pupitre(QWidget):
         gl = QVBoxLayout(g)
         self.cmb_travail = QComboBox()
         self.cmb_travail.addItems(["tout, sauf les repères", "tracer",
-                                   "rainer", "découper"])
+                                   "rainer", "découper", "perforer"])
         self.cmb_travail.setToolTip(
             "Ce qui part au traceur MAINTENANT. Un fichier peut porter\n"
             "le motif et son contour : on envoie l'un, on change d'outil,\n"
@@ -1473,10 +1475,11 @@ class Pupitre(QWidget):
                                          self.correspondance, self.reperes)
         choix = self.cmb_travail.currentText()
         if choix.startswith("tout"):
-            garde = ["tracer", "rainer", "decouper"]
+            garde = ["tracer", "rainer", "decouper", "perforer"]
         else:
             garde = {"tracer": ["tracer"], "rainer": ["rainer"],
-                     "découper": ["decouper"]}[choix]
+                     "découper": ["decouper"],
+                     "perforer": ["perforer"]}[choix]
         retenus, self._roles_retenus = [], []
         for role in garde:
             retenus += par_role[role]
@@ -2164,6 +2167,8 @@ class Pupitre(QWidget):
         if len(roles_traces) != len(self.calcule):
             roles_traces = ["tracer"] * len(self.calcule)
         roles_traces = roles_traces + ["contour"] * len(self.contour)
+        # Gardé pour l'envoi : c'est lui qui dira quels tracés perforer.
+        self.roles_traces = roles_traces
 
         self.apercu.poser(self.calcule + self.contour, self.media, deborde,
                           [p[2] for p in panneaux], roles_traces)
@@ -2178,7 +2183,8 @@ class Pupitre(QWidget):
                       else "  —  LE DESSIN DÉBORDE DE LA ZONE UTILE")
         presents = []
         for role, mot in (("tracer", "tracé"), ("rainer", "rainage"),
-                          ("decouper", "découpe"), ("contour", "contour")):
+                          ("decouper", "découpe"), ("perforer", "pointillé"),
+                          ("contour", "contour")):
             if role in roles_traces:
                 presents.append(mot)
         if len(presents) > 1:
@@ -2236,17 +2242,34 @@ class Pupitre(QWidget):
             lots = [("", corriger(self.contour if self.contour
                                   else self.calcule))]
 
+        # Quels tracés perforer ? Ceux dont la couleur porte le rôle
+        # « perforer », et TOUT l'envoi si la case globale est cochée.
+        # Deux chemins parce qu'ils répondent à deux besoins : une planche
+        # entière en pointillé, ou seulement quelques traits d'un dessin
+        # qui en porte d'autres.
+        roles_envoi = getattr(self, "roles_traces", [])
+        if self.contour:
+            roles_envoi = ["contour"] * len(self.contour)
+
         programmes, gains = [], []
         for nom, morceaux in lots:
             av = noyau.trajet_a_vide(morceaux)
             cand = noyau.ordonner(morceaux)
             ap = noyau.trajet_a_vide(cand)
             retenu = cand if ap < av else morceaux
+            # APRÈS le réordonnancement : le pointillé multiplie par
+            # vingt le nombre de chemins, et l'ordonnancement est en n².
+            coupe, saut = self.spn_coupe.value(), self.spn_saut.value()
             if self.chk_perfo.isChecked():
-                # APRÈS le réordonnancement : le pointillé multiplie par
-                # vingt le nombre de chemins, et l'ordonnancement est en n².
-                retenu = noyau.perforer(retenu, self.spn_coupe.value(),
-                                        self.spn_saut.value())
+                retenu = noyau.perforer(retenu, coupe, saut)
+            elif "perforer" in roles_envoi and len(roles_envoi) == len(retenu):
+                # Perforer les SEULS tracés dont la couleur le demande, en
+                # gardant les autres entiers.
+                a_perforer = [t for t, r in zip(retenu, roles_envoi)
+                              if r == "perforer"]
+                entiers = [t for t, r in zip(retenu, roles_envoi)
+                           if r != "perforer"]
+                retenu = entiers + noyau.perforer(a_perforer, coupe, saut)
             prog, _ = noyau.en_hpgl(retenu, condition,
                                     self.spn_force.value(),
                                     self.spn_passages.value(),

@@ -2,7 +2,8 @@
 """Classer la géométrie d'un fichier par RÔLE, d'après la couleur du trait.
 
 Un même dessin porte plusieurs travaux : le motif qu'on imprime, le
-contour qu'on découpe, les plis qu'on raine. Les distinguer par la
+contour qu'on découpe, les plis qu'on raine, les traits qu'on perfore
+pour qu'une pièce tienne dans sa feuille. Les distinguer par la
 couleur est la convention de tous les logiciels de découpe, et elle a
 l'avantage de survivre à l'export depuis n'importe quel dessin — Inkscape,
 Illustrator, ou notre propre composeur.
@@ -17,12 +18,13 @@ import math
 
 # Les rôles, et ce qu'on en fait. L'ordre est celui de l'atelier : ce
 # qu'on trace, ce qu'on marque, ce qu'on coupe.
-ROLES = ["tracer", "rainer", "decouper", "repere", "ignorer"]
+ROLES = ["tracer", "rainer", "decouper", "perforer", "repere", "ignorer"]
 
 LIBELLES = {
     "tracer": "tracer (stylo)",
     "rainer": "rainer (marquer le pli)",
     "decouper": "découper",
+    "perforer": "perforer (pointillé)",
     "repere": "repère ARMS — ni tracé ni découpé",
     "ignorer": "ignorer",
 }
@@ -34,6 +36,7 @@ DEFAUTS = [
     ((0.0, 0.0, 0.0), "tracer"),
     ((1.0, 0.0, 0.0), "decouper"),
     ((0.0, 0.0, 1.0), "rainer"),
+    ((1.0, 0.0, 1.0), "perforer"),
 ]
 
 TOLERANCE_COULEUR = 0.25          # distance RGB en deçà de laquelle on assimile

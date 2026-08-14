@@ -653,6 +653,32 @@ def test_un_repere_hors_datteinte_est_signale_avant_impression():
         "l'hypothèse du calcul n'est pas annoncée")
 
 
+def test_le_pointille_est_un_role_comme_un_autre():
+    """Une couleur peut demander la perforation, sans toucher au reste.
+
+    Christophe : « comment distinguer les traits perforés du dessin ? ».
+    Par la couleur, comme tout le reste — le magenta perfore. Sans ce
+    rôle, la perforation était globale : tout l'envoi en pointillé ou
+    rien, ce qui interdit une planche où quelques traits seulement
+    doivent tenir dans la feuille.
+    """
+    assert "perforer" in roles.ROLES
+    assert roles.role_par_defaut((1.0, 0.0, 1.0)) == "perforer"
+    # Et une nuance voisine tombe du même côté : Inkscape n'exporte pas
+    # toujours un magenta exactement pur.
+    assert roles.role_par_defaut((0.95, 0.05, 0.92)) == "perforer"
+    # Sans empiéter sur le rouge, qui découpe franchement.
+    assert roles.role_par_defaut((1.0, 0.0, 0.0)) == "decouper"
+
+    dessin = [([(0.0, 0.0), (10.0, 0.0)], False),
+              ([(0.0, 5.0), (10.0, 5.0)], False)]
+    couleurs = [(0.0, 0.0, 0.0), (1.0, 0.0, 1.0)]
+    par_role = roles.classer(dessin, couleurs)
+    assert len(par_role["tracer"]) == 1
+    assert len(par_role["perforer"]) == 1, (
+        "le magenta n'a pas été rangé dans la perforation")
+
+
 def test_unites_accordees():
     """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
 
@@ -1111,6 +1137,32 @@ def test_un_repere_hors_datteinte_est_signale_avant_impression():
     aveugle = arms.tient_dans_la_zone((250.0, 170.0), (255.9, 174.4))
     assert any("ORIGINE" in e for e in aveugle), (
         "l'hypothèse du calcul n'est pas annoncée")
+
+
+def test_le_pointille_est_un_role_comme_un_autre():
+    """Une couleur peut demander la perforation, sans toucher au reste.
+
+    Christophe : « comment distinguer les traits perforés du dessin ? ».
+    Par la couleur, comme tout le reste — le magenta perfore. Sans ce
+    rôle, la perforation était globale : tout l'envoi en pointillé ou
+    rien, ce qui interdit une planche où quelques traits seulement
+    doivent tenir dans la feuille.
+    """
+    assert "perforer" in roles.ROLES
+    assert roles.role_par_defaut((1.0, 0.0, 1.0)) == "perforer"
+    # Et une nuance voisine tombe du même côté : Inkscape n'exporte pas
+    # toujours un magenta exactement pur.
+    assert roles.role_par_defaut((0.95, 0.05, 0.92)) == "perforer"
+    # Sans empiéter sur le rouge, qui découpe franchement.
+    assert roles.role_par_defaut((1.0, 0.0, 0.0)) == "decouper"
+
+    dessin = [([(0.0, 0.0), (10.0, 0.0)], False),
+              ([(0.0, 5.0), (10.0, 5.0)], False)]
+    couleurs = [(0.0, 0.0, 0.0), (1.0, 0.0, 1.0)]
+    par_role = roles.classer(dessin, couleurs)
+    assert len(par_role["tracer"]) == 1
+    assert len(par_role["perforer"]) == 1, (
+        "le magenta n'a pas été rangé dans la perforation")
 
 
 def test_unites_accordees():

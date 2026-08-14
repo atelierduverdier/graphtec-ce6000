@@ -365,6 +365,35 @@ def desaccord_de_taille_symetrique():
     arms.desaccords = symetrique
 
 
+def apercu_impression_par_qsvgrenderer():
+    """La faute d'origine : rendre l'aperçu avec le moteur SVG de Qt.
+
+    Il s'annonce valide et laisse tomber le `<svg>` imbriqué qui porte le
+    motif — la page sort avec ses seuls repères.
+    """
+    import pupitre
+    _vraies["rendre"] = pupitre._PageRendue._rendre
+
+    def par_qt(svg, page_mm):
+        from PySide6.QtGui import QImage, QPainter
+        from PySide6.QtSvg import QSvgRenderer
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QColor
+        rendu = QSvgRenderer(svg.encode("utf-8"))
+        if not rendu.isValid():
+            return None, "SVG invalide"
+        pl, ph = page_mm
+        largeur = 1400
+        image = QImage(largeur, int(largeur * ph / pl), QImage.Format_RGB32)
+        image.fill(QColor("white"))
+        p = QPainter(image)
+        rendu.render(p, QRectF(0, 0, image.width(), image.height()))
+        p.end()
+        return image, None
+
+    pupitre._PageRendue._rendre = staticmethod(par_qt)
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
@@ -502,6 +531,12 @@ CAS = [
      "test_une_branche_plus_longue_que_MARK_SIZE_nest_pas_une_faute",
      desaccord_de_taille_symetrique,
      lambda: setattr(arms, "desaccords", _vraies["desaccords"])),
+
+    ("aperçu d'impression rendu par le moteur SVG de Qt",
+     "test_lapercu_avant_impression_montre_le_motif",
+     apercu_impression_par_qsvgrenderer,
+     lambda: setattr(__import__("pupitre")._PageRendue, "_rendre",
+                     staticmethod(_vraies["rendre"]))),
 
     ("profil dont la force sort des bornes machine",
      "test_profils_coherents",

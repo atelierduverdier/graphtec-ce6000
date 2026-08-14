@@ -37,13 +37,13 @@ import icones                                               # noqa: E402
 from PySide6.QtCore import (Qt, QPointF, QRectF, QSize, QTimer,
                             QEvent, QObject)        # noqa: E402
 from PySide6.QtGui import (QPainter, QPen, QColor, QPolygonF,  # noqa: E402
-                           QIcon, QPixmap)
+                           QIcon, QPixmap, QImage)
 from PySide6.QtSvg import QSvgRenderer                        # noqa: E402
 from PySide6.QtWidgets import (                              # noqa: E402
     QApplication, QWidget, QLabel, QPushButton, QSpinBox, QDoubleSpinBox,
     QComboBox, QCheckBox, QGridLayout, QVBoxLayout, QHBoxLayout, QGroupBox,
     QFileDialog, QMessageBox, QSizePolicy, QTabWidget, QFrame,
-    QScrollArea)
+    QScrollArea, QDialog, QDialogButtonBox)
 
 
 # ======================================================================
@@ -60,6 +60,177 @@ METHODES_CONTOUR = {
     "d'un trait": dict(pointille=False),
     "en pointillé": dict(pointille=True),
 }
+
+
+class _PageRendue(QWidget):
+    """La feuille composée, dessinée à ses proportions exactes.
+
+    Pas de déformation possible : la page est peinte dans le plus grand
+    rectangle de MÊME rapport qui tienne dans le widget. Un aperçu étiré
+    ferait juger d'un cadrage qui n'existe pas.
+    """
+
+    def __init__(self, svg, page_mm):
+        super().__init__()
+        self.setMinimumSize(300, 400)
+        self.page_mm = page_mm
+        self.image, self.ennui = self._rendre(svg, page_mm)
+
+    @staticmethod
+    def _rendre(svg, page_mm):
+        """La page en pixels, par LE MÊME moteur que le PDF imprimé.
+
+        Premier jet : `QSvgRenderer`. Il s'annonçait valide et rendait les
+        quatre repères sur une page BLANCHE — le dessin manquait. Qt ne
+        gère pas le `<svg>` imbriqué qui transporte le motif, et il le
+        signale par un silence.
+
+        C'était le pire aperçu possible : celui qui rassure à tort. La
+        fenêtre existe pour vérifier ce qui va sortir ; en montrer une
+        version incomplète, sans rien dire, vaut moins que pas d'aperçu.
+
+        `rsvg-convert` est déjà employé pour fabriquer le PDF envoyé à
+        l'imprimante. Passer par lui n'ajoute donc aucune dépendance, et
+        garantit surtout que l'aperçu et la feuille sortent du même
+        moteur — deux moteurs différents finiraient par diverger, et
+        c'est l'aperçu qu'on croirait.
+        """
+        import subprocess
+        import tempfile
+        largeur = 1400
+        try:
+            with tempfile.TemporaryDirectory() as dossier:
+                src = os.path.join(dossier, "page.svg")
+                png = os.path.join(dossier, "page.png")
+                with open(src, "w", encoding="utf-8") as f:
+                    f.write(svg)
+                subprocess.run(["rsvg-convert", "-f", "png", "-w",
+                                str(largeur), "-o", png, src],
+                               check=True, capture_output=True, timeout=30)
+                image = QImage(png)
+            if not image.isNull():
+                return image, None
+            return None, "rsvg-convert n'a rien rendu"
+        except FileNotFoundError:
+            return None, ("rsvg-convert est absent — c'est lui qui fabrique "
+                          "aussi le PDF imprimé, l'impression échouera de "
+                          "même.")
+        except Exception as e:
+            return None, str(e)
+
+    def rect_page(self):
+        """Le rectangle de la page dans le widget, en pixels."""
+        pl, ph = self.page_mm
+        marge = 12
+        k = min((self.width() - 2 * marge) / max(pl, 1e-6),
+                (self.height() - 2 * marge) / max(ph, 1e-6))
+        w, h = pl * k, ph * k
+        return QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor("#1d2330"))
+        r = self.rect_page()
+        p.fillRect(r, QColor("white"))
+        if self.image is not None:
+            p.setRenderHint(QPainter.SmoothPixmapTransform)
+            p.drawImage(r, self.image)
+        else:
+            # Dire que l'aperçu manque, plutôt que montrer une page vide
+            # qu'on prendrait pour une feuille correcte.
+            p.setPen(QPen(QColor("#c0392b")))
+            zone = r.adjusted(14, 14, -14, -14)
+            p.drawText(zone, Qt.AlignCenter | Qt.TextWordWrap,
+                       "aperçu impossible\n\n" + (self.ennui or ""))
+        p.setPen(QPen(QColor("#6b7688"), 1))
+        p.drawRect(r)
+
+
+class ApercuImpression(QDialog):
+    """Ce qui va sortir de l'imprimante, et de quoi vérifier le 1:1.
+
+    Christophe : « j'aimerais une fenêtre de visualisation avant
+    impression afin de savoir si c'est en 100 % ».
+
+    La question est la bonne : une mise à l'échelle de 4 % déplace un
+    repère de huit millimètres, et la feuille sort BELLE — rien ne se voit.
+    C'est le piège qui a coûté le plus cher le 13/08/2026.
+
+    Un aperçu ne peut pourtant pas PROUVER le 1:1 : il montre ce qu'on
+    envoie, pas ce que le pilote en fait. La fenêtre donne donc les trois
+    choses qui, ensemble, tranchent — les options passées à `lp`, la
+    commande exacte telle qu'elle sera lancée, et une cote à VÉRIFIER AU
+    PIED À COULISSE sur la feuille sortie. La dernière est la seule
+    preuve ; les deux autres disent seulement qu'on a demandé ce qu'il
+    fallait.
+    """
+
+    def __init__(self, parent, svg, infos, page_mm, commande, avertissements):
+        super().__init__(parent)
+        self.setWindowTitle("Avant d'imprimer")
+        ax, ay = infos["ecart"]
+        ox, oy = infos["origine_dessin"]
+
+        page = _PageRendue(svg, page_mm)
+
+        droite = QVBoxLayout()
+        droite.setSpacing(10)
+
+        def bloc(titre, corps, alerte=False):
+            g = QGroupBox(titre)
+            gl = QVBoxLayout(g)
+            lab = QLabel(corps)
+            lab.setWordWrap(True)
+            lab.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            if alerte:
+                lab.setStyleSheet("color: #e06c5a;")
+            gl.addWidget(lab)
+            droite.addWidget(g)
+            return g
+
+        bloc("La feuille",
+             f"page {page_mm[0]:.1f} × {page_mm[1]:.1f} mm\n"
+             f"écart entre repères {ax:.1f} × {ay:.1f} mm\n"
+             f"dessin à {ox:g} ; {oy:g} mm du premier repère")
+
+        # LA vérification. Une cote déjà présente sur le papier : inutile
+        # d'ajouter une réglette, les repères en sont une.
+        bloc("Vérifier le 100 % sur le papier",
+             f"Mesurer au pied à coulisse la distance entre les ANGLES de "
+             f"deux repères voisins.\n\n"
+             f"Elle doit valoir {ax:.1f} mm dans le sens de l'avance et "
+             f"{ay:.1f} mm dans celui du chariot.\n\n"
+             f"Si la mesure est plus courte, l'imprimante a réduit : ne pas "
+             f"lancer la découpe, la feuille ne vaut rien.")
+
+        bloc("Ce qui est demandé au pilote",
+             "fit-to-page=false et scaling=100 sont passés tous les deux — "
+             "un pilote peut n'écouter que l'un des deux.\n\n"
+             + " ".join(commande))
+
+        if avertissements:
+            bloc("Attention", "\n\n".join(avertissements), alerte=True)
+
+        droite.addStretch(1)
+        boutons = QDialogButtonBox(QDialogButtonBox.Ok |
+                                   QDialogButtonBox.Cancel)
+        boutons.button(QDialogButtonBox.Ok).setText("Imprimer")
+        boutons.button(QDialogButtonBox.Cancel).setText("Annuler")
+        boutons.accepted.connect(self.accept)
+        boutons.rejected.connect(self.reject)
+        droite.addWidget(boutons)
+
+        corps = QHBoxLayout(self)
+        corps.setSpacing(14)
+        corps.addWidget(page, 1)
+        colonne = QWidget()
+        colonne.setLayout(droite)
+        colonne.setMaximumWidth(420)
+        corps.addWidget(colonne, 0)
+        ecran = parent.screen().availableGeometry() if parent.screen() else None
+        self.resize(min(980, ecran.width() - 80) if ecran else 980,
+                    min(680, ecran.height() - 80) if ecran else 680)
 
 
 class Apercu(QWidget):
@@ -2123,20 +2294,21 @@ class Pupitre(QWidget):
             infos["ecart"], (self.spn_mx.value(), self.spn_my.value()),
             premier=(self.spn_dep_av.value(), self.spn_dep_ch.value()),
             branche=self.spn_branche_arms.value())
-        ax, ay = infos["ecart"]
-        question = (f"Imprimer sur {nom} à l'échelle 1.\n\n"
-                    f"écart entre repères {ax:.1f} × {ay:.1f} mm\n"
-                    f"dessin à {infos['origine_dessin'][0]:g} ; "
-                    f"{infos['origine_dessin'][1]:g} mm du premier repère")
-        for a in infos["avertissements"] + hors:
-            question += f"\n\nATTENTION : {a}"
+        alertes = list(infos["avertissements"]) + list(hors)
         if hors:
-            question += ("\n\nCes repères seront HORS D'ATTEINTE de la "
-                         "tête : la feuille sera imprimée pour rien.")
-        question += "\n\nContinuer ?"
-        rep = QMessageBox.question(self, "Imprimer la feuille", question,
-                                   QMessageBox.Ok | QMessageBox.Cancel)
-        if rep != QMessageBox.Ok:
+            alertes.append("Ces repères seront HORS D'ATTEINTE de la tête : "
+                           "la feuille sera imprimée pour rien.")
+        # La commande est construite ICI pour être MONTRÉE, puis repassée
+        # telle quelle à l'impression. Deux constructions séparées
+        # dériveraient, et la fenêtre finirait par annoncer des options que
+        # l'impression n'emploie plus — le pire des aperçus, celui qui
+        # rassure à tort.
+        tirage = dict(imprimante=nom, media="A4", copies=1,
+                      gris=self.chk_gris.isChecked())
+        commande = impression.commande("la-feuille.pdf", **tirage)
+        fenetre = ApercuImpression(self, svg, infos, infos["page"],
+                                   commande, alertes)
+        if fenetre.exec() != QDialog.Accepted:
             return
 
         with tempfile.TemporaryDirectory() as dossier:
@@ -2149,9 +2321,8 @@ class Pupitre(QWidget):
                 subprocess.run(["rsvg-convert", "-f", "pdf",
                                 "-o", chemin_pdf, chemin_svg],
                                check=True, capture_output=True, timeout=30)
-                travail = impression.imprimer(
-                    chemin_pdf, nom, copies=1,
-                    gris=self.chk_gris.isChecked())
+                # LES MÊMES arguments que ceux montrés dans l'aperçu.
+                travail = impression.imprimer(chemin_pdf, **tirage)
             except Exception as e:
                 QMessageBox.warning(self, "Imprimer", str(e))
                 return

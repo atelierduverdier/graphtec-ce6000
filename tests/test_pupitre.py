@@ -388,6 +388,60 @@ def test_limage_se_pose_sous_les_traces_au_bon_endroit(fenetre):
         f"{', '.join(desaccords[:6])}")
 
 
+def test_lapercu_avant_impression_montre_le_motif(fenetre):
+    """Un aperçu incomplet vaut moins que pas d'aperçu du tout.
+
+    Christophe voulait une fenêtre avant impression « afin de savoir si
+    c'est en 100 % ». Le premier jet passait par `QSvgRenderer` : il
+    s'annonçait valide et rendait les quatre repères sur une page
+    BLANCHE. Qt ne gère pas le `<svg>` imbriqué qui transporte le motif,
+    et il le signale par un silence.
+
+    Valider une feuille sur cet aperçu-là, c'est valider une page dont on
+    n'a pas vu le contenu. D'où le passage par `rsvg-convert`, qui
+    fabrique déjà le PDF imprimé : l'aperçu et la feuille sortent ainsi
+    du MÊME moteur, et ne peuvent pas diverger.
+
+    Le test compare le rendu AVEC motif à celui SANS. Vérifier que
+    l'image n'est pas nulle aurait passé avec le défaut — elle ne l'était
+    pas, elle était seulement vide.
+    """
+    import arms
+
+    dessin = [([(0., 0.), (80., 0.), (80., 50.), (0., 50.), (0., 0.)], True)]
+    # Un motif franchement coloré : sur une page blanche à repères noirs,
+    # sa présence se compte sans ambiguïté.
+    visuel = {
+        "contenu": ('<svg xmlns="http://www.w3.org/2000/svg" '
+                    'width="80mm" height="50mm" viewBox="0 0 80 50">'
+                    '<rect x="0" y="0" width="80" height="50" '
+                    'fill="#e07a20"/></svg>'),
+        "boite": (0.0, 0.0, 80.0, 50.0),
+        "hauteur": 50.0,
+    }
+    avec, _ = arms.composer(dessin, marge=25.0, visuel=visuel)
+    sans, infos = arms.composer(dessin, marge=25.0)
+
+    def colores(svg):
+        image, ennui = pupitre._PageRendue._rendre(svg, infos["page"])
+        if image is None:
+            raise AssertionError(f"aucun rendu : {ennui}")
+        n = 0
+        for y in range(0, image.height(), 4):
+            for x in range(0, image.width(), 4):
+                q = image.pixelColor(x, y)
+                if q.red() > 150 and q.green() > 40 and q.blue() < 120 \
+                        and q.red() - q.blue() > 60:
+                    n += 1
+        return n
+
+    teintes = colores(avec)
+    temoin = colores(sans)
+    assert teintes > temoin + 200, (
+        f"l'aperçu ne montre pas le motif : {teintes} pixel(s) colorés "
+        f"avec, {temoin} sans — la page est rendue sans son contenu")
+
+
 def test_le_contour_se_coupe_en_pointille(fenetre):
     """Des ponts de matière doivent retenir la pièce dans sa feuille.
 

@@ -451,6 +451,51 @@ def test_lapercu_sait_le_role_de_chaque_trace(fenetre):
         len(fenetre.contour)
 
 
+def test_ouvrir_une_image_ne_meurt_pas_en_silence(fenetre):
+    """Ouvrir un JPG doit poser le dessin, pas mourir en route.
+
+    `svg_source` lisait le fichier en UTF-8 pour le garder dans le projet.
+    Sur un JPEG binaire, cela lève une UnicodeDecodeError — qui n'était
+    pas attrapée, l'ouverture mourait là, et Christophe voyait
+    « rien n'apparaît » sans le moindre message. Le pire genre de faute :
+    silencieuse, et qui ressemble à un fichier illisible.
+
+    Le test reproduit le geste sur un vrai fichier binaire, sans passer
+    par la boîte de dialogue.
+    """
+    import tempfile
+    import numpy as np
+    from PIL import Image
+    import silhouette
+
+    with tempfile.TemporaryDirectory() as dossier:
+        chemin = os.path.join(dossier, "motif.jpg")
+        # Un disque noir sur fond blanc, marges comprises.
+        a = np.full((200, 300, 3), 255, dtype=np.uint8)
+        yy, xx = np.mgrid[0:200, 0:300]
+        a[((yy - 100) ** 2 + (xx - 150) ** 2) ** 0.5 < 60] = 0
+        Image.fromarray(a).save(chemin, quality=95)
+
+        trace, couleurs, avert = fenetre._ouvrir_image(chemin)
+        assert trace and couleurs, "l'image n'a rien donné"
+
+        # Le geste qui mourait : lire le fichier comme du texte.
+        fenetre.svg_source = None
+        if not chemin.lower().endswith((".png", ".jpg", ".jpeg")):
+            fenetre.svg_source = open(chemin, encoding="utf-8").read()
+        assert fenetre.svg_source is None, (
+            "une image ne doit pas être lue comme du texte")
+
+        fenetre.brut, fenetre.couleurs = trace, couleurs
+        fenetre.reperes = set()
+        fenetre._refaire_liste_couleurs()
+        fenetre._recalculer()
+
+    assert fenetre.calcule, "rien n'a été calculé après l'ouverture"
+    assert fenetre.visuel and fenetre.visuel.get("contenu"), (
+        "l'image d'origine n'a pas été gardée pour l'impression")
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

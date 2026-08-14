@@ -2057,20 +2057,17 @@ class Pupitre(QWidget):
         self.correspondance = {}
         self.reperes = roles_couleur.reperes_arms(self.brut)
         self.chemin = chemin
-        try:
-            self.svg_source = open(chemin, encoding="utf-8").read()
-        except OSError:
-            self.svg_source = None
-        # Couleur de chaque tracé, en parallèle de `brut`. Sert à donner
-        # un RÔLE à chacun : le motif qu'on imprime, le contour qu'on
-        # découpe, les plis qu'on raine.
-        self.couleurs = []
-        self.correspondance = {}          # couleur arrondie -> rôle
-        # Le dessin d'ORIGINE, à imprimer tel quel : un SVG en couleur, ou
-        # une image enveloppée dans un SVG. Sans lui la feuille sortirait
-        # en fil de fer, les aplats perdus.
-        self.visuel = None
-        self.reperes = set()              # indices reconnus comme repères
+        # Le SVG est gardé en TEXTE pour l'enregistrement du projet. Une
+        # image ne se lit pas ainsi : le faire levait une UnicodeDecodeError
+        # qui n'était pas attrapée, et l'ouverture mourait là — après avoir
+        # posé le dessin, mais avant de l'afficher. Christophe voyait donc
+        # « rien n'apparaît », sans le moindre message.
+        self.svg_source = None
+        if not chemin.lower().endswith((".png", ".jpg", ".jpeg")):
+            try:
+                self.svg_source = open(chemin, encoding="utf-8").read()
+            except (OSError, UnicodeDecodeError):
+                self.svg_source = None
         self.empreinte_export = None      # un dessin neuf n'a pas de feuille
         self.lbl_fichier.setText(os.path.basename(chemin) +
                                  ("\n⚠ " + "\n⚠ ".join(avertissements)

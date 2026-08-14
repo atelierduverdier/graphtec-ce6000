@@ -594,6 +594,39 @@ def test_le_scan_peut_amener_la_tete_avant_de_chercher():
     assert "PU" in src, "aucun ordre de déplacement dans le scan"
 
 
+def test_un_repere_hors_datteinte_est_signale_avant_impression():
+    """Un « HORS SURFACE » se calcule : il ne doit pas se découvrir sur
+    la machine, feuille déjà imprimée.
+
+    Cas réel du 14/08/2026, chiffres relevés à l'établi : premier repère
+    à 34 ; 39 mm de l'origine, écart de 225,9 × 148,8, zone atteignable
+    de 255,9 × 174,4. Le repère opposé tombait à 259,9 et 187,8 — hors
+    d'atteinte des deux côtés, dont 13,4 mm sur le chariot parce que
+    rapprocher les galets avait rétréci la course.
+
+    La machine l'a découvert en s'y cassant le nez ; le logiciel avait
+    tout ce qu'il fallait pour le dire avant.
+    """
+    ennuis = arms.tient_dans_la_zone((225.9, 148.8), (255.9, 174.4),
+                                     premier=(34.0, 39.0))
+    assert len(ennuis) >= 2, "les deux axes débordent, un seul est signalé"
+    assert any("259.9" in e for e in ennuis), (
+        "l'avertissement ne dit pas OÙ tombe le repère — sans le chiffre "
+        "on ne sait pas de combien réduire")
+    assert any("187.8" in e for e in ennuis)
+
+    # Et il ne doit pas crier pour rien.
+    assert not arms.tient_dans_la_zone((150.0, 100.0), (255.9, 174.4),
+                                       premier=(20.0, 20.0)), (
+        "faux positif sur un jeu de repères qui tient largement")
+
+    # Sans la position du premier repère, le calcul est OPTIMISTE, et il
+    # doit le dire plutôt que de laisser croire à une vérification.
+    aveugle = arms.tient_dans_la_zone((250.0, 170.0), (255.9, 174.4))
+    assert any("ORIGINE" in e for e in aveugle), (
+        "l'hypothèse du calcul n'est pas annoncée")
+
+
 def test_unites_accordees():
     """`arms.UNITES_PAR_MM` recopie une valeur qui vit ailleurs.
 
@@ -993,6 +1026,39 @@ def test_le_scan_peut_amener_la_tete_avant_de_chercher():
     assert "UNITES_PAR_MM" in src, (
         "le déplacement n'est pas converti en unités machine")
     assert "PU" in src, "aucun ordre de déplacement dans le scan"
+
+
+def test_un_repere_hors_datteinte_est_signale_avant_impression():
+    """Un « HORS SURFACE » se calcule : il ne doit pas se découvrir sur
+    la machine, feuille déjà imprimée.
+
+    Cas réel du 14/08/2026, chiffres relevés à l'établi : premier repère
+    à 34 ; 39 mm de l'origine, écart de 225,9 × 148,8, zone atteignable
+    de 255,9 × 174,4. Le repère opposé tombait à 259,9 et 187,8 — hors
+    d'atteinte des deux côtés, dont 13,4 mm sur le chariot parce que
+    rapprocher les galets avait rétréci la course.
+
+    La machine l'a découvert en s'y cassant le nez ; le logiciel avait
+    tout ce qu'il fallait pour le dire avant.
+    """
+    ennuis = arms.tient_dans_la_zone((225.9, 148.8), (255.9, 174.4),
+                                     premier=(34.0, 39.0))
+    assert len(ennuis) >= 2, "les deux axes débordent, un seul est signalé"
+    assert any("259.9" in e for e in ennuis), (
+        "l'avertissement ne dit pas OÙ tombe le repère — sans le chiffre "
+        "on ne sait pas de combien réduire")
+    assert any("187.8" in e for e in ennuis)
+
+    # Et il ne doit pas crier pour rien.
+    assert not arms.tient_dans_la_zone((150.0, 100.0), (255.9, 174.4),
+                                       premier=(20.0, 20.0)), (
+        "faux positif sur un jeu de repères qui tient largement")
+
+    # Sans la position du premier repère, le calcul est OPTIMISTE, et il
+    # doit le dire plutôt que de laisser croire à une vérification.
+    aveugle = arms.tient_dans_la_zone((250.0, 170.0), (255.9, 174.4))
+    assert any("ORIGINE" in e for e in aveugle), (
+        "l'hypothèse du calcul n'est pas annoncée")
 
 
 def test_unites_accordees():

@@ -661,9 +661,16 @@ class Pupitre(QWidget):
         self.spn_dep_av = self._reel(0, 600, 35.0)
         self.spn_dep_ch = self._reel(0, 600, 30.0)
         gl.addWidget(self.chk_depart, 20, 0, 1, 2)
-        gl.addWidget(QLabel("départ avance"), 21, 0)
+        for w in (self.spn_dep_av, self.spn_dep_ch):
+            w.setToolTip(
+                "Position de l'angle du PREMIER REPÈRE dans le repère de\n"
+                "la machine, mesurée sur la feuille chargée.\n\n"
+                "Sert deux fois : à amener la tête avant le scan, et à\n"
+                "vérifier à l'export que le repère opposé reste dans la\n"
+                "zone que la machine peut atteindre.")
+        gl.addWidget(QLabel("1er repère, avance"), 21, 0)
         gl.addWidget(self.spn_dep_av, 21, 1)
-        gl.addWidget(QLabel("départ chariot"), 22, 0)
+        gl.addWidget(QLabel("1er repère, chariot"), 22, 0)
         gl.addWidget(self.spn_dep_ch, 22, 1)
         g_arms = g
 
@@ -1414,6 +1421,14 @@ class Pupitre(QWidget):
         # l'envoi, si le dessin a bougé depuis que la feuille est sortie.
         self.empreinte_export = fichier_projet.empreinte(self._lire_reglages())
 
+        # Le jeu de repères est-il ATTEIGNABLE ? La zone utile est plus
+        # petite que la feuille, et elle rétrécit quand on rapproche les
+        # galets. Un « HORS SURFACE » se calcule ici plutôt que de se
+        # découvrir sur la machine, feuille déjà imprimée.
+        hors = arms.tient_dans_la_zone(
+            infos["ecart"], (self.spn_mx.value(), self.spn_my.value()),
+            premier=(self.spn_dep_av.value(), self.spn_dep_ch.value()))
+
         pl, ph = infos["page"]
         texte = (f"Feuille écrite : {os.path.basename(chemin)}\n"
                  + (f"PDF : {os.path.basename(pdf)}\n" if pdf else "")
@@ -1429,7 +1444,12 @@ class Pupitre(QWidget):
                  "5. revenir ici et envoyer au traceur")
         for a in infos["avertissements"]:
             texte += f"\n\nATTENTION : {a}"
-        QMessageBox.information(self, "Feuille à imprimer", texte)
+        for a in hors:
+            texte += f"\n\nHORS D'ATTEINTE : {a}"
+        if hors:
+            QMessageBox.warning(self, "Feuille à imprimer", texte)
+        else:
+            QMessageBox.information(self, "Feuille à imprimer", texte)
 
     def _scanner_arms(self):
         """Déclenche une détection depuis le PC. Chemin NON ÉPROUVÉ.

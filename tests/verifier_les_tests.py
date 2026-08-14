@@ -86,11 +86,25 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "composer": arms.composer,
           "contour": contour.contour,
           "sequence_scan": arms.sequence_scan,
+          "tient_dans_la_zone": arms.tient_dans_la_zone,
           "reperes_arms": roles.reperes_arms,
           "TOLERANCE_COULEUR": roles.TOLERANCE_COULEUR,
           "TOLERANCE": contour.TOLERANCE,
           "recolter": arms.Ecoute.recolter,
           "UNITES_PAR_MM": arms.UNITES_PAR_MM}
+
+
+def zone_verifiee_sans_le_premier_repere():
+    """La faute : ne comparer l'écart qu'à la taille de la zone.
+
+    225,9 tient dans 255,9, et 148,8 tient dans 174,4 — donc rien à
+    signaler, en apparence. C'est faux : les repères ne partent pas de
+    l'origine, et le cas réel du 14/08/2026 débordait des DEUX côtés.
+    """
+    def sans_origine(ecart, zone, premier=None, branche=arms.BRANCHE):
+        return [f"écart {ecart} plus grand que la zone {zone}"] \
+            if ecart[0] > zone[0] or ecart[1] > zone[1] else []
+    arms.tient_dans_la_zone = sans_origine
 
 
 def tb57_fige_dans_la_sequence():
@@ -265,6 +279,11 @@ CAS = [
      "test_gabarit_officiel_garde_ses_cotes_relevees",
      gabarit_officiel_arrondi_a_l_a4,
      lambda: setattr(arms, "PAGE", _VRAIS["PAGE"])),
+
+    ("zone vérifiée sans la position du premier repère",
+     "test_un_repere_hors_datteinte_est_signale_avant_impression",
+     zone_verifiee_sans_le_premier_repere,
+     lambda: setattr(arms, "tient_dans_la_zone", _VRAIS["tient_dans_la_zone"])),
 
     ("TB57 figé, donc impossible à éprouver",
      "test_sequence_de_scan_est_calculee",

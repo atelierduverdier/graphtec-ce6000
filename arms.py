@@ -310,6 +310,47 @@ def composer(polylignes, marge=25.0, branche=BRANCHE, epaisseur=1.0,
     }
 
 
+def tient_dans_la_zone(ecart, zone, premier=None, branche=BRANCHE):
+    """Le jeu de repères est-il ATTEIGNABLE par la tête ?
+
+    La question n'est pas de savoir s'il tient sur la feuille : c'est la
+    zone que la machine peut balayer qui borne, et elle est plus petite.
+    `zone` vient de `OH;`, pour le média réellement chargé.
+
+    `premier` est la position de l'angle du premier repère dans le repère
+    de la MACHINE, si on la connaît. Sans elle on suppose le cas le plus
+    favorable — le premier repère à l'origine — ce qui donne un
+    avertissement optimiste, et c'est dit.
+
+    Écrit le 14/08/2026 après un « HORS SURFACE » qui se calculait :
+    premier repère à 34 mm, écart de 225,9 mm, zone utile de 255,9 mm.
+    Le repère opposé tombait à 259,9 mm, quatre millimètres hors
+    d'atteinte. La machine l'a découvert en s'y cassant le nez ; le
+    logiciel pouvait le dire avant d'imprimer la feuille.
+    """
+    ennuis = []
+    ox, oy = premier or (0.0, 0.0)
+    for valeur, debut, limite, axe in ((ecart[0], ox, zone[0], "l'avance"),
+                                       (ecart[1], oy, zone[1], "le chariot")):
+        bout = debut + valeur
+        if bout > limite:
+            ennuis.append(
+                f"sur {axe} : le repère opposé tombe à {bout:.1f} mm alors "
+                f"que la machine n'atteint que {limite:.1f} mm — "
+                f"{bout - limite:.1f} mm de trop. Réduire la marge de "
+                f"{(bout - limite) / 2:.0f} mm au moins, ou le dessin.")
+        elif bout > limite - branche:
+            ennuis.append(
+                f"sur {axe} : le repère opposé est à {limite - bout:.1f} mm "
+                f"du bord de la zone utile, moins qu'une branche de repère "
+                f"({branche:g} mm). Le capteur risque de manquer de place.")
+    if ennuis and premier is None:
+        ennuis.append(
+            "calculé en supposant le premier repère À L'ORIGINE machine ; "
+            "s'il en est écarté, c'est pire d'autant.")
+    return ennuis
+
+
 # ======================================================================
 # LE SCAN, PILOTÉ DEPUIS LE PC — À ÉPROUVER
 # ======================================================================
@@ -490,10 +531,17 @@ def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
 
 def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
             type_repere=1, periph=None, patience=90.0, journal=None,
-            tb57=(1, 1), depart=None, tb50=None, queue=False):
+            tb57=(1, 1), depart=None, tb50=None, queue=False,
+            depart_avant_declenchement=False):
     # `type_repere` part dans `TB55`. Sa numérotation n'est PAS établie :
     # voir TB55_DOUTEUX. C'est pour ça qu'il est réglable et non deviné.
     """Lance une détection depuis le PC. NON ÉPROUVÉ — voir l'en-tête.
+
+    `depart_avant_declenchement` place le déplacement ENTRE les paramètres
+    et le `TB99` final, au lieu d'avant toute la séquence. C'est l'ordre
+    du panneau, décrit par Christophe le 14/08/2026 : la machine prend ses
+    paramètres, PUIS demande de positionner, PUIS part sur [ENTER]. Le
+    second `TB99` est très probablement ce [ENTER].
 
     `depart` amène la POINTE de l'outil en (x, y) millimètres avant de
     lancer la séquence. C'est ce que le panneau fait faire à la main —
@@ -521,21 +569,41 @@ def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
             journal.append(f"la machine n'est pas libre (C1 = {libre}) — "
                            f"le scan risque de ne pas partir")
 
-        if depart:
+        def aller():
             # Le déplacement passe par HP-GL, sur le MÊME descripteur :
             # rouvrir le périphérique rendrait la machine muette.
             dx, dy = round(depart[0] * UNITES_PAR_MM), \
                 round(depart[1] * UNITES_PAR_MM)
             conditions._ecrire(fd, f"SP1;PU{dx},{dy};")
-            journal.append(f"tête amenée à {depart[0]:g} ; {depart[1]:g} mm")
-            ecoute.guetter(depart_t, 1.5)      # la laisser arriver
+            # ATTENDRE QU'ELLE SOIT ARRIVÉE, et non un délai fixe. Deux
+            # essais identiques du 14/08/2026 ont donné 4,8 s et 7,6 s de
+            # recherche : avec une attente aveugle de 1,5 s, le scan
+            # partait pendant que le chariot roulait encore, et la vraie
+            # position de départ dépendait d'où il venait.
+            t0 = time.monotonic()
+            while time.monotonic() - t0 < 20.0:
+                if ecoute.demander(ETAT_SIMPLE, depart_t, delai=0.5) == "0":
+                    break
+                time.sleep(0.2)
+            arrivee = time.monotonic() - t0
+            journal.append(f"tête amenée à {depart[0]:g} ; {depart[1]:g} mm "
+                           f"— immobile après {arrivee:.1f} s")
+
+        if depart and not depart_avant_declenchement:
+            aller()
 
         conditions._ecrire(fd, PREAMBULE)
         conditions._ecrire(fd, PREAMBULE)
-        for commande in sequence_scan(ecart_x, ecart_y, branche,
-                                      epaisseur, type_repere, tb57,
-                                      tb50, queue):
+        sequence = sequence_scan(ecart_x, ecart_y, branche, epaisseur,
+                                 type_repere, tb57, tb50, queue)
+        # Le DERNIER TB99 est très probablement le déclencheur — l'écran
+        # du panneau demande de positionner juste avant son équivalent,
+        # la touche ENTER.
+        for commande in sequence[:-1]:
             conditions._ecrire(fd, f"\x1b.v:{commande}\x03")
+        if depart and depart_avant_declenchement:
+            aller()
+        conditions._ecrire(fd, f"\x1b.v:{sequence[-1]}\x03")
 
         sens = {"0": "au repos", "1": "elle cherche",
                 "6": "terminé", "10": "terminé"}

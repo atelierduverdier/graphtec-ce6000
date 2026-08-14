@@ -76,6 +76,12 @@ class Apercu(QWidget):
         self.emprise = None
         self.deborde = False
         self.tuiles = []
+        self.visuel = None
+        self.place = None
+        self.rotation = 0
+        self.miroirs = (False, False)
+        self.montrer_image = True
+        self._rendu = None
         self.zoom = 1.0
         self.decalage = QPointF(0, 0)
         self._saisie = None
@@ -179,7 +185,92 @@ class Apercu(QWidget):
     def mouseDoubleClickEvent(self, _e):
         self.reinitialiser_vue()
 
-    def poser(self, polylignes, media, deborde, tuiles=(), roles=None):
+    def _peindre_visuel(self, p, pt):
+        """Le motif d'origine, calé sur l'emprise du dessin placé.
+
+        On ne recopie pas les aplats du fichier : on les TRANSPORTE. Le
+        `viewBox` du `<svg>` construit ici cadre l'emprise du dessin DANS
+        SA SOURCE, et le rectangle de rendu dit où la poser. C'est la même
+        idée que `arms._poser_visuel`, qui compose la feuille à imprimer —
+        et c'est voulu : si l'aperçu et la feuille imprimée se calaient
+        autrement, l'aperçu mentirait précisément là où on le consulte.
+        """
+        rendu = self._rendu_visuel()
+        if rendu is None or not rendu.isValid() or not self.place:
+            return
+        x0, y0, x1, y1 = self.place
+        rect = QRectF(pt(x0, y1), pt(x1, y0))     # Y de l'écran vers le bas
+        if rect.width() < 1 or rect.height() < 1:
+            return
+        p.save()
+        # Un peu translucide : les tracés doivent rester lisibles par-dessus,
+        # et c'est leur position sur le motif qu'on vient juger.
+        p.setOpacity(0.75)
+        rot = self.rotation % 360
+        mx, my = self.miroirs
+        if rot or mx or my:
+            centre = rect.center()
+            p.translate(centre)
+            # ORDRE INVERSE de celui du pipeline, exprès. Le pipeline
+            # tourne puis reflète ; les transformations d'un pinceau Qt
+            # agissent sur le repère, donc la DERNIÈRE écrite s'applique
+            # la première au contenu. Écrites dans l'ordre du pipeline,
+            # rotation 90° et miroir X se contredisaient — mesuré, les
+            # coins d'un L ne tombaient plus sur ceux de la découpe.
+            #
+            # Sens de rotation : la machine compte Y vers le haut, l'écran
+            # vers le bas, donc une rotation directe en machine est horaire
+            # à l'écran — ce que `rotate` fait pour un angle positif.
+            p.scale(-1.0 if mx else 1.0, -1.0 if my else 1.0)
+            if rot:
+                p.rotate(rot)
+            p.translate(-centre.x(), -centre.y())
+            if rot in (90, 270):
+                # Le rectangle a tourné avec le pinceau : le rendu doit
+                # viser ses côtés échangés, sinon l'image est écrasée.
+                rect = QRectF(centre.x() - rect.height() / 2,
+                              centre.y() - rect.width() / 2,
+                              rect.height(), rect.width())
+        rendu.render(p, rect)
+        p.restore()
+
+    def _rendu_visuel(self):
+        """Le rendu SVG, construit une fois. Un JPEG y est en base64 :
+        le refabriquer à chaque rafraîchissement rendrait le déplacement
+        à la souris saccadé."""
+        if self._rendu is not None:
+            return self._rendu
+        if not self.visuel:
+            return None
+        import re as _re
+        contenu = self.visuel["contenu"]
+        sx0, sy0, sx1, sy1 = self.visuel["boite"]
+        if sx1 - sx0 <= 0 or sy1 - sy0 <= 0:
+            return None
+        vb_y = self.visuel.get("hauteur", sy1) - sy1
+        try:
+            debut = contenu.index("<svg")
+            fin = contenu.index(">", debut)
+        except ValueError:
+            return None
+        entete = contenu[debut:fin]
+        interieur = contenu[fin + 1:].rsplit("</svg>", 1)[0]
+        # Reprendre les espaces de noms du fichier source : sans eux un SVG
+        # d'Inkscape ne se rend pas du tout, à cause de ses attributs
+        # `sodipodi:` et `inkscape:`.
+        espaces = " ".join(m.group(0) for m in
+                           _re.finditer(r'xmlns:[\w-]+="[^"]*"', entete))
+        if "xmlns=" not in espaces:
+            espaces = 'xmlns="http://www.w3.org/2000/svg" ' + espaces
+        enveloppe = (f'<svg {espaces} viewBox="{sx0:.3f} {vb_y:.3f} '
+                     f'{sx1 - sx0:.3f} {sy1 - sy0:.3f}" '
+                     f'preserveAspectRatio="none">{interieur}</svg>')
+        self._rendu = QSvgRenderer(enveloppe.encode("utf-8"))
+        self._rendu.setAspectRatioMode(Qt.IgnoreAspectRatio)
+        return self._rendu
+
+    def poser(self, polylignes, media, deborde, tuiles=(), roles=None,
+              visuel=None, place=None, rotation=0, miroirs=(False, False)):
         """`roles` donne, en parallèle des polylignes, le rôle de chacune.
 
         Sans lui tout se peint de la même couleur, et une couleur mal
@@ -189,6 +280,12 @@ class Apercu(QWidget):
         """
         self.media = media
         self.deborde = deborde
+        if visuel is not self.visuel:
+            self._rendu = None            # le rendu coûte un décodage base64
+        self.visuel = visuel
+        self.place = place
+        self.rotation = rotation
+        self.miroirs = miroirs
         self.tuiles = list(tuiles)
         self.roles = list(roles) if roles else []
         self.polygones = [QPolygonF([QPointF(x, y) for x, y in pts])
@@ -219,6 +316,13 @@ class Apercu(QWidget):
 
         # le dessin, PAR RÔLE. Un contour de découpe et un motif à tracer
         # ne se font pas avec le même outil ; les peindre pareil oblige à
+        # Le dessin lui-même, sous les tracés. Christophe : « il n'y a pas
+        # moyen de voir l'image dans l'afficheur ? » — jusque-là l'aperçu
+        # ne montrait que la silhouette détourée, et rien ne permettait de
+        # juger si le tour tombait au bon endroit sur le motif.
+        if self.montrer_image:
+            self._peindre_visuel(p, pt)
+
         # deviner lequel est lequel.
         if self.polygones:
             p.setBrush(Qt.NoBrush)
@@ -342,6 +446,15 @@ class Pupitre(QWidget):
 
         self.apercu = Apercu(self.pal)
         self.apercu.deplacer = self._traine
+        self.chk_visuel = QCheckBox("montrer l'image sous les tracés")
+        self.chk_visuel.setChecked(True)
+        self.chk_visuel.setToolTip(
+            "Affiche le motif d'origine — avec ses couleurs — sous les\n"
+            "tracés, à l'endroit exact où il sera imprimé.\n\n"
+            "C'est ce qui permet de juger si le tour de découpe tombe bien\n"
+            "sur le motif AVANT d'imprimer. Décocher pour n'examiner que\n"
+            "les tracés.")
+        self.chk_visuel.stateChanged.connect(self._montrer_visuel)
         self.info = QLabel("Aucun dessin chargé.")
         self.info.setObjectName("faible")
         self.info.setWordWrap(True)
@@ -361,6 +474,7 @@ class Pupitre(QWidget):
         droite = QVBoxLayout()
         droite.setSpacing(8)
         droite.addWidget(self.apercu, 1)
+        droite.addWidget(self.chk_visuel, 0)
         droite.addWidget(self.info, 0)
         corps.addLayout(droite, 1)
         racine.addLayout(corps, 1)
@@ -1783,6 +1897,10 @@ class Pupitre(QWidget):
             self.grille_couleurs.addWidget(cmb, rang, 2)
         self._roles_changes()
 
+    def _montrer_visuel(self):
+        self.apercu.montrer_image = self.chk_visuel.isChecked()
+        self.apercu.update()
+
     def _methode_contour_changee(self):
         """Grise les longueurs quand elles ne servent à rien."""
         pointille = self.cmb_contour_methode.currentText() == "en pointillé"
@@ -2622,8 +2740,15 @@ class Pupitre(QWidget):
         # Gardé pour l'envoi : c'est lui qui dira quels tracés perforer.
         self.roles_traces = roles_traces
 
-        self.apercu.poser(self.calcule + self.contour, self.media, deborde,
-                          [p[2] for p in panneaux], roles_traces)
+        # L'emprise du DESSIN seul, contour exclu : c'est elle que le motif
+        # doit remplir. Prendre l'emprise avec le contour poserait l'image
+        # trop grande, de la valeur du retrait, tout autour.
+        self.apercu.poser(
+            self.calcule + self.contour, self.media, deborde,
+            [p[2] for p in panneaux], roles_traces,
+            visuel=self.visuel, place=noyau.cadre(self.calcule),
+            rotation=int(self.cmb_rot.currentText().rstrip("°")),
+            miroirs=(self.chk_mx.isChecked(), self.chk_my.isChecked()))
 
         n = len(self.calcule)
         texte = (f"{n} tracé(s) — emprise {x1 - x0:.1f} × {y1 - y0:.1f} mm, "

@@ -288,6 +288,49 @@ def molette_non_protegee():
     pupitre.Pupitre._proteger_de_la_molette = lambda self, *a: None
 
 
+def visuel_transforme_dans_l_ordre_du_pipeline():
+    """La faute : écrire rotation puis miroir comme le fait le pipeline.
+
+    Les transformations d'un pinceau Qt agissent sur le REPÈRE : la
+    dernière écrite s'applique la première au contenu. Écrites dans
+    l'ordre du pipeline, quatre combinaisons sur seize posaient l'image
+    de travers — et une image de travers fait valider un placement faux.
+    """
+    import pupitre
+    _vraies["visuel"] = pupitre.Apercu._peindre_visuel
+    vrai = _vraies["visuel"]
+
+    def a_l_envers(self, p, pt):
+        rot, (mx, my) = self.rotation % 360, self.miroirs
+        if not (rot and (mx or my)):
+            return vrai(self, p, pt)
+        self.rotation, self.miroirs = 0, (False, False)
+        try:
+            from PySide6.QtCore import QRectF
+            rendu = self._rendu_visuel()
+            if rendu is None or not self.place:
+                return
+            x0, y0, x1, y1 = self.place
+            rect = QRectF(pt(x0, y1), pt(x1, y0))
+            centre = rect.center()
+            p.save()
+            p.setOpacity(0.75)
+            p.translate(centre)
+            p.rotate(rot)                      # ordre du pipeline : faux
+            p.scale(-1.0 if mx else 1.0, -1.0 if my else 1.0)
+            p.translate(-centre.x(), -centre.y())
+            if rot in (90, 270):
+                rect = QRectF(centre.x() - rect.height() / 2,
+                              centre.y() - rect.width() / 2,
+                              rect.height(), rect.width())
+            rendu.render(p, rect)
+            p.restore()
+        finally:
+            self.rotation, self.miroirs = rot, (mx, my)
+
+    pupitre.Apercu._peindre_visuel = a_l_envers
+
+
 def rainage_devenu_coupe():
     """La faute : « corriger » la force 2 du canson en la croyant fautive."""
     for nom, m in materiaux.MATERIAUX.items():
@@ -409,6 +452,12 @@ CAS = [
      molette_non_protegee,
      lambda: setattr(__import__("pupitre").Pupitre,
                      "_proteger_de_la_molette", _vraies["molette"])),
+
+    ("image de l'aperçu tournée dans l'ordre du pipeline",
+     "test_limage_se_pose_sous_les_traces_au_bon_endroit",
+     visuel_transforme_dans_l_ordre_du_pipeline,
+     lambda: setattr(__import__("pupitre").Apercu,
+                     "_peindre_visuel", _vraies["visuel"])),
 
     ("profil dont la force sort des bornes machine",
      "test_profils_coherents",

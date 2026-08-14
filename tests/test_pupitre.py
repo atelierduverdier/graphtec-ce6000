@@ -306,6 +306,88 @@ def test_la_molette_epargne_aussi_les_listes_nees_plus_tard(fenetre):
         f"{cmb.currentText()}")
 
 
+def test_limage_se_pose_sous_les_traces_au_bon_endroit(fenetre):
+    """Le motif affiché doit s'accorder avec ce qui sera DÉCOUPÉ.
+
+    Christophe : « il n'y a pas moyen de voir l'image dans l'afficheur ? »
+    L'aperçu ne montrait que la silhouette détourée, et rien ne permettait
+    de juger si le tour tombait au bon endroit sur le motif.
+
+    Une image posée de travers serait pire que pas d'image du tout : elle
+    ferait valider un placement faux. Le test prend donc un L — dont un
+    quadrant est VIDE — et exige qu'à chaque coin l'image rendue et la
+    géométrie disent la même chose. Une forme symétrique ne prouverait
+    rien : elle a le même aspect dans les huit orientations.
+
+    Les seize combinaisons de rotation et de miroir sont éprouvées parce
+    que c'est là qu'était la faute : le pipeline tourne PUIS reflète,
+    alors que les transformations d'un pinceau Qt s'appliquent dans
+    l'ordre inverse de leur écriture. Écrites dans l'ordre du pipeline,
+    quatre combinaisons sur seize tombaient à côté.
+    """
+    import tempfile
+    from PySide6.QtGui import QImage
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return                                  # sans Pillow, rien à faire
+
+    image = Image.new("RGB", (200, 200), "white")
+    ImageDraw.Draw(image).polygon(
+        [(20, 20), (110, 20), (110, 110), (180, 110), (180, 180), (20, 180)],
+        fill=(0, 150, 0))
+    chemin = os.path.join(tempfile.gettempdir(), "essai_L_apercu.png")
+    image.save(chemin)
+
+    def dans(polygone, x, y):
+        """Point dans polygone, par le nombre de croisements."""
+        dedans = False
+        n = len(polygone)
+        for i in range(n):
+            (ax, ay), (bx, by) = polygone[i], polygone[(i + 1) % n]
+            if (ay > y) != (by > y) and \
+                    x < (bx - ax) * (y - ay) / (by - ay + 1e-12) + ax:
+                dedans = not dedans
+        return dedans
+
+    fenetre.brut, fenetre.couleurs, _ = fenetre._ouvrir_image(chemin)
+    fenetre.correspondance = {}
+    fenetre.reperes = set()
+    fenetre.chk_contour.setChecked(False)
+
+    desaccords = []
+    for rotation in (0, 90, 180, 270):
+        for mx in (False, True):
+            for my in (False, True):
+                fenetre.cmb_rot.setCurrentText(f"{rotation}°")
+                fenetre.chk_mx.setChecked(mx)
+                fenetre.chk_my.setChecked(my)
+                fenetre._rafraichir_cotes()
+                fenetre._recalculer()
+                vue = fenetre.apercu
+                vue.resize(620, 480)
+                rendu = QImage(620, 480, QImage.Format_RGB32)
+                vue.render(rendu)
+                k, ox, oy = vue._cadrage()
+                x0, y0, x1, y1 = vue.place
+                polygone = fenetre.calcule[0][0]
+                for nom, (fx, fy) in {"HG": (.25, .75), "HD": (.75, .75),
+                                      "BG": (.25, .25), "BD": (.75, .25)}.items():
+                    mmx, mmy = x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy
+                    q = rendu.pixelColor(int(ox + mmx * k), int(oy - mmy * k))
+                    vert = q.green() > q.red() + 30 and q.green() > q.blue() + 30
+                    if dans(polygone, mmx, mmy) != vert:
+                        desaccords.append(f"{rotation}° mx={mx} my={my} {nom}")
+
+    fenetre.cmb_rot.setCurrentText("0°")
+    fenetre.chk_mx.setChecked(False)
+    fenetre.chk_my.setChecked(False)
+    os.unlink(chemin)
+    assert not desaccords, (
+        f"{len(desaccords)} coin(s) où l'image ne tombe pas sur la découpe : "
+        f"{', '.join(desaccords[:6])}")
+
+
 def test_le_contour_se_coupe_en_pointille(fenetre):
     """Des ponts de matière doivent retenir la pièce dans sa feuille.
 

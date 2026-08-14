@@ -23,6 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import contour
 import projet as fichier_projet
+import impression
 import roles as roles_couleur
 import svg2hpgl as noyau
 import mosaique                                    # noqa: E402
@@ -32,7 +33,8 @@ from theme import SOMBRE, CLAIR, feuille_de_style           # noqa: E402
 import conditions as machine                                # noqa: E402
 import icones                                               # noqa: E402
 
-from PySide6.QtCore import Qt, QPointF, QRectF, QSize, QTimer        # noqa: E402
+from PySide6.QtCore import (Qt, QPointF, QRectF, QSize, QTimer,
+                            QEvent, QObject)        # noqa: E402
 from PySide6.QtGui import (QPainter, QPen, QColor, QPolygonF,  # noqa: E402
                            QIcon, QPixmap)
 from PySide6.QtSvg import QSvgRenderer                        # noqa: E402
@@ -193,6 +195,32 @@ class Apercu(QWidget):
 # B. LE PUPITRE
 # ======================================================================
 
+class _MoletteNonVoleuse(QObject):
+    """Empêche les champs numériques de voler la molette.
+
+    Un QSpinBox saisit l'événement de molette même sans avoir le focus :
+    on fait défiler la colonne, le curseur passe au-dessus d'un champ, le
+    défilement s'arrête net et la VALEUR CHANGE. Christophe l'a signalé
+    le 14/08/2026 — c'est une faute d'usage sournoise, parce qu'elle
+    modifie un réglage sans qu'on l'ait voulu et sans rien dire.
+
+    Le remède : ne traiter la molette que si le champ a le focus, et
+    sinon la renvoyer à la zone défilante qui le porte.
+    """
+
+    def eventFilter(self, objet, evenement):
+        if evenement.type() != QEvent.Wheel or objet.hasFocus():
+            return False
+        zone = objet.parent()
+        while zone is not None and not isinstance(zone, QScrollArea):
+            zone = zone.parent()
+        if zone is not None:
+            barre = zone.verticalScrollBar()
+            pas = evenement.angleDelta().y()
+            barre.setValue(barre.value() - pas)
+        return True
+
+
 class Pupitre(QWidget):
 
     def __init__(self):
@@ -257,6 +285,13 @@ class Pupitre(QWidget):
         else:
             self.resize(1120, 720)
 
+        # La molette ne doit pas changer un réglage en passant dessus.
+        self._molette = _MoletteNonVoleuse(self)
+        for classe in (QSpinBox, QDoubleSpinBox, QComboBox):
+            for champ in self.findChildren(classe):
+                champ.setFocusPolicy(Qt.StrongFocus)
+                champ.installEventFilter(self._molette)
+
         self._habiller()
         # RIEN qui parle à la machine ici. Le constructeur interrogeait le
         # traceur avant que la fenêtre s'affiche, et surtout il lisait le
@@ -269,6 +304,7 @@ class Pupitre(QWidget):
         # les conditions attendent qu'on ouvre l'onglet Outil.
         self._conditions_lues = False
         self.onglets.currentChanged.connect(self._onglet_change)
+        QTimer.singleShot(0, self._ajuster_largeurs)
         QTimer.singleShot(0, lambda: self._interroger_media(silencieux=True))
         self._lire_condition(silencieux=True)
 
@@ -353,6 +389,13 @@ class Pupitre(QWidget):
         self.pal = CLAIR if self.pal is SOMBRE else SOMBRE
         self.b_theme.setText("Thème clair" if self.pal is SOMBRE
                              else "Thème sombre")
+        # La molette ne doit pas changer un réglage en passant dessus.
+        self._molette = _MoletteNonVoleuse(self)
+        for classe in (QSpinBox, QDoubleSpinBox, QComboBox):
+            for champ in self.findChildren(classe):
+                champ.setFocusPolicy(Qt.StrongFocus)
+                champ.installEventFilter(self._molette)
+
         self._habiller()
 
     # ---------------------------------------------------------------- UI
@@ -500,6 +543,23 @@ class Pupitre(QWidget):
         # --- print & cut
         g = QGroupBox("Print && cut (ARMS)")
         gl = QGridLayout(g)
+
+        # LES RANGS SE COMPTENT TOUT SEULS. Ce cadre a grandi de quatre
+        # lignes à vingt-cinq en une nuit, et les numéros écrits à la main
+        # ont fini par se chevaucher : deux widgets dans la même case,
+        # dont un invisible. C'est exactement la faute qui avait fait
+        # disparaître la liste « outil », et un test la voit — mais autant
+        # supprimer la cause.
+        _rang = [0]
+
+        def pose(gauche, droite=None):
+            if droite is None:
+                gl.addWidget(gauche, _rang[0], 0, 1, 2)
+            else:
+                gl.addWidget(gauche, _rang[0], 0)
+                gl.addWidget(droite, _rang[0], 1)
+            _rang[0] += 1
+
         self.chk_arms = QCheckBox("après une détection de repères")
         self.chk_arms.setToolTip(
             "À cocher quand la machine vient de détecter les repères d'une\n"
@@ -525,18 +585,16 @@ class Pupitre(QWidget):
         self.lbl_arms = QLabel("réglages non lus")
         self.lbl_arms.setObjectName("faible")
         self.lbl_arms.setWordWrap(True)
-        gl.addWidget(self.chk_arms, 0, 0, 1, 2)
-        gl.addWidget(rappel_arms, 1, 0, 1, 2)
-        gl.addWidget(b_arms, 2, 0, 1, 2)
-        gl.addWidget(self.lbl_arms, 3, 0, 1, 2)
+        pose(self.chk_arms)
+        pose(rappel_arms)
+        pose(b_arms)
+        pose(self.lbl_arms)
         # Écart entre repères, dans l'ordre de TB124 : l'avance d'abord.
         # Défauts = les cotes relevées sur le gabarit officiel de Graphtec.
         self.spn_ecart_av = self._reel(20, 900, 160.0)
         self.spn_ecart_ch = self._reel(20, 600, 150.0)
-        gl.addWidget(QLabel("écart avance"), 4, 0)
-        gl.addWidget(self.spn_ecart_av, 4, 1)
-        gl.addWidget(QLabel("écart chariot"), 5, 0)
-        gl.addWidget(self.spn_ecart_ch, 5, 1)
+        pose(QLabel("écart avance"), self.spn_ecart_av)
+        pose(QLabel("écart chariot"), self.spn_ecart_ch)
         b_scan = QPushButton("Lancer une détection  (à éprouver)")
         b_scan.setToolTip(
             "Déclenche le balayage depuis le PC, au lieu du panneau.\n\n"
@@ -546,14 +604,13 @@ class Pupitre(QWidget):
             "le panneau. À employer pour reprendre l'enquête, pas pour\n"
             "travailler.")
         b_scan.clicked.connect(self._scanner_arms)
-        gl.addWidget(b_scan, 6, 0, 1, 2)
+        pose(b_scan)
         self.spn_marge_arms = self._reel(5, 200, 25.0)
         self.spn_marge_arms.setToolTip(
             "distance entre le dessin et l'ANGLE des repères.\n"
             "En dessous de la longueur des branches (20 mm), les repères\n"
             "mordent sur le dessin.")
-        gl.addWidget(QLabel("marge repères"), 7, 0)
-        gl.addWidget(self.spn_marge_arms, 7, 1)
+        pose(QLabel("marge repères"), self.spn_marge_arms)
         self.chk_marges4 = QCheckBox("quatre marges séparées")
         self.chk_marges4.setToolTip(
             "Comme le panneau de Graphtec Studio.\n\n"
@@ -565,20 +622,36 @@ class Pupitre(QWidget):
         self.spn_md = self._reel(1, 200, 25.0)
         self.spn_mb = self._reel(1, 200, 25.0)
         self.spn_mh = self._reel(1, 200, 25.0)
-        gl.addWidget(self.chk_marges4, 15, 0, 1, 2)
-        for rang, (nom, w) in enumerate((("gauche (chariot)", self.spn_mg),
-                                         ("droite (chariot)", self.spn_md),
-                                         ("bas (avance)", self.spn_mb),
-                                         ("haut (avance)", self.spn_mh)), 16):
-            gl.addWidget(QLabel(nom), rang, 0)
-            gl.addWidget(w, rang, 1)
+        pose(self.chk_marges4)
+        for nom, w in (("gauche (chariot)", self.spn_mg),
+                       ("droite (chariot)", self.spn_md),
+                       ("bas (avance)", self.spn_mb),
+                       ("haut (avance)", self.spn_mh)):
+            pose(QLabel(nom), w)
         b_feuille = QPushButton("Exporter la feuille à imprimer…")
         b_feuille.setToolTip(
             "Écrit le dessin ENTOURÉ de ses quatre repères, à imprimer\n"
             "tel quel à l'échelle 1. Règle ensuite le placement pour que\n"
             "la découpe retombe sur l'impression.")
         b_feuille.clicked.connect(self._exporter_feuille)
-        gl.addWidget(b_feuille, 8, 0, 1, 2)
+        pose(b_feuille)
+        self.cmb_imprimante = QComboBox()
+        self.cmb_imprimante.addItems(impression.imprimantes() or ["(aucune)"])
+        self.chk_gris = QCheckBox("noir seul")
+        b_imprimer = QPushButton("Imprimer la feuille")
+        b_imprimer.setToolTip(
+            "Compose la feuille et l'envoie à l'imprimante À L'ÉCHELLE 1.\n\n"
+            "Les options qui interdisent la mise à l'échelle sont posées\n"
+            "par le logiciel : un « ajuster à la page » de 4 % déplace un\n"
+            "repère de huit millimètres, et la feuille sort belle.")
+        b_imprimer.clicked.connect(self._imprimer_feuille)
+        ligne_imp = QHBoxLayout()
+        ligne_imp.addWidget(self.cmb_imprimante, 1)
+        ligne_imp.addWidget(self.chk_gris)
+        boite_imp = QWidget()
+        boite_imp.setLayout(ligne_imp)
+        pose(boite_imp)
+        pose(b_imprimer)
         self.spn_trait_arms = self._reel(0.3, 3.0, 1.0)
         self.spn_trait_arms.setDecimals(1)
         self.spn_trait_arms.setToolTip(
@@ -586,8 +659,7 @@ class Pupitre(QWidget):
             "Le manuel donne 0,3 à 1 mm ; au-delà on sort de la plage\n"
             "annoncée, mais un trait plus gros donne plus de signal au\n"
             "capteur. C'est la feuille qui tranche, pas la notice.")
-        gl.addWidget(QLabel("trait repères"), 9, 0)
-        gl.addWidget(self.spn_trait_arms, 9, 1)
+        pose(QLabel("trait repères"), self.spn_trait_arms)
         self.cmb_type_arms = QComboBox()
         self.cmb_type_arms.addItems(["type 2 — angles vers l'extérieur",
                                      "type 1 — angles vers l'intérieur"])
@@ -597,8 +669,7 @@ class Pupitre(QWidget):
             "papier, puis s'arrêter sur le bord de la feuille.\n\n"
             "Type 2 : repères DANS la zone de découpe, plus de surface\n"
             "utile. Type 1 : repères autour, feuille plus grande.")
-        gl.addWidget(QLabel("type de repère"), 10, 0)
-        gl.addWidget(self.cmb_type_arms, 10, 1)
+        pose(QLabel("type de repère"), self.cmb_type_arms)
         self.spn_corr_av = self._reel(-20.0, 20.0, 0.0)
         self.spn_corr_ch = self._reel(-20.0, 20.0, 0.0)
         for w in (self.spn_corr_av, self.spn_corr_ch):
@@ -615,17 +686,15 @@ class Pupitre(QWidget):
                 "dit tout de suite si le signe est le bon.\n\n"
                 "N'agit que sur la DÉCOUPE, jamais sur la feuille à "
                 "imprimer.")
-        gl.addWidget(QLabel("correction avance"), 11, 0)
-        gl.addWidget(self.spn_corr_av, 11, 1)
-        gl.addWidget(QLabel("correction chariot"), 12, 0)
-        gl.addWidget(self.spn_corr_ch, 12, 1)
+        pose(QLabel("correction avance"), self.spn_corr_av)
+        pose(QLabel("correction chariot"), self.spn_corr_ch)
         # Deux paramètres du protocole, ouverts pour l'ESSAI. TB57 est le
         # seul dont un binaire officiel dise qu'il porte un mode
         # (AccumPCode_TB57_MODE dans Cutting Master 3), et le seul qu'on
         # n'ait jamais fait varier — on envoie TB57,1,1 depuis le début.
         essais = QLabel("essais de protocole")
         essais.setObjectName("faible")
-        gl.addWidget(essais, 13, 0, 1, 2)
+        pose(essais)
         self.spn_tb57a = self._entier(0, 9, 1)
         self.spn_tb57b = self._entier(0, 9, 1)
         self.spn_tb55 = self._entier(0, 9, 1)
@@ -650,7 +719,7 @@ class Pupitre(QWidget):
         rang.addWidget(self.spn_tb55)
         cadre_essais = QWidget()
         cadre_essais.setLayout(rang)
-        gl.addWidget(cadre_essais, 14, 0, 1, 2)
+        pose(cadre_essais)
         self.chk_depart = QCheckBox("amener la tête avant de chercher")
         self.chk_depart.setToolTip(
             "Le manuel demande de « positionner le chariot dans la zone\n"
@@ -660,7 +729,7 @@ class Pupitre(QWidget):
             "scans pilotés depuis le PC ne l'a jamais fait.")
         self.spn_dep_av = self._reel(0, 600, 35.0)
         self.spn_dep_ch = self._reel(0, 600, 30.0)
-        gl.addWidget(self.chk_depart, 20, 0, 1, 2)
+        pose(self.chk_depart)
         for w in (self.spn_dep_av, self.spn_dep_ch):
             w.setToolTip(
                 "Position de l'angle du PREMIER REPÈRE dans le repère de\n"
@@ -668,10 +737,8 @@ class Pupitre(QWidget):
                 "Sert deux fois : à amener la tête avant le scan, et à\n"
                 "vérifier à l'export que le repère opposé reste dans la\n"
                 "zone que la machine peut atteindre.")
-        gl.addWidget(QLabel("1er repère, avance"), 21, 0)
-        gl.addWidget(self.spn_dep_av, 21, 1)
-        gl.addWidget(QLabel("1er repère, chariot"), 22, 0)
-        gl.addWidget(self.spn_dep_ch, 22, 1)
+        pose(QLabel("1er repère, avance"), self.spn_dep_av)
+        pose(QLabel("1er repère, chariot"), self.spn_dep_ch)
         g_arms = g
 
         # --- rôles des couleurs
@@ -878,6 +945,14 @@ class Pupitre(QWidget):
             # Défilement vertical seulement : la colonne a une largeur
             # voulue, et une barre horizontale rognerait les libellés.
             zone.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            # Sans largeur minimale, la barre de défilement verticale mange
+            # la place et la colonne se retrouve ROGNÉE : les libellés
+            # perdent leur début, « largeur » devient « eur ». Vu sur une
+            # capture de Christophe, pas dans le code.
+            # La largeur minimale est posée plus tard, par
+            # `_ajuster_largeurs` : ici le contenu ne connaît pas encore
+            # sa taille, et un sizeHint pris trop tôt rogne les champs de
+            # quelques pixels — assez pour manger leurs flèches.
             return zone
 
         self.onglets = QTabWidget()
@@ -1451,6 +1526,83 @@ class Pupitre(QWidget):
         else:
             QMessageBox.information(self, "Feuille à imprimer", texte)
 
+    def _imprimer_feuille(self):
+        """Compose et imprime, à l'échelle exacte.
+
+        Le même contrôle qu'à l'export : inutile d'imprimer une feuille
+        dont les repères seront hors d'atteinte de la tête.
+        """
+        import arms
+        import tempfile
+        if not self.calcule:
+            QMessageBox.information(self, "Imprimer", "Ouvre d'abord un dessin.")
+            return
+        nom = self.cmb_imprimante.currentText()
+        if nom.startswith("("):
+            QMessageBox.warning(self, "Imprimer",
+                                "Aucune imprimante connue du système.")
+            return
+        marge = self.spn_marge_arms.value()
+        quatre = None
+        if self.chk_marges4.isChecked():
+            quatre = (self.spn_mg.value(), self.spn_md.value(),
+                      self.spn_mb.value(), self.spn_mh.value())
+        try:
+            svg, infos = arms.composer(
+                self.calcule, marge=marge, marges=quatre,
+                epaisseur=self.spn_trait_arms.value(),
+                type_repere=self._type_arms())
+        except ValueError as e:
+            QMessageBox.warning(self, "Imprimer", str(e))
+            return
+
+        hors = arms.tient_dans_la_zone(
+            infos["ecart"], (self.spn_mx.value(), self.spn_my.value()),
+            premier=(self.spn_dep_av.value(), self.spn_dep_ch.value()))
+        ax, ay = infos["ecart"]
+        question = (f"Imprimer sur {nom} à l'échelle 1.\n\n"
+                    f"écart entre repères {ax:.1f} × {ay:.1f} mm\n"
+                    f"dessin à {infos['origine_dessin'][0]:g} ; "
+                    f"{infos['origine_dessin'][1]:g} mm du premier repère")
+        for a in infos["avertissements"] + hors:
+            question += f"\n\nATTENTION : {a}"
+        if hors:
+            question += ("\n\nCes repères seront HORS D'ATTEINTE de la "
+                         "tête : la feuille sera imprimée pour rien.")
+        question += "\n\nContinuer ?"
+        rep = QMessageBox.question(self, "Imprimer la feuille", question,
+                                   QMessageBox.Ok | QMessageBox.Cancel)
+        if rep != QMessageBox.Ok:
+            return
+
+        with tempfile.TemporaryDirectory() as dossier:
+            chemin_svg = os.path.join(dossier, "feuille.svg")
+            chemin_pdf = os.path.join(dossier, "feuille.pdf")
+            with open(chemin_svg, "w", encoding="utf-8") as f:
+                f.write(svg)
+            try:
+                import subprocess
+                subprocess.run(["rsvg-convert", "-f", "pdf",
+                                "-o", chemin_pdf, chemin_svg],
+                               check=True, capture_output=True, timeout=30)
+                travail = impression.imprimer(
+                    chemin_pdf, nom, copies=1,
+                    gris=self.chk_gris.isChecked())
+            except Exception as e:
+                QMessageBox.warning(self, "Imprimer", str(e))
+                return
+
+        # Sceller le placement, comme le fait l'export : c'est cette
+        # feuille-là qui part sur la machine.
+        self.empreinte_export = fichier_projet.empreinte(self._lire_reglages())
+        ox, oy = infos["origine_dessin"]
+        self.spn_x.setValue(ox)
+        self.spn_y.setValue(oy)
+        self.chk_arms.setChecked(True)
+        self.spn_ecart_av.setValue(ax)
+        self.spn_ecart_ch.setValue(ay)
+        self.lbl_arms.setText(f"feuille envoyée à {nom} — {travail}")
+
     def _scanner_arms(self):
         """Déclenche une détection depuis le PC. Chemin NON ÉPROUVÉ.
 
@@ -1769,6 +1921,27 @@ class Pupitre(QWidget):
         # Un dessin neuf mérite un cadrage neuf ; un simple réglage, non.
         self.apercu.reinitialiser_vue()
         self._recalculer()
+
+    def _ajuster_largeurs(self):
+        """Donne à la colonne la largeur que son contenu réclame.
+
+        Une fois la mise en page faite, et pas avant : un `sizeHint` pris
+        dans le constructeur vaut moins que la réalité, et la colonne se
+        retrouve rognée de quelques pixels — assez pour manger les flèches
+        des champs. Vu sur une capture de Christophe le 14/08/2026, pas
+        dans le code.
+        """
+        besoin = 0
+        for i in range(self.onglets.count()):
+            zone = self.onglets.widget(i)
+            if not isinstance(zone, QScrollArea):
+                continue
+            besoin = max(besoin,
+                         zone.widget().sizeHint().width()
+                         + zone.verticalScrollBar().sizeHint().width()
+                         + 2 * zone.frameWidth() + 4)
+        if besoin:
+            self.onglets.setMinimumWidth(besoin + 6)
 
     def _onglet_change(self, index):
         """Lit les conditions à la PREMIÈRE ouverture de l'onglet Outil.

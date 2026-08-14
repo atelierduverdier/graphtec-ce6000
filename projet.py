@@ -58,6 +58,7 @@ REGLAGES = [
     ("chk_marges4", "bool"), ("spn_mg", "reel"), ("spn_md", "reel"),
     ("spn_mb", "reel"), ("spn_mh", "reel"),
     ("chk_depart", "bool"), ("spn_dep_av", "reel"), ("spn_dep_ch", "reel"),
+    ("cmb_imprimante", "texte"), ("chk_gris", "bool"),
     # outil
     ("cmb_profil", "texte"), ("cmb_cond", "entier_liste"),
     ("cmb_outil", "texte"), ("spn_offset", "entier"), ("spn_debord", "reel"),

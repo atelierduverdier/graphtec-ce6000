@@ -59,6 +59,7 @@ class Apercu(QWidget):
         self.pal = palette
         self.media = (380.9, 285.6)
         self.polygones = []
+        self.roles = []
         self.emprise = None
         self.deborde = False
         self.tuiles = []
@@ -127,10 +128,18 @@ class Apercu(QWidget):
     def mouseDoubleClickEvent(self, _e):
         self.reinitialiser_vue()
 
-    def poser(self, polylignes, media, deborde, tuiles=()):
+    def poser(self, polylignes, media, deborde, tuiles=(), roles=None):
+        """`roles` donne, en parallèle des polylignes, le rôle de chacune.
+
+        Sans lui tout se peint de la même couleur, et une couleur mal
+        rangée ne se voit qu'en changeant le sélecteur d'envoi pour la
+        faire disparaître. Christophe : « et je les vois comment ces
+        traits ? » — il ne les voyait pas.
+        """
         self.media = media
         self.deborde = deborde
         self.tuiles = list(tuiles)
+        self.roles = list(roles) if roles else []
         self.polygones = [QPolygonF([QPointF(x, y) for x, y in pts])
                           for pts, _ in polylignes]
         self.emprise = noyau.cadre(polylignes) if polylignes else None
@@ -157,11 +166,25 @@ class Apercu(QWidget):
         p.setBrush(QColor(pal.papier))
         p.drawRect(QRectF(pt(0, my), pt(mx, 0)))
 
-        # le dessin
+        # le dessin, PAR RÔLE. Un contour de découpe et un motif à tracer
+        # ne se font pas avec le même outil ; les peindre pareil oblige à
+        # deviner lequel est lequel.
         if self.polygones:
             p.setBrush(Qt.NoBrush)
-            p.setPen(QPen(QColor(pal.alerte if self.deborde else pal.trace), 1))
-            for poly in self.polygones:
+            defaut = QColor(pal.alerte if self.deborde else pal.trace)
+            # Quatre rôles, quatre couleurs DISTINCTES. Le rainage et le
+            # contour partageaient l'orange, ce qui rendait la légende
+            # menteuse — deux traits de même couleur pour deux outils
+            # différents.
+            couleurs = {"tracer": defaut,
+                        "decouper": QColor(pal.alerte),
+                        "rainer": QColor("#7ac74f"),
+                        "contour": QColor(pal.accent)}
+            for i, poly in enumerate(self.polygones):
+                role = self.roles[i] if i < len(self.roles) else None
+                teinte = defaut if self.deborde else couleurs.get(role, defaut)
+                epaisseur = 2 if role in ("decouper", "contour") else 1
+                p.setPen(QPen(teinte, epaisseur))
                 p.drawPolyline(QPolygonF([pt(q.x(), q.y()) for q in poly]))
 
         # l'emprise, pour lire le placement d'un coup d'oeil
@@ -1444,6 +1467,7 @@ class Pupitre(QWidget):
         viennent de servir à la détection.
         """
         if not self.couleurs or len(self.couleurs) != len(self.brut):
+            self._roles_retenus = ["tracer"] * len(self.brut)
             return self.brut
         par_role = roles_couleur.classer(self.brut, self.couleurs,
                                          self.correspondance, self.reperes)
@@ -1453,9 +1477,10 @@ class Pupitre(QWidget):
         else:
             garde = {"tracer": ["tracer"], "rainer": ["rainer"],
                      "découper": ["decouper"]}[choix]
-        retenus = []
+        retenus, self._roles_retenus = [], []
         for role in garde:
             retenus += par_role[role]
+            self._roles_retenus += [role] * len(par_role[role])
         return retenus
 
     def _type_arms(self):
@@ -2127,8 +2152,21 @@ class Pupitre(QWidget):
         else:
             self.lbl_perfo.setText("inactive")
 
+        # Le rôle de chaque tracé, dans le même ordre que les polylignes.
+        # L'appariement se fait par l'ORDRE et non par l'identité des
+        # objets : le pipeline reconstruit les listes de points à chaque
+        # étape, donc les identités ne survivent pas. `dupliquer` recopie
+        # le lot entier, d'où la répétition.
+        base = getattr(self, "_roles_retenus", []) or \
+            ["tracer"] * len(self.brut)
+        copies = max(1, self.spn_rang.value()) * max(1, self.spn_col.value())
+        roles_traces = base * copies
+        if len(roles_traces) != len(self.calcule):
+            roles_traces = ["tracer"] * len(self.calcule)
+        roles_traces = roles_traces + ["contour"] * len(self.contour)
+
         self.apercu.poser(self.calcule + self.contour, self.media, deborde,
-                          [p[2] for p in panneaux])
+                          [p[2] for p in panneaux], roles_traces)
 
         n = len(self.calcule)
         texte = (f"{n} tracé(s) — emprise {x1 - x0:.1f} × {y1 - y0:.1f} mm, "
@@ -2138,6 +2176,13 @@ class Pupitre(QWidget):
         if deborde:
             texte += ("  —  UN PANNEAU DÉBORDE" if panneaux
                       else "  —  LE DESSIN DÉBORDE DE LA ZONE UTILE")
+        presents = []
+        for role, mot in (("tracer", "tracé"), ("rainer", "rainage"),
+                          ("decouper", "découpe"), ("contour", "contour")):
+            if role in roles_traces:
+                presents.append(mot)
+        if len(presents) > 1:
+            texte += "  —  " + " · ".join(presents)
         self.info.setText(texte)
         # Un message d'alerte doit aussi en avoir la couleur : un texte
         # rouge sous un style neutre ne se lit pas comme un refus.

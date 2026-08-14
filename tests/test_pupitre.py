@@ -403,6 +403,48 @@ def test_un_export_ne_se_denonce_pas_lui_meme(fenetre):
     assert fenetre.chk_arms.isChecked()
 
 
+def test_lapercu_sait_le_role_de_chaque_trace(fenetre):
+    """Chaque tracé de l'aperçu doit porter SON rôle, dans le bon ordre.
+
+    L'aperçu peint le motif, le rainage, la découpe et le contour de
+    quatre couleurs. L'appariement se fait par l'ORDRE, parce que le
+    pipeline reconstruit les listes de points à chaque étape et que les
+    identités d'objets n'y survivent pas — une première version appariait
+    par `id()` et rangeait donc tout en « tracer », sans que rien ne
+    proteste.
+
+    Christophe : « et je les vois comment ces traits ? » — il ne les
+    voyait pas.
+    """
+    import roles as roles_couleur
+
+    # noir à tracer, bleu à rainer, rouge à découper — dans cet ordre.
+    fenetre.brut = [
+        ([(0.0, 0.0), (50.0, 0.0), (50.0, 30.0), (0.0, 0.0)], True),
+        ([(10.0, 5.0), (10.0, 25.0)], False),
+        ([(-5.0, -5.0), (55.0, -5.0), (55.0, 35.0), (-5.0, -5.0)], True),
+    ]
+    fenetre.couleurs = [(0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)]
+    fenetre.correspondance = {}
+    fenetre.reperes = set()
+    fenetre.chk_contour.setChecked(False)
+    fenetre.cmb_travail.setCurrentText("tout, sauf les repères")
+    fenetre._recalculer()
+
+    assert len(fenetre.apercu.roles) == len(fenetre.calcule), (
+        "autant de rôles que de tracés, sinon l'appariement a glissé")
+    assert set(fenetre.apercu.roles) == {"tracer", "rainer", "decouper"}, (
+        f"rôles peints : {fenetre.apercu.roles} — tout a été rangé dans "
+        f"le même, l'appariement ne suit plus l'ordre")
+
+    fenetre.chk_contour.setChecked(True)
+    fenetre._recalculer()
+    assert "contour" in fenetre.apercu.roles, (
+        "le contour n'a pas sa couleur propre dans l'aperçu")
+    assert len(fenetre.apercu.roles) == len(fenetre.calcule) + \
+        len(fenetre.contour)
+
+
 def test_les_onglets_defilent(fenetre):
     """Chaque onglet doit pouvoir défiler, sinon la fenêtre déborde l'écran.
 

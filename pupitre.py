@@ -32,7 +32,7 @@ from theme import SOMBRE, CLAIR, feuille_de_style           # noqa: E402
 import conditions as machine                                # noqa: E402
 import icones                                               # noqa: E402
 
-from PySide6.QtCore import Qt, QPointF, QRectF, QSize        # noqa: E402
+from PySide6.QtCore import Qt, QPointF, QRectF, QSize, QTimer        # noqa: E402
 from PySide6.QtGui import (QPainter, QPen, QColor, QPolygonF,  # noqa: E402
                            QIcon, QPixmap)
 from PySide6.QtSvg import QSvgRenderer                        # noqa: E402
@@ -258,12 +258,18 @@ class Pupitre(QWidget):
             self.resize(1120, 720)
 
         self._habiller()
-        self._interroger_media(silencieux=True)
-        # Charger la condition RÉELLE au démarrage. Sans ça les champs
-        # affichent des valeurs par défaut, et « Appliquer maintenant » les
-        # écrirait dans la machine en croyant obéir : c'est arrivé le
-        # 11/08/2026, un « Stylo feutre » monté est repassé à CB09U.
-        self._resumer_conditions()
+        # RIEN qui parle à la machine ici. Le constructeur interrogeait le
+        # traceur avant que la fenêtre s'affiche, et surtout il lisait le
+        # vidage complet TC2009,5 puis refermait le périphérique — ce que
+        # la règle 5 du dépôt interdit : la machine reste alors muette des
+        # dizaines de secondes. Le programme sabotait son propre premier
+        # envoi, et mettait plusieurs secondes à apparaître.
+        #
+        # La zone utile est demandée dès que la fenêtre est à l'écran ;
+        # les conditions attendent qu'on ouvre l'onglet Outil.
+        self._conditions_lues = False
+        self.onglets.currentChanged.connect(self._onglet_change)
+        QTimer.singleShot(0, lambda: self._interroger_media(silencieux=True))
         self._lire_condition(silencieux=True)
 
     def _entete(self):
@@ -1671,6 +1677,18 @@ class Pupitre(QWidget):
         # Un dessin neuf mérite un cadrage neuf ; un simple réglage, non.
         self.apercu.reinitialiser_vue()
         self._recalculer()
+
+    def _onglet_change(self, index):
+        """Lit les conditions à la PREMIÈRE ouverture de l'onglet Outil.
+
+        Le vidage TC2009,5 coûte plusieurs secondes et laisse la machine
+        muette derrière lui. Le faire au démarrage, c'était le faire même
+        quand on vient seulement tracer un dessin.
+        """
+        if self._conditions_lues or self.onglets.tabText(index) != "Outil":
+            return
+        self._conditions_lues = True
+        self._resumer_conditions()
 
     def _interroger_media(self, silencieux):
         limites = noyau.limites_machine()

@@ -809,6 +809,34 @@ class Pupitre(QWidget):
         ligne.addWidget(QLabel("envoyer"))
         ligne.addWidget(self.cmb_travail, 1)
         gl.addLayout(ligne)
+
+        # La convention, pour savoir quoi employer DANS INKSCAPE. Elle est
+        # ENGENDRÉE à partir de `roles.DEFAUTS` plutôt que recopiée : une
+        # légende recopiée mentirait le jour où l'on ajoute un rôle, et
+        # c'est le genre de mensonge qu'on ne découvre qu'en gâchant une
+        # feuille.
+        lignes = []
+        for rgb, role in roles_couleur.DEFAUTS:
+            # PAS de r, v, b ici : `v` porte la disposition de la colonne
+            # et se ferait écraser. Un nom de trois lettres réutilisé se
+            # voit mal, et l'erreur ne sort qu'à la construction.
+            teinte = "#%02x%02x%02x" % tuple(round(c * 255) for c in rgb)
+            if teinte == "#000000":
+                teinte = "#888888"        # sinon invisible sur fond sombre
+            lignes.append(
+                f'<span style="color:{teinte}">&#9644;&#9644;</span> '
+                f'{roles_couleur.nom_couleur(rgb)} — '
+                f'{roles_couleur.LIBELLES[role]}')
+        convention = QLabel("dans Inkscape :<br>" + "<br>".join(lignes))
+        convention.setObjectName("faible")
+        convention.setTextFormat(Qt.RichText)
+        convention.setToolTip(
+            "La couleur du TRAIT, ou du remplissage s'il y en a un.\n"
+            "Une nuance approximative passe : un rouge à 94 % est reconnu.\n\n"
+            "Chaque couleur reste modifiable ci-dessous — la convention\n"
+            "n'est qu'un défaut.")
+        gl.addWidget(convention)
+
         # Rempli à l'ouverture d'un fichier : une ligne par couleur trouvée.
         self.zone_couleurs = QWidget()
         self.grille_couleurs = QGridLayout(self.zone_couleurs)

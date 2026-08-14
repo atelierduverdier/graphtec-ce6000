@@ -90,9 +90,15 @@ def test_aucun_titre_ne_perd_son_esperluette(fenetre):
 
     La règle : dans un libellé Qt, une esperluette littérale se double.
     """
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QGroupBox, QCheckBox, QPushButton, QLabel
     for classe in (QGroupBox, QCheckBox, QPushButton, QLabel):
         for w in fenetre.findChildren(classe):
+            # Un libellé en TEXTE ENRICHI n'est pas concerné : `&` y est
+            # du HTML, et `&#9644;` désigne un rectangle plein, pas un
+            # raccourci clavier.
+            if classe is QLabel and w.textFormat() == Qt.RichText:
+                continue
             titre = w.title() if classe is QGroupBox else w.text()
             sans_doubles = titre.replace("&&", "")
             assert "&" not in sans_doubles, (

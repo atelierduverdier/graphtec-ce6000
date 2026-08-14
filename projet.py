@@ -54,6 +54,7 @@ REGLAGES = [
     ("spn_marge_arms", "reel"), ("spn_trait_arms", "reel"),
     ("cmb_type_arms", "texte"),
     ("spn_corr_av", "reel"), ("spn_corr_ch", "reel"),
+    ("spn_tb57a", "entier"), ("spn_tb57b", "entier"), ("spn_tb55", "entier"),
     # outil
     ("cmb_profil", "texte"), ("cmb_cond", "entier_liste"),
     ("cmb_outil", "texte"), ("spn_offset", "entier"), ("spn_debord", "reel"),

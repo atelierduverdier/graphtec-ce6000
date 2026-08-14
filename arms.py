@@ -317,7 +317,16 @@ ETAT_SIMPLE = "\x1b.v:\x1b.C1:"      # 8 occupée, 0 libre — trop pauvre ici
 # La correspondance exacte reste à établir ; l'essai de `TB55,2` du
 # 13/08/2026 n'avait donc aucune raison d'aboutir, et n'a rien changé.
 TB55_DOUTEUX = ("TB55 vaut 1 chez Studio alors que son gabarit est de "
-                "type 2 : le sens de ce champ n'est pas établi.")
+                "type 2, et c'est une CONSTANTE dans Cutting Master 3 : "
+                "ce champ ne porte pas le type de repère.")
+
+# `TB57` est le seul paramètre dont un binaire officiel dise qu'il porte
+# un mode — `AccumPCode_TB57_MODE` dans Cutting Master 3 — et il n'y
+# figure pas parmi les chaînes constantes, donc il est construit à
+# l'exécution. C'est le candidat qui reste, et celui qu'on n'a jamais
+# essayé : on envoie `TB57,1,1` depuis le début sans savoir ce que ça
+# demande.
+TB57_PORTE_UN_MODE = True
 
 
 class Ecoute:
@@ -423,7 +432,7 @@ class Ecoute:
 
 
 def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
-                  type_repere=1):
+                  type_repere=1, tb57=(1, 1)):
     """Les commandes `TB` d'une détection, dans l'ordre de la capture.
 
     Les valeurs qui portent une cote sont CALCULÉES à partir des
@@ -433,9 +442,22 @@ def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
 
     `ecart_x` est l'axe d'AVANCE, `ecart_y` celui du chariot — l'ordre de
     `TB124` dans la capture du 13/08/2026.
+
+    `tb57` est le seul paramètre dont on sache qu'il porte un MODE, et le
+    seul qu'on n'ait jamais fait varier. Le binaire de Cutting Master 3
+    nomme une routine `AccumPCode_TB57_MODE`, et `TB57` n'y figure pas
+    parmi les chaînes constantes : il est donc construit à l'exécution,
+    ses valeurs changent selon ce qu'on demande. Voir
+    `notes/cutting_master_3.md`.
+
+    `type_repere` part dans `TB55`. On sait maintenant que c'est
+    probablement inutile de le faire varier — `TB55,1` est une CONSTANTE
+    dans CM3 comme dans Studio, quel que soit le type de repère du
+    travail. Le réglage reste offert parce qu'un essai coûte moins qu'une
+    certitude empruntée.
     """
     u = UNITES_PAR_MM
-    return ["TB99", "TB57,1,1", "TB59,0,0", "TB52,1",
+    return ["TB99", f"TB57,{tb57[0]},{tb57[1]}", "TB59,0,0", "TB52,1",
             f"TB51,{round(branche * u)}",
             f"TB53,{round(epaisseur * u)}",
             f"TB55,{type_repere}",
@@ -445,7 +467,8 @@ def sequence_scan(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
 
 
 def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
-            type_repere=1, periph=None, patience=90.0, journal=None):
+            type_repere=1, periph=None, patience=90.0, journal=None,
+            tb57=(1, 1)):
     # `type_repere` part dans `TB55`. Sa numérotation n'est PAS établie :
     # voir TB55_DOUTEUX. C'est pour ça qu'il est réglable et non deviné.
     """Lance une détection depuis le PC. NON ÉPROUVÉ — voir l'en-tête.
@@ -472,7 +495,7 @@ def scanner(ecart_x, ecart_y, branche=BRANCHE, epaisseur=1.0,
         conditions._ecrire(fd, PREAMBULE)
         conditions._ecrire(fd, PREAMBULE)
         for commande in sequence_scan(ecart_x, ecart_y, branche,
-                                      epaisseur, type_repere):
+                                      epaisseur, type_repere, tb57):
             conditions._ecrire(fd, f"\x1b.v:{commande}\x03")
 
         sens = {"0": "au repos", "1": "elle cherche",

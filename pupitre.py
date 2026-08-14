@@ -601,6 +601,38 @@ class Pupitre(QWidget):
         gl.addWidget(self.spn_corr_av, 11, 1)
         gl.addWidget(QLabel("correction chariot"), 12, 0)
         gl.addWidget(self.spn_corr_ch, 12, 1)
+        # Deux paramètres du protocole, ouverts pour l'ESSAI. TB57 est le
+        # seul dont un binaire officiel dise qu'il porte un mode
+        # (AccumPCode_TB57_MODE dans Cutting Master 3), et le seul qu'on
+        # n'ait jamais fait varier — on envoie TB57,1,1 depuis le début.
+        essais = QLabel("essais de protocole")
+        essais.setObjectName("faible")
+        gl.addWidget(essais, 13, 0, 1, 2)
+        self.spn_tb57a = self._entier(0, 9, 1)
+        self.spn_tb57b = self._entier(0, 9, 1)
+        self.spn_tb55 = self._entier(0, 9, 1)
+        for w in (self.spn_tb57a, self.spn_tb57b):
+            w.setToolTip(
+                "TB57 porte un MODE — Cutting Master 3 nomme une routine\n"
+                "AccumPCode_TB57_MODE, et ne garde pas TB57 en constante,\n"
+                "donc ses valeurs changent selon ce qu'on demande.\n\n"
+                "On envoie TB57,1,1 depuis le début sans savoir ce que ça\n"
+                "réclame. C'est le paramètre qu'il reste à éprouver.")
+        self.spn_tb55.setToolTip(
+            "TB55 ne porte PAS le type de repère : c'est une constante\n"
+            "valant 1 dans Cutting Master 3 comme dans Graphtec Studio,\n"
+            "quel que soit le type du travail.\n\n"
+            "Laissé réglable parce qu'un essai coûte moins qu'une\n"
+            "certitude empruntée — mais ne pas en attendre grand-chose.")
+        rang = QHBoxLayout()
+        rang.addWidget(QLabel("TB57"))
+        rang.addWidget(self.spn_tb57a)
+        rang.addWidget(self.spn_tb57b)
+        rang.addWidget(QLabel("TB55"))
+        rang.addWidget(self.spn_tb55)
+        cadre_essais = QWidget()
+        cadre_essais.setLayout(rang)
+        gl.addWidget(cadre_essais, 14, 0, 1, 2)
         g_arms = g
 
         # --- rôles des couleurs
@@ -1381,8 +1413,8 @@ class Pupitre(QWidget):
             f"La tête va balayer la feuille pendant une vingtaine de "
             f"secondes, à la recherche de repères espacés de "
             f"{av:g} mm dans l'avance et {ch:g} mm sous le chariot.\n\n"
-            f"Type de repère annoncé : {self._type_arms()} — la machine "
-            f"est réglée sur ce que dit « Lire les réglages ARMS ».\n\n"
+            f"Protocole : TB57,{self.spn_tb57a.value()},"
+            f"{self.spn_tb57b.value()} et TB55,{self.spn_tb55.value()}.\n\n"
             f"Ce chemin N'A JAMAIS ABOUTI : la machine cherche, mais aucune "
             f"détection pilotée par le PC n'a été menée à son terme. Celles "
             f"qui ont réussi sont passées par le panneau.\n\n"
@@ -1393,7 +1425,8 @@ class Pupitre(QWidget):
         try:
             annonces, journal = arms.scanner(
                 av, ch, epaisseur=self.spn_trait_arms.value(),
-                type_repere=self._type_arms())
+                type_repere=self.spn_tb55.value(),
+                tb57=(self.spn_tb57a.value(), self.spn_tb57b.value()))
         except Exception as e:
             QMessageBox.warning(self, "Traceur", str(e))
             return

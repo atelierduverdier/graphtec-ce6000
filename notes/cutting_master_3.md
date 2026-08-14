@@ -54,10 +54,42 @@ tenait pour une incohérence.
 Les deux valeurs d'entrée sont dans le binaire, en toutes lettres :
 `type_1` et `type_2`.
 
-**Conséquence pratique** : essayer `TB55,2` parce que la machine annonce
-`MARK TYPE=2` n'avait aucune raison de marcher — et de fait, l'essai du
-13/08/2026 n'a rien changé. La correspondance reste à établir, mais on
-sait maintenant qu'il y en a une.
+### Mais `PCode` ne veut pas dire « petit entier »
+
+Le même vocabulaire porte `GetPCode`, `PCodeA`, `AccumPCode_NORMAL`,
+`AccumPCode_TB57_MODE` : un **PCode est le programme de commandes
+accumulé**. `RegMarkType_Studio_to_PCode` ne convertit donc pas un numéro
+en numéro — elle traduit un type de repère en **séquence de commandes**.
+
+Et `type_1` / `type_2` sont rangés à côté de `registration_mark_type=` :
+ce sont les valeurs de la DESCRIPTION DU TRAVAIL, pas du protocole.
+
+### `TB55,1` est une CONSTANTE
+
+Relevé en distinguant, dans le binaire, les chaînes complètes des simples
+préfixes complétés à l'exécution :
+
+| constantes | préfixes |
+|---|---|
+| `TB5` `TB23` `TB50,0` `TB52,2` `TB54,0,0` `TB55,1` `TB99` `TB123` | `TB50,` `TB51,` `TB53,` |
+
+`TB55,1` ne varie donc **jamais** dans Cutting Master 3, quel que soit le
+type de repère du travail. Studio envoie la même chose. Ce champ ne porte
+pas le type, et l'essai de `TB55,2` du 13/08/2026 n'avait aucune raison
+d'aboutir — il n'a effectivement rien changé.
+
+## Le paramètre qui reste : `TB57`
+
+`AccumPCode_TB57_MODE`. C'est le **seul** paramètre de notre séquence
+dont un binaire officiel dise qu'il porte un mode, et il **ne figure pas**
+parmi les chaînes constantes de CM3 : il est donc construit à l'exécution,
+ses valeurs changent selon ce qu'on demande.
+
+Or on envoie `TB57,1,1` depuis le premier jour, recopié de la capture,
+sans savoir ce que ça réclame. C'est là qu'il faut essayer.
+
+Rendu réglable dans `arms.sequence_scan(tb57=…)` et dans le pupitre, sous
+« essais de protocole ».
 
 ## Les modes de repérage, nommés par le programme
 

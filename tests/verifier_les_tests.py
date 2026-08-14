@@ -85,11 +85,27 @@ _VRAIS = {"en_unites": noyau.en_unites,
           "PAGE": arms.PAGE,
           "composer": arms.composer,
           "contour": contour.contour,
+          "sequence_scan": arms.sequence_scan,
           "reperes_arms": roles.reperes_arms,
           "TOLERANCE_COULEUR": roles.TOLERANCE_COULEUR,
           "TOLERANCE": contour.TOLERANCE,
           "recolter": arms.Ecoute.recolter,
           "UNITES_PAR_MM": arms.UNITES_PAR_MM}
+
+
+def tb57_fige_dans_la_sequence():
+    """La faute : recopier TB57,1,1 de la capture au lieu de le paramétrer.
+
+    C'est l'état d'avant le 14/08/2026, et le défaut ne se voit sur aucun
+    scan : la séquence part, la machine cherche. Il se voit seulement à ce
+    qu'on ne peut RIEN essayer.
+    """
+    vraie = _VRAIS["sequence_scan"]
+
+    def figee(ecart_x, ecart_y, branche=arms.BRANCHE, epaisseur=1.0,
+              type_repere=1, tb57=(1, 1)):
+        return vraie(ecart_x, ecart_y, branche, epaisseur, type_repere, (1, 1))
+    arms.sequence_scan = figee
 
 
 def repere_reconnu_a_sa_seule_boite():
@@ -249,6 +265,11 @@ CAS = [
      "test_gabarit_officiel_garde_ses_cotes_relevees",
      gabarit_officiel_arrondi_a_l_a4,
      lambda: setattr(arms, "PAGE", _VRAIS["PAGE"])),
+
+    ("TB57 figé, donc impossible à éprouver",
+     "test_sequence_de_scan_est_calculee",
+     tb57_fige_dans_la_sequence,
+     lambda: setattr(arms, "sequence_scan", _VRAIS["sequence_scan"])),
 
     ("repère reconnu à sa seule boîte englobante",
      "test_un_repere_ne_se_confond_pas_avec_un_carre",

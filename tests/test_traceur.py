@@ -582,6 +582,13 @@ def test_sequence_de_scan_est_calculee():
     autre = arms.sequence_scan(190.0, 140.0, branche=10.0)
     assert "TB51,400" in autre, "TB51 ne suit pas la longueur de branche"
 
+    # TB57 porte un MODE — Cutting Master 3 nomme AccumPCode_TB57_MODE et
+    # ne le garde pas en constante. C'est le seul paramètre de la séquence
+    # qu'on n'ait jamais fait varier, donc il doit être réglable.
+    assert "TB57,1,1" in seq, "valeur par défaut de TB57 perdue"
+    assert "TB57,2,0" in arms.sequence_scan(190.0, 140.0, tb57=(2, 0)), (
+        "TB57 est figé dans la séquence — impossible d'éprouver son mode")
+
 
 def test_annonce_poussee_nest_jamais_avalee():
     """Une trame terminée par CR est une ANNONCE, et doit être gardée.
@@ -926,6 +933,13 @@ def test_sequence_de_scan_est_calculee():
     # Changer une cote doit changer la commande, sinon elle est en dur.
     autre = arms.sequence_scan(190.0, 140.0, branche=10.0)
     assert "TB51,400" in autre, "TB51 ne suit pas la longueur de branche"
+
+    # TB57 porte un MODE — Cutting Master 3 nomme AccumPCode_TB57_MODE et
+    # ne le garde pas en constante. C'est le seul paramètre de la séquence
+    # qu'on n'ait jamais fait varier, donc il doit être réglable.
+    assert "TB57,1,1" in seq, "valeur par défaut de TB57 perdue"
+    assert "TB57,2,0" in arms.sequence_scan(190.0, 140.0, tb57=(2, 0)), (
+        "TB57 est figé dans la séquence — impossible d'éprouver son mode")
 
 
 def test_gabarit_officiel_garde_ses_cotes_relevees():

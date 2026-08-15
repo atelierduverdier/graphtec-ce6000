@@ -19,7 +19,7 @@ fi
 
 command -v python3 >/dev/null || { echo "python3 introuvable" >&2; exit 1; }
 python3 -c "import PySide6" 2>/dev/null || {
-    echo "PySide6 manque : pip install --user PySide6" >&2; exit 1; }
+    echo "PySide6 manque : sudo pacman -S pyside6" >&2; exit 1; }
 
 mkdir -p "$APPS" "$ICONES"
 install -m 644 "$ICI/resources/icons/traceur.svg" "$ICONES/$NOM.svg"

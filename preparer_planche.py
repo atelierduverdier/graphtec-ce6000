@@ -34,6 +34,11 @@ La police est EMBARQUÉE (`resources/osifont-lgpl3fe.ttf`, LGPL v3 avec
 « font exception », licence jointe) : la planche entière porte un seul
 dessin de lettre, même sur une machine sans FreeCAD.
 
+`--police hershey` (ou toute clé de `--liste-polices`) vectorise plutôt
+en MONOTRAIT, avec les polices de LaserAtelier : une passe de plume par
+branche de lettre — pour les planches à grands titres, qu'osifont sort
+en lettres creuses.
+
 Rien ne disparaît en silence : les glyphes absents de la police sont
 NOMMÉS sur la console et remplacés par une avance d'un demi-cadratin.
 """
@@ -58,6 +63,8 @@ except ImportError:                                     # pragma: no cover
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 POLICE = os.path.join(ICI, "resources", "osifont-lgpl3fe.ttf")
+CHEMIN_ATELIER = os.path.expanduser(
+    "~/.local/share/FreeCAD/v1-1/Mod/LaserAtelier")
 SVG = "http://www.w3.org/2000/svg"
 # Trait des lettres vectorisées : fin — c'est le stylo qui donne la largeur.
 TRAIT_LETTRE = "0.18"
@@ -115,6 +122,117 @@ class Osifont(object):
                 morceaux.append(d)
             avance += self._avance(nom)
         return " ".join(morceaux), avance * ech
+
+
+# =============================================================================
+#  Les polices monotrait de LaserAtelier (--police hershey)
+# =============================================================================
+
+# Repli typographique minimal — la version complète (deplier_texte) vit dans
+# laser_core, qui tire FreeCAD ; ici on reste autonome. Ce qui manque encore
+# après repli est NOMMÉ sur la console, jamais avalé.
+REPLIS = {"œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE", "ß": "ss",
+          "’": "'", "‘": "'", "“": '"', "”": '"', "…": "...",
+          " ": " ", " ": " ", "—": "-", "–": "-"}
+
+
+class Hershey(object):
+    """Texte -> chemins MONOTRAIT, mêmes appels que `Osifont`.
+
+    Les polices sont les modules de données de LaserAtelier
+    (`polices_monotrait/hershey_font[_clé].py` : GLYPHES, CAP_HEIGHT,
+    ADV_DEFAULT ; ligne de base à y = 0, Y vers le HAUT). Chaque lettre est
+    l'axe du trait : au stylo, une passe par branche — les grands titres ne
+    sortent plus en lettres creuses. L'échelle est calée pour qu'une
+    capitale ait la même hauteur qu'en osifont à la même font-size.
+
+    Éviter les variantes Med/Bold : leur fût est CONTOURNÉ, la plume passe
+    deux fois (c'est étiqueté ainsi dans LaserAtelier).
+    """
+
+    RAPPORT_CAPITALE = 0.72     # capitale/em d'osifont, mesuré sur la TTF
+
+    def __init__(self, cle="sans"):
+        if CHEMIN_ATELIER not in sys.path:
+            sys.path.insert(0, CHEMIN_ATELIER)
+        nom = "polices_monotrait.hershey_font" + ("" if cle in ("", "sans")
+                                                  else "_" + cle)
+        try:
+            import importlib
+            self.hf = importlib.import_module(nom)
+        except ImportError:
+            sys.exit(f"police monotrait « {cle} » introuvable ({nom}) — "
+                     f"--liste-polices donne les clés, LaserAtelier attendu "
+                     f"dans {CHEMIN_ATELIER}")
+        try:
+            fonte = TTFont(POLICE)
+            self.RAPPORT_CAPITALE = (fonte["OS/2"].sCapHeight
+                                     / float(fonte["head"].unitsPerEm))
+        except Exception:
+            pass                                # 0.72 reste une bonne mesure
+        self.manquants = {}
+
+    def _glyphe(self, c):
+        g = self.hf.GLYPHES.get(c)
+        if g is None and c in REPLIS:
+            morceaux = [self._glyphe(r) for r in REPLIS[c]]
+            if all(m is not None for m in morceaux):
+                avance = sum(m[0] for m in morceaux)
+                traits, x = [], 0.0
+                for m in morceaux:
+                    traits += [[(px + x, py) for px, py in t] for t in m[1]]
+                    x += m[0]
+                return (avance, traits)
+            return None
+        return g
+
+    def _echelle(self, taille):
+        return taille * self.RAPPORT_CAPITALE / float(self.hf.CAP_HEIGHT)
+
+    def largeur(self, texte, taille):
+        ech = self._echelle(taille)
+        total = 0.0
+        for c in texte:
+            g = self._glyphe(c)
+            total += g[0] if g else self.hf.ADV_DEFAULT
+        return total * ech
+
+    def chemin(self, texte, x, y, taille):
+        """(d, avance_mm) — baseline en (x, y), l'axe Y du SVG descend."""
+        ech = self._echelle(taille)
+        morceaux, avance = [], 0.0
+        for c in texte:
+            g = self._glyphe(c)
+            if g is None:
+                self.manquants[c] = self.manquants.get(c, 0) + 1
+                avance += self.hf.ADV_DEFAULT
+                continue
+            for trait in g[1]:
+                if len(trait) < 2:
+                    continue
+                pts = [(x + (avance + px) * ech, y - py * ech)
+                       for px, py in trait]
+                morceaux.append("M " + " L ".join(
+                    f"{px:.4f} {py:.4f}" for px, py in pts))
+            avance += g[0]
+        return " ".join(morceaux), avance * ech
+
+
+def charger_police(nom):
+    """« osifont » (défaut), « hershey » (= sans), ou une clé monotrait."""
+    if nom in ("", None, "osifont"):
+        return Osifont()
+    return Hershey("sans" if nom == "hershey" else nom)
+
+
+def lister_polices():
+    import glob as _glob
+    cles = ["osifont (défaut — la police des cotes, à contours)",
+            "hershey (= sans)"]
+    for f in sorted(_glob.glob(os.path.join(
+            CHEMIN_ATELIER, "polices_monotrait", "hershey_font_*.py"))):
+        cles.append(os.path.basename(f)[len("hershey_font_"):-3])
+    return cles
 
 
 # =============================================================================
@@ -346,12 +464,27 @@ def main():
     ap.add_argument("-o", "--sortie",
                     help="fichier de sortie (une seule planche) ; par défaut "
                          "un suffixe _propre à côté de l'original")
+    ap.add_argument("--police", default="osifont",
+                    help="police des textes vectorisés : « osifont » (défaut, "
+                         "la police des cotes, à contours — les grands titres "
+                         "sortent en lettres creuses) ou une police MONOTRAIT "
+                         "de LaserAtelier : « hershey » (= sans), ou une clé "
+                         "de --liste-polices")
+    ap.add_argument("--liste-polices", action="store_true",
+                    help="affiche les polices disponibles et sort")
     args = ap.parse_args()
+
+    if args.liste_polices:
+        for cle in lister_polices():
+            print(" ", cle)
+        print("  (les variantes gothiques et Med/Bold gravent DOUBLE — fût"
+              " contourné — à éviter au stylo)")
+        return
 
     if args.sortie and len(args.svg) > 1:
         sys.exit("--sortie ne vaut que pour une seule planche")
 
-    fonte = Osifont()
+    fonte = charger_police(args.police)
     for source in args.svg:
         if not os.path.exists(source):
             print(f"  absent : {source}", file=sys.stderr)

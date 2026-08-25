@@ -823,6 +823,13 @@ trait net, comme les cotes ; sur les grands titres (8 px), le double contour
 se voit. C'est le même dessin de lettre partout, cotes comprises : c'était
 la demande.
 
+Pour les planches à grands titres, `--police hershey` (ou toute clé de
+`--liste-polices`) vectorise plutôt en MONOTRAIT, avec les polices de
+LaserAtelier : une passe de plume par branche de lettre. Mesuré sur
+Plan_Debit : 4 015 polylignes, zéro glyphe manquant, accents compris.
+Éviter les variantes gothiques et Med/Bold, au fût contourné — elles
+gravent double, c'est étiqueté ainsi dans LaserAtelier.
+
 **Pourquoi passer par `svg2hpgl.py` plutôt que par l'export d'Inkscape**, sur
 une planche réelle :
 

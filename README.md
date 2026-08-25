@@ -790,26 +790,38 @@ l'A2 ou le rouleau.
 **Piège :** une planche dont `KeepUpdated` est faux, ou qui n'a jamais été
 ouverte, s'exporte **vide** — 975 octets au lieu de 29 000, sans erreur.
 
-**Préparation.** Une planche exportée contient trois familles d'éléments qui
-ne se tracent pas telles quelles — sur `Plan_Debit` du meuble à balais :
-430 `<rect>`, 2 `<circle>`, 10 `<text>`, soit les tableaux et le cartouche.
+**Préparation — une seule commande, plus d'Inkscape** (25/08/2026). Une
+planche exportée contient trois familles d'éléments qui ne se tracent pas
+telles quelles — sur `Plan_Debit` du meuble à balais : 430 `<rect>`,
+2 `<circle>`, 10 `<text>`, soit les tableaux et le cartouche.
 
-1. `python3 preparer_planche.py planche.svg` — retire les commentaires XML.
-   **Indispensable** : TechDraw en écrit quatre par planche et l'extension
-   Texte Hershey plante dessus (`'_Comment' object has no attribute
-   'transform'`).
-2. Dans Inkscape, tout sélectionner puis *Chemin → Objet en chemin* pour les
-   `<rect>` et `<circle>`.
-3. **Sélectionner le dessin SEUL, pas le cartouche**, puis *Extensions →
-   Texte → Texte Hershey*. Hershey ne traite que la sélection quand il y en
-   a une, et c'est ce qui sauve : les champs du cartouche vivent hors du
-   groupe `DrawingContent` et de son transform, donc Hershey ignore le
-   facteur 10 du `viewBox` et les rend **dix fois trop grands** — ils
-   débordent alors de 185 mm hors de la page. Les cotes, elles, sont dans le
-   groupe transformé et sortent justes.
+```bash
+python3 preparer_planche.py planche.svg     # -> planche_propre.svg
+python3 svg2hpgl.py planche_propre.svg …
+```
 
-Le cartouche se traite ensuite à part : *Objet en chemin* donne des lettres
-creuses, acceptable pour quelques mots.
+`preparer_planche.py` fait désormais les trois traitements : il retire les
+commentaires XML, **vectorise les `<text>` restants en osifont** — la police
+même que TechDraw met dans ses cotes, embarquée dans le dépôt
+(`resources/osifont-lgpl3fe.ttf`, LGPL avec « font exception ») — et
+convertit les formes simples en `<path>`. La graisse est NORMALE partout,
+même pour les champs déclarés gras : au stylo, un titre gras sortait en
+lettres creuses. Mesuré sur les deux planches du meuble : 432 et 38 formes
+converties, 38 textes vectorisés, et `svg2hpgl` lit le résultat **sans un
+avertissement**.
+
+Chaque remplacement se fait dans le repère local de l'élément remplacé, ce
+qui immunise contre le piège qui gouvernait l'ancien protocole Inkscape :
+les champs du cartouche vivent hors du groupe `DrawingContent` et de son
+transform, et l'extension Texte Hershey les rendait **dix fois trop
+grands** (elle plantait d'ailleurs sur les commentaires XML — raison d'être
+historique de ce script).
+
+Limite assumée : osifont est une police à contours. Sur les textes courants
+(≤ 5 px) les deux bords d'un fût fusionnent sous un stylo de 0,5 mm — un
+trait net, comme les cotes ; sur les grands titres (8 px), le double contour
+se voit. C'est le même dessin de lettre partout, cotes comprises : c'était
+la demande.
 
 **Pourquoi passer par `svg2hpgl.py` plutôt que par l'export d'Inkscape**, sur
 une planche réelle :

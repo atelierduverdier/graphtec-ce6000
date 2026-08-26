@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prépare une planche TechDraw pour le traçage au stylo — sans Inkscape.
 
-Trois traitements, dans cet ordre :
+Cinq traitements, dans cet ordre :
 
 1. retire les **commentaires XML** — TechDraw en écrit quatre par planche
    (« Working space », « Title block »…) ; l'extension Texte Hershey
@@ -17,7 +17,11 @@ Trois traitements, dans cet ordre :
 3. convertit `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`
    et `<polygon>` en `<path>` — le parseur de `svg2hpgl` ne lit que les
    chemins (tableaux de débit : 430 `<rect>` sur Plan_Debit) ;
-4. **découpe les traits interrompus en VRAIS segments**. `stroke-dasharray`
+4. **retire les cachés confondus** : TechDraw exporte le contour d'une
+   pièce deux fois, arête visible et arête cachée superposées. À l'écran
+   le tireté disparaît sous le plein ; à la plume, le traceur repassait
+   dessus pour rien ;
+5. **découpe les traits interrompus en VRAIS segments**. `stroke-dasharray`
    est un style, et `svg2hpgl` lit la géométrie : les lignes cachées de
    TechDraw sortaient en trait CONTINU à la plume, indiscernables d'une
    arête réelle sur une planche d'atelier.
@@ -498,6 +502,75 @@ def _d_polylignes(polylignes):
                     for p in polylignes)
 
 
+def _transform_cumule(el):
+    """Matrice du repere de `el` vers celui de la racine.
+
+    Les transforms s'empilent de la racine vers la feuille : on remonte,
+    puis on compose dans l'ordre parent · enfant (matrix_mul applique le
+    second d'abord).
+    """
+    chaine = []
+    cur = el
+    while cur is not None:
+        t = cur.get("transform")
+        if t:
+            chaine.append(svg_import.parse_transform(t))
+        cur = cur.getparent()
+    m = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+    for t in reversed(chaine):          # de la racine vers la feuille
+        m = svg_import.matrix_mul(m, t)
+    return m
+
+
+def _signature(points, tol):
+    """Empreinte d'une polyligne, INDEPENDANTE du sens de parcours.
+
+    TechDraw exporte la meme arete a l'endroit dans les visibles et a
+    l'envers dans les cachees — sans cela, la moitie des doublons
+    passerait au travers.
+    """
+    q = tuple((round(x / tol), round(y / tol)) for x, y in points)
+    return min(q, q[::-1])
+
+
+def retirer_caches_confondus(racine, tol=0.02):
+    """Supprime les traces POINTILLES confondus avec un trace PLEIN.
+
+    TechDraw exporte le contour d'une piece DEUX fois : une fois en arete
+    visible, une fois en arete cachee (la face arriere se projette au meme
+    endroit). A l'ecran le tirete disparait sous le plein ; a la plume, le
+    traceur repasse dessus pour rien — 640 mm sur la seule traverse.
+
+    On ne retire que si TOUS les sous-traces du pointille sont confondus :
+    un recouvrement partiel garde l'information.
+
+    A LANCER AVANT `pointiller_traits` : apres decoupe, la geometrie du
+    pointille n'est plus celle du plein et plus rien ne se ressemble.
+    """
+    pleins = set()
+    dashes = []
+    for el in list(racine.iter(f"{{{SVG}}}path")):
+        if _dans_defs(el) or _invisible(el) or not el.get("d"):
+            continue
+        sous, _a = svg_import.path_d_to_subpaths(el.get("d"), 0.05)
+        m = _transform_cumule(el)
+        polys = [[svg_import.matrix_apply(m, x, y) for x, y in sp["points"]]
+                 for sp in sous if len(sp["points"]) >= 2]
+        if not polys:
+            continue
+        if _motif(_propriete(el, "stroke-dasharray")):
+            dashes.append((el, polys))
+        else:
+            for p in polys:
+                pleins.add(_signature(p, tol))
+    retires = 0
+    for el, polys in dashes:
+        if all(_signature(p, tol) in pleins for p in polys):
+            el.getparent().remove(el)
+            retires += 1
+    return retires
+
+
 def pointiller_traits(racine, tol=0.05):
     """Remplace la GEOMETRIE des traces pointilles par leurs segments.
 
@@ -588,8 +661,8 @@ def convertir_formes(racine):
 def nettoyer(source, destination, fonte=None):
     """Commentaires retirés, textes en osifont, formes en chemins.
 
-    Rend (commentaires, textes, formes, pointilles). `fonte` se partage
-    entre planches pour ne charger la TTF qu'une fois.
+    Rend (commentaires, textes, formes, pointilles, doublons). `fonte` se
+    partage entre planches pour ne charger la TTF qu'une fois.
     """
     arbre = etree.parse(source, etree.XMLParser(remove_comments=False))
     commentaires = len(arbre.getroot().xpath("//comment()"))
@@ -598,10 +671,11 @@ def nettoyer(source, destination, fonte=None):
     fonte = fonte or Osifont()
     textes = vectoriser_textes(racine, fonte)
     formes = convertir_formes(racine)
+    doublons = retirer_caches_confondus(racine)
     pointilles = pointiller_traits(racine)
     arbre.write(destination, xml_declaration=True,
                 encoding="utf-8", pretty_print=False)
-    return commentaires, textes, formes, pointilles
+    return commentaires, textes, formes, pointilles, doublons
 
 
 def main():
@@ -641,10 +715,11 @@ def main():
             continue
         racine, ext = os.path.splitext(source)
         destination = args.sortie or f"{racine}_propre{ext}"
-        com, txt, formes, pts = nettoyer(source, destination, fonte)
+        com, txt, formes, pts, dbl = nettoyer(source, destination, fonte)
         print(f"{os.path.basename(source)} -> {os.path.basename(destination)}"
               f"   ({com} commentaire(s), {txt} texte(s), {formes} forme(s)"
-              f" en chemins, {pts} pointille(s) decoupe(s))")
+              f" en chemins, {pts} pointille(s) decoupe(s),"
+              f" {dbl} cache(s) confondu(s) retire(s))")
     if fonte.manquants:
         detail = ", ".join(f"« {c} » x{n}" for c, n in sorted(fonte.manquants.items()))
         print(f"  ATTENTION — glyphes absents d'osifont, remplacés par un blanc :"

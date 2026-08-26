@@ -63,7 +63,7 @@ def _abscisses(chemin):
 
 def test_texte_vectorise():
     """Un <text> devient des chemins, que svg2hpgl sait lire."""
-    dst, (_com, txt, _formes, _pts) = _preparer(
+    dst, (_com, txt, _formes, _pts, _d) = _preparer(
         '<text x="20" y="40" style="font-size:5px">ATELIER</text>')
     assert txt == 1, "aucun texte vectorise"
     assert "<text" not in open(dst).read(), "il reste un <text>"
@@ -101,7 +101,7 @@ def test_ancres_respectees():
 
 def test_formes_simples_converties():
     """Les six formes que svg2hpgl ne lit pas deviennent des chemins."""
-    dst, (_com, _txt, formes, _pts) = _preparer(
+    dst, (_com, _txt, formes, _pts, _d) = _preparer(
         '<rect x="10" y="10" width="20" height="10" style="stroke:#000"/>'
         '<circle cx="60" cy="20" r="8" style="stroke:#000"/>'
         '<ellipse cx="100" cy="20" rx="10" ry="5" style="stroke:#000"/>'
@@ -132,7 +132,7 @@ def test_pointille_devient_de_vrais_segments():
     indiscernable d'une arete reelle sur une planche d'atelier (Christophe,
     26/08/2026 ; mesure : 16 motifs ignores sur Planche4).
     """
-    dst, (_com, _txt, _formes, pts) = _preparer(
+    dst, (_com, _txt, _formes, pts, _d) = _preparer(
         '<path d="M10,10 L110,10" style="stroke:#000;fill:none"'
         ' stroke-dasharray="6,4"/>')
     assert pts == 1, "%d pointille(s) decoupe(s)" % pts
@@ -146,10 +146,40 @@ def test_pointille_devient_de_vrais_segments():
         "le motif reste actif : un rendu l'appliquerait une SECONDE fois"
 
 
+def test_cache_confondu_retire_mais_pas_l_autre():
+    """TechDraw exporte le contour DEUX fois : arete visible et arete
+    cachee superposees. A l'ecran le tirete disparait sous le plein ; a la
+    plume, le traceur repasse dessus pour rien.
+
+    Le doublon inverse est le cas qui compte : TechDraw ecrit l'arete a
+    l'endroit dans les visibles et a l'envers dans les cachees.
+    """
+    dst, (_com, _txt, _formes, pts, dbl) = _preparer(
+        '<path d="M10,10 L110,10" style="stroke:#000;fill:none"/>'
+        '<path d="M110,10 L10,10" style="stroke:#000;fill:none"'
+        ' stroke-dasharray="6,4"/>'
+        '<path d="M10,30 L110,30" style="stroke:#000;fill:none"'
+        ' stroke-dasharray="6,4"/>')
+    assert dbl == 1, "%d doublon(s) retire(s) au lieu de 1" % dbl
+    assert pts == 1, "%d pointille(s) decoupe(s) : le survivant seul" % pts
+    _xs, polys, avert = _abscisses(dst)
+    assert not avert, "svg2hpgl proteste : %s" % avert
+    # svg2hpgl retourne l'axe Y (repere traceur) : on raisonne donc sur la
+    # STRUCTURE, pas sur des ordonnees absolues.
+    from collections import Counter
+    par_hauteur = Counter(round(p[0][1], 1) for p, _c in polys)
+    assert len(par_hauteur) == 2, \
+        "deux lignes attendues, %d hauteur(s) : %s" % (len(par_hauteur),
+                                                       dict(par_hauteur))
+    compte = sorted(par_hauteur.values())
+    assert compte == [1, 10], \
+        "attendu la pleine en 1 trace et le pointille en 10, obtenu %s" % compte
+
+
 def test_commentaires_retires():
     """TechDraw en ecrit quatre par planche ; l'extension Hershey mourait
     dessus, et un flux sans commentaire ne gene personne d'autre."""
-    dst, (com, _txt, _formes, _pts) = _preparer(
+    dst, (com, _txt, _formes, _pts, _d) = _preparer(
         '<!-- Working space --><text x="20" y="40"'
         ' style="font-size:4px">X</text>')
     assert com == 1, "%d commentaire(s) compte(s)" % com

@@ -426,6 +426,7 @@ def _vraie_methode():
 # `preparer_planche` a ses propres proprietes ; elles s'eprouvent comme les
 # autres. Les vraies fonctions sont prises AVANT toute casse.
 _VRAIS_PREP = {"nettoyer": prep.nettoyer,
+               "retirer_caches_confondus": prep.retirer_caches_confondus,
                "pointiller_traits": prep.pointiller_traits,
                "vectoriser_textes": prep.vectoriser_textes,
                "convertir_formes": prep.convertir_formes,
@@ -455,6 +456,12 @@ def largeur_sans_ancrage(self, texte, taille):
     """Une largeur nulle ramene middle et end sur start : le titre centre
     part en biais."""
     return 0.0
+
+
+def doublons_caches_conserves(racine, tol=0.02):
+    """La faute d'origine : le contour reste trace DEUX fois, et la plume
+    repasse dessus pour rien."""
+    return 0
 
 
 def pointille_laisse_en_style(racine, tol=0.05):
@@ -505,6 +512,12 @@ CAS = [
      lambda: setattr(prep.Osifont, "largeur", largeur_sans_ancrage),
      lambda: setattr(prep.Osifont, "largeur",
                      _VRAIS_PREP["largeur_osifont"])),
+
+    ("doublons caches conserves (la plume repasse)",
+     "test_cache_confondu_retire_mais_pas_l_autre",
+     lambda: setattr(prep, "retirer_caches_confondus", doublons_caches_conserves),
+     lambda: setattr(prep, "retirer_caches_confondus",
+                     _VRAIS_PREP["retirer_caches_confondus"])),
 
     ("pointille laisse en style, jamais decoupe",
      "test_pointille_devient_de_vrais_segments",

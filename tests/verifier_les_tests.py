@@ -29,7 +29,9 @@ import contour
 import mosaique
 import roles                                              # noqa: E402
 import svg2hpgl as noyau                                     # noqa: E402
+import preparer_planche as prep                              # noqa: E402
 import test_traceur as T                                     # noqa: E402
+import test_preparer_planche as PP                           # noqa: E402
 
 # Les tests d'interface s'éprouvent aussi. Ils prennent une fenêtre en
 # argument et demandent Qt ; elle n'est construite que si un cas en
@@ -420,7 +422,96 @@ def _vraie_methode():
     return pupitre.Pupitre._accorder_echelles
 
 
+# --- preparation d'une planche pour la plume (25-26/08/2026) -------------
+# `preparer_planche` a ses propres proprietes ; elles s'eprouvent comme les
+# autres. Les vraies fonctions sont prises AVANT toute casse.
+_VRAIS_PREP = {"nettoyer": prep.nettoyer,
+               "vectoriser_textes": prep.vectoriser_textes,
+               "convertir_formes": prep.convertir_formes,
+               "_ne_peint_rien": prep._ne_peint_rien,
+               "largeur_osifont": prep.Osifont.largeur,
+               "largeur_hershey": prep.Hershey.largeur}
+
+
+def textes_laisses_tels_quels(racine, fonte):
+    """La faute d'origine : svg2hpgl IGNORE les <text>, le cartouche ne se
+    tracait pas."""
+    return 0
+
+
+def formes_laissees_telles_quelles(racine):
+    """Les 430 <rect> d'un tableau de debit restaient invisibles au trace."""
+    return 0
+
+
+def tout_est_peint(el):
+    """Plus de filtre : le rect de page en fill:none;stroke:none redevient
+    un rectangle de 210 x 297 trace a la plume."""
+    return False
+
+
+def largeur_sans_ancrage(self, texte, taille):
+    """Une largeur nulle ramene middle et end sur start : le titre centre
+    part en biais."""
+    return 0.0
+
+
+def nettoyage_qui_garde_les_commentaires(source, destination, fonte=None):
+    """TechDraw ecrit quatre commentaires par planche et l'extension Hershey
+    d'Inkscape mourait dessus : un flux qui les garde rouvre la panne."""
+    from lxml import etree as _et
+    arbre = _et.parse(source)                      # commentaires conserves
+    racine = arbre.getroot()
+    fonte = fonte or prep.Osifont()
+    textes = prep.vectoriser_textes(racine, fonte)
+    formes = prep.convertir_formes(racine)
+    arbre.write(destination, xml_declaration=True, encoding="utf-8")
+    return 0, textes, formes
+
+
+def hershey_a_la_chasse_de_l_osifont(self, texte, taille):
+    """Le monotrait mesure comme l'osifont : la mise en page deborde a
+    l'impression sans que rien ne l'ait dit."""
+    return _VRAIS_PREP["largeur_osifont"](prep.Osifont(), texte, taille)
+
+
 CAS = [
+    ("textes laisses tels quels (svg2hpgl les ignore)",
+     "test_texte_vectorise",
+     lambda: setattr(prep, "vectoriser_textes", textes_laisses_tels_quels),
+     lambda: setattr(prep, "vectoriser_textes",
+                     _VRAIS_PREP["vectoriser_textes"])),
+
+    ("formes simples laissees telles quelles",
+     "test_formes_simples_converties",
+     lambda: setattr(prep, "convertir_formes", formes_laissees_telles_quelles),
+     lambda: setattr(prep, "convertir_formes",
+                     _VRAIS_PREP["convertir_formes"])),
+
+    ("forme invisible convertie quand meme",
+     "test_forme_invisible_ne_trace_rien",
+     lambda: setattr(prep, "_ne_peint_rien", tout_est_peint),
+     lambda: setattr(prep, "_ne_peint_rien", _VRAIS_PREP["_ne_peint_rien"])),
+
+    ("ancre middle/end ignoree",
+     "test_ancres_respectees",
+     lambda: setattr(prep.Osifont, "largeur", largeur_sans_ancrage),
+     lambda: setattr(prep.Osifont, "largeur",
+                     _VRAIS_PREP["largeur_osifont"])),
+
+    ("commentaires XML conserves",
+     "test_commentaires_retires",
+     lambda: setattr(prep, "nettoyer", nettoyage_qui_garde_les_commentaires),
+     lambda: setattr(prep, "nettoyer", _VRAIS_PREP["nettoyer"])),
+
+    ("monotrait mesure a la chasse de l'osifont",
+     "test_monotrait_plus_large_que_osifont",
+     lambda: setattr(prep.Hershey, "largeur",
+                     hershey_a_la_chasse_de_l_osifont),
+     lambda: setattr(prep.Hershey, "largeur",
+                     _VRAIS_PREP["largeur_hershey"])),
+
+
     ("coordonnées décimales",
      "test_coordonnees_entieres",
      lambda: setattr(noyau, "en_unites", sans_arrondi),
@@ -577,6 +668,8 @@ def main():
         try:
             if hasattr(T, nom_test):
                 getattr(T, nom_test)()
+            elif hasattr(PP, nom_test):
+                getattr(PP, nom_test)()
             else:
                 getattr(P, nom_test)(fenetre())
             vu = False

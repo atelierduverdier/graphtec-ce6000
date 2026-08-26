@@ -286,6 +286,19 @@ def _invisible(el):
     return _style_de(el).get("display") == "none" or el.get("display") == "none"
 
 
+def _ne_peint_rien(el):
+    """Forme sans trait NI remplissage : elle ne se voit pas, elle ne doit
+    pas se tracer non plus.
+
+    Le gabarit de l'atelier pose un `<rect>` de page entier en
+    `fill:none;stroke:none` — converti sans discernement, il devenait un
+    rectangle de 210 x 297 tracé à la plume, hors surface utile.
+    """
+    trait = _propriete(el, "stroke", "none")
+    fond = _propriete(el, "fill", "none")
+    return trait in ("none", "") and fond in ("none", "")
+
+
 # =============================================================================
 #  <text> -> chemins osifont
 # =============================================================================
@@ -403,6 +416,9 @@ def convertir_formes(racine):
     for tag in ("rect", "circle", "ellipse", "line", "polyline", "polygon"):
         for el in list(racine.iter(f"{{{SVG}}}{tag}")):
             if _dans_defs(el) or _invisible(el):
+                continue
+            if _ne_peint_rien(el):
+                el.getparent().remove(el)
                 continue
             if tag == "rect":
                 d = _d_rect(el)

@@ -5,7 +5,8 @@ import subprocess
 import sys
 
 ICI = os.path.dirname(os.path.abspath(__file__))
-SUITES = ["test_traceur.py", "verifier_les_tests.py", "test_pupitre.py"]
+SUITES = ["test_traceur.py", "test_preparer_planche.py",
+          "verifier_les_tests.py", "test_pupitre.py"]
 
 code = 0
 for suite in SUITES:

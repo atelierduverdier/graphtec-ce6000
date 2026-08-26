@@ -426,6 +426,7 @@ def _vraie_methode():
 # `preparer_planche` a ses propres proprietes ; elles s'eprouvent comme les
 # autres. Les vraies fonctions sont prises AVANT toute casse.
 _VRAIS_PREP = {"nettoyer": prep.nettoyer,
+               "pointiller_traits": prep.pointiller_traits,
                "vectoriser_textes": prep.vectoriser_textes,
                "convertir_formes": prep.convertir_formes,
                "_ne_peint_rien": prep._ne_peint_rien,
@@ -454,6 +455,12 @@ def largeur_sans_ancrage(self, texte, taille):
     """Une largeur nulle ramene middle et end sur start : le titre centre
     part en biais."""
     return 0.0
+
+
+def pointille_laisse_en_style(racine, tol=0.05):
+    """La faute d'origine : le motif reste un STYLE, que svg2hpgl ne lit
+    pas — la ligne cachee sort en trait continu a la plume."""
+    return 0
 
 
 def nettoyage_qui_garde_les_commentaires(source, destination, fonte=None):
@@ -498,6 +505,12 @@ CAS = [
      lambda: setattr(prep.Osifont, "largeur", largeur_sans_ancrage),
      lambda: setattr(prep.Osifont, "largeur",
                      _VRAIS_PREP["largeur_osifont"])),
+
+    ("pointille laisse en style, jamais decoupe",
+     "test_pointille_devient_de_vrais_segments",
+     lambda: setattr(prep, "pointiller_traits", pointille_laisse_en_style),
+     lambda: setattr(prep, "pointiller_traits",
+                     _VRAIS_PREP["pointiller_traits"])),
 
     ("commentaires XML conserves",
      "test_commentaires_retires",

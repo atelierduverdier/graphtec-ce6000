@@ -16,7 +16,11 @@ Trois traitements, dans cet ordre :
    cotations, comme cela pas de soucis ») ;
 3. convertit `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`
    et `<polygon>` en `<path>` — le parseur de `svg2hpgl` ne lit que les
-   chemins (tableaux de débit : 430 `<rect>` sur Plan_Debit).
+   chemins (tableaux de débit : 430 `<rect>` sur Plan_Debit) ;
+4. **découpe les traits interrompus en VRAIS segments**. `stroke-dasharray`
+   est un style, et `svg2hpgl` lit la géométrie : les lignes cachées de
+   TechDraw sortaient en trait CONTINU à la plume, indiscernables d'une
+   arête réelle sur une planche d'atelier.
 
 Après quoi la chaîne est directe :
 
@@ -44,6 +48,7 @@ NOMMÉS sur la console et remplacés par une avance d'un demi-cadratin.
 """
 
 import argparse
+import math
 import os
 import re
 import sys
@@ -62,6 +67,16 @@ except ImportError:                                     # pragma: no cover
     sys.exit("fontTools requis : pacman -S python-fonttools")
 
 ICI = os.path.dirname(os.path.abspath(__file__))
+# Le parseur de chemins de LaserAtelier : il aplatit courbes et arcs en
+# polylignes, ce qu'il faut pour decouper un pointille. Pas de second
+# tokeniseur maison — c'est deja celui que svg2hpgl emprunte.
+_ATELIER = os.path.expanduser("~/.local/share/FreeCAD/v1-1/Mod/LaserAtelier")
+if _ATELIER not in sys.path:
+    sys.path.insert(0, _ATELIER)
+try:
+    import svg_import
+except ImportError:                                     # pragma: no cover
+    sys.exit(f"svg_import.py introuvable dans {_ATELIER}")
 POLICE = os.path.join(ICI, "resources", "osifont-lgpl3fe.ttf")
 CHEMIN_ATELIER = os.path.expanduser(
     "~/.local/share/FreeCAD/v1-1/Mod/LaserAtelier")
@@ -410,6 +425,124 @@ _GEOMETRIE = {"x", "y", "width", "height", "rx", "ry", "cx", "cy", "r",
               "x1", "y1", "x2", "y2", "points", "d"}
 
 
+# =============================================================================
+#  Les traits interrompus, decoupes en VRAIS segments
+# =============================================================================
+
+def _motif(valeur):
+    """« 30,7.5 » -> [30.0, 7.5]. None si le motif ne pointille rien."""
+    if not valeur or valeur.strip() in ("none", "0"):
+        return None
+    bouts = [float(v) for v in re.split(r"[,\s]+", valeur.strip()) if v]
+    bouts = [abs(v) for v in bouts if _est_nombre(v)]
+    if not bouts or sum(bouts) <= 0:
+        return None
+    # Un motif impair se parcourt deux fois (regle SVG) : 5 -> plein 5, vide 5.
+    return bouts if len(bouts) % 2 == 0 else bouts * 2
+
+
+def _est_nombre(v):
+    try:
+        float(v)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _pointiller(points, motif, decalage=0.0):
+    """Decoupe une polyligne selon `motif`. Rend une liste de polylignes.
+
+    On avance le long du trace en alternant plein et vide, exactement comme
+    le fait un rendu SVG — mais en GEOMETRIE, pas en style : c'est la seule
+    forme qu'un traceur comprenne.
+    """
+    if len(points) < 2:
+        return []
+    total = sum(motif)
+    pos = decalage % total
+    i, plein = 0, True
+    while pos >= motif[i]:                  # ou en est-on dans le motif ?
+        pos -= motif[i]
+        i = (i + 1) % len(motif)
+        plein = not plein
+    reste = motif[i] - pos
+
+    morceaux, courant = [], ([points[0]] if plein else [])
+    for a, b in zip(points, points[1:]):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        seg = math.hypot(dx, dy)
+        parcouru = 0.0
+        while seg - parcouru > reste:
+            parcouru += reste
+            t = parcouru / seg
+            coupe = (a[0] + dx * t, a[1] + dy * t)
+            if plein:
+                courant.append(coupe)
+                morceaux.append(courant)
+                courant = []
+            else:
+                courant = [coupe]
+            plein = not plein
+            i = (i + 1) % len(motif)
+            reste = motif[i]
+        reste -= seg - parcouru
+        if plein:
+            courant.append(b)
+    if plein and len(courant) >= 2:
+        morceaux.append(courant)
+    return [m for m in morceaux if len(m) >= 2]
+
+
+def _d_polylignes(polylignes):
+    return " ".join("M " + " L ".join("%.4f %.4f" % (x, y) for x, y in p)
+                    for p in polylignes)
+
+
+def pointiller_traits(racine, tol=0.05):
+    """Remplace la GEOMETRIE des traces pointilles par leurs segments.
+
+    `stroke-dasharray` est un style : svg2hpgl lit la geometrie et ne le
+    voit pas, donc une ligne cachee de TechDraw sortait en trait CONTINU
+    a la plume — indiscernable d'une arete reelle sur une planche
+    d'atelier (mesure du 26/08/2026 : 16 attributs de tirets ignores sur
+    Planche4). Rend le nombre de traces convertis.
+    """
+    faits = 0
+    for el in list(racine.iter(f"{{{SVG}}}path")):
+        if _dans_defs(el) or _invisible(el):
+            continue
+        motif = _motif(_propriete(el, "stroke-dasharray"))
+        if not motif:
+            continue
+        try:
+            decalage = float(_propriete(el, "stroke-dashoffset", "0") or 0.0)
+        except ValueError:
+            decalage = 0.0
+        sous, _avert = svg_import.path_d_to_subpaths(el.get("d", ""), tol)
+        segments = []
+        for sp in sous:
+            segments.extend(_pointiller(list(sp["points"]), motif, decalage))
+        if not segments:
+            el.getparent().remove(el)
+            faits += 1
+            continue
+        el.set("d", _d_polylignes(segments))
+        # Le motif est desormais DANS le trace : le laisser actif le ferait
+        # appliquer une SECONDE fois par un rendu SVG. Il vit le plus souvent
+        # sur le <g> parent (TechDraw groupe ses aretes cachees), qu'on ne
+        # peut pas vider tant qu'il porte d'autres enfants — on le neutralise
+        # donc SUR LE CHEMIN, ou l'attribut de l'enfant l'emporte.
+        el.set("stroke-dasharray", "none")
+        el.set("stroke-dashoffset", "0")
+        st = _style_de(el)
+        if "stroke-dasharray" in st or "stroke-dashoffset" in st:
+            st["stroke-dasharray"] = "none"
+            st["stroke-dashoffset"] = "0"
+            el.set("style", ";".join("%s:%s" % kv for kv in st.items()))
+        faits += 1
+    return faits
+
+
 def convertir_formes(racine):
     """<rect|circle|ellipse|line|polyline|polygon> -> <path>. Rend n."""
     faits = 0
@@ -455,8 +588,8 @@ def convertir_formes(racine):
 def nettoyer(source, destination, fonte=None):
     """Commentaires retirés, textes en osifont, formes en chemins.
 
-    Rend (commentaires, textes, formes). `fonte` se partage entre
-    planches pour ne charger la TTF qu'une fois.
+    Rend (commentaires, textes, formes, pointilles). `fonte` se partage
+    entre planches pour ne charger la TTF qu'une fois.
     """
     arbre = etree.parse(source, etree.XMLParser(remove_comments=False))
     commentaires = len(arbre.getroot().xpath("//comment()"))
@@ -465,9 +598,10 @@ def nettoyer(source, destination, fonte=None):
     fonte = fonte or Osifont()
     textes = vectoriser_textes(racine, fonte)
     formes = convertir_formes(racine)
+    pointilles = pointiller_traits(racine)
     arbre.write(destination, xml_declaration=True,
                 encoding="utf-8", pretty_print=False)
-    return commentaires, textes, formes
+    return commentaires, textes, formes, pointilles
 
 
 def main():
@@ -507,10 +641,10 @@ def main():
             continue
         racine, ext = os.path.splitext(source)
         destination = args.sortie or f"{racine}_propre{ext}"
-        com, txt, formes = nettoyer(source, destination, fonte)
+        com, txt, formes, pts = nettoyer(source, destination, fonte)
         print(f"{os.path.basename(source)} -> {os.path.basename(destination)}"
-              f"   ({com} commentaire(s), {txt} texte(s) en osifont,"
-              f" {formes} forme(s) en chemins)")
+              f"   ({com} commentaire(s), {txt} texte(s), {formes} forme(s)"
+              f" en chemins, {pts} pointille(s) decoupe(s))")
     if fonte.manquants:
         detail = ", ".join(f"« {c} » x{n}" for c, n in sorted(fonte.manquants.items()))
         print(f"  ATTENTION — glyphes absents d'osifont, remplacés par un blanc :"

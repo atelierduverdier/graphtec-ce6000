@@ -48,7 +48,7 @@ def _svg(corps, larg=210, haut=297):
 
 
 def _preparer(corps, police="osifont", **kw):
-    """(chemin prepare, (commentaires, textes, formes))."""
+    """(chemin prepare, (commentaires, textes, formes, pointilles))."""
     src = _svg(corps, **kw)
     dst = src[:-4] + "_p.svg"
     return dst, pp.nettoyer(src, dst, pp.charger_police(police))
@@ -63,7 +63,7 @@ def _abscisses(chemin):
 
 def test_texte_vectorise():
     """Un <text> devient des chemins, que svg2hpgl sait lire."""
-    dst, (_com, txt, _formes) = _preparer(
+    dst, (_com, txt, _formes, _pts) = _preparer(
         '<text x="20" y="40" style="font-size:5px">ATELIER</text>')
     assert txt == 1, "aucun texte vectorise"
     assert "<text" not in open(dst).read(), "il reste un <text>"
@@ -101,7 +101,7 @@ def test_ancres_respectees():
 
 def test_formes_simples_converties():
     """Les six formes que svg2hpgl ne lit pas deviennent des chemins."""
-    dst, (_com, _txt, formes) = _preparer(
+    dst, (_com, _txt, formes, _pts) = _preparer(
         '<rect x="10" y="10" width="20" height="10" style="stroke:#000"/>'
         '<circle cx="60" cy="20" r="8" style="stroke:#000"/>'
         '<ellipse cx="100" cy="20" rx="10" ry="5" style="stroke:#000"/>'
@@ -125,10 +125,31 @@ def test_monotrait_plus_large_que_osifont():
         % (ratio, largeurs["hershey"], largeurs["osifont"])
 
 
+def test_pointille_devient_de_vrais_segments():
+    """`stroke-dasharray` est un STYLE, et svg2hpgl lit la GEOMETRIE.
+
+    Une ligne cachee de TechDraw sortait donc en trait CONTINU a la plume,
+    indiscernable d'une arete reelle sur une planche d'atelier (Christophe,
+    26/08/2026 ; mesure : 16 motifs ignores sur Planche4).
+    """
+    dst, (_com, _txt, _formes, pts) = _preparer(
+        '<path d="M10,10 L110,10" style="stroke:#000;fill:none"'
+        ' stroke-dasharray="6,4"/>')
+    assert pts == 1, "%d pointille(s) decoupe(s)" % pts
+    _xs, polys, avert = _abscisses(dst)
+    assert not avert, "svg2hpgl proteste : %s" % avert
+    # 100 mm au motif 6 plein / 4 vide : dix tirets de 6, soit 60 mm traces
+    assert len(polys) == 10, "%d segments au lieu de 10" % len(polys)
+    trace = sum(abs(p[-1][0] - p[0][0]) for p, _c in polys)
+    assert abs(trace - 60.0) < 0.5, "%.1f mm traces au lieu de 60" % trace
+    assert 'stroke-dasharray="none"' in open(dst).read(), \
+        "le motif reste actif : un rendu l'appliquerait une SECONDE fois"
+
+
 def test_commentaires_retires():
     """TechDraw en ecrit quatre par planche ; l'extension Hershey mourait
     dessus, et un flux sans commentaire ne gene personne d'autre."""
-    dst, (com, _txt, _formes) = _preparer(
+    dst, (com, _txt, _formes, _pts) = _preparer(
         '<!-- Working space --><text x="20" y="40"'
         ' style="font-size:4px">X</text>')
     assert com == 1, "%d commentaire(s) compte(s)" % com

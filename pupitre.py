@@ -832,8 +832,8 @@ class Pupitre(QWidget):
         # --- placement
         g = QGroupBox("Placement")
         gl = QGridLayout(g)
-        self.spn_x = self._reel(0, 700, 5.0)
-        self.spn_y = self._reel(0, 700, 5.0)
+        self.spn_x = self._reel(-700, 700, 5.0)
+        self.spn_y = self._reel(-700, 700, 5.0)
         self.cmb_rot = QComboBox(); self.cmb_rot.addItems(["0°", "90°", "180°", "270°"])
         self.cmb_rot.currentIndexChanged.connect(self._recalculer)
         self.chk_mx = QCheckBox("miroir X"); self.chk_my = QCheckBox("miroir Y")
@@ -2683,9 +2683,14 @@ class Pupitre(QWidget):
         qu'une autre façon de les saisir. Sans ça on aurait deux sources
         pour la même chose, et l'enregistrement d'un projet en oublierait
         une.
+
+        Pas de plancher à 0 : un dessin plus grand que le média doit
+        pouvoir glisser sous une origine négative, pour amener sous la
+        pince le morceau qui dépasse actuellement de l'autre côté — quitte
+        à perdre ce qui sort par le bord opposé (avertit `_recalculer`).
         """
-        self.spn_x.setValue(max(0.0, self.spn_x.value() + dx))
-        self.spn_y.setValue(max(0.0, self.spn_y.value() + dy))
+        self.spn_x.setValue(self.spn_x.value() + dx)
+        self.spn_y.setValue(self.spn_y.value() + dy)
 
     def _emprise_source(self):
         """L'emprise du dessin AVANT toute mise à l'échelle, en mm.
@@ -2895,7 +2900,11 @@ class Pupitre(QWidget):
                 + (f" {len(self.reperes)} repère(s) ARMS reconnu(s) et "
                    f"écarté(s)." if self.reperes else ""))
         x0, y0, x1, y1 = noyau.cadre(self.calcule + self.contour)
-        deborde = x1 > self.media[0] or y1 > self.media[1]
+        # x0/y0 < 0 compte aussi : une origine négative (glissée là exprès
+        # pour amener sous la pince un morceau qui dépassait de l'autre
+        # côté) sort tout autant de la zone utile, côté bas-gauche cette
+        # fois.
+        deborde = x1 > self.media[0] or y1 > self.media[1] or x0 < 0 or y0 < 0
 
         panneaux = self._panneaux()
         if panneaux:
@@ -2977,9 +2986,24 @@ class Pupitre(QWidget):
         # rouge sous un style neutre ne se lit pas comme un refus.
         self.info.setObjectName("alerte" if deborde else "faible")
         self.info.setStyleSheet(feuille_de_style(self.pal))
-        self.b_envoyer.setEnabled(bool(self.brut) and not deborde)
+        # Le débordement est un avertissement, pas une interdiction : on
+        # prévient avant l'envoi (voir _envoyer) plutôt que de bloquer le
+        # bouton — un dessin qui dépasse peut valoir la peine d'être envoyé
+        # tronqué plutôt que pas du tout.
+        self.deborde = deborde
+        self.b_envoyer.setEnabled(bool(self.brut))
 
     def _envoyer(self):
+        if getattr(self, "deborde", False):
+            suite = QMessageBox.warning(
+                self, "Le dessin dépasse la feuille",
+                "Le dessin (ou un panneau, en mosaïque) déborde de la zone "
+                "utile du média.\n\nCe qui dépasse ne sera pas tracé : la "
+                "pièce sortira incomplète.\n\nEnvoyer quand même ?",
+                QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel)
+            if suite != QMessageBox.Ok:
+                return
+
         # Le dessin a-t-il bougé depuis que la feuille a été imprimée ?
         # Rien ne le signalait le 13/08/2026, et la manche y est passée :
         # l'écart mesuré ensuite mêlait deux causes et ne disait rien.
